@@ -7,10 +7,10 @@ export const getPollState = (): PollState => dataStore.getPollState();
 export const ensurePollIsOpen = (): PollState => {
   const pollState = getPollState();
   if (!pollState.settings.isOpen) {
-    throw new ForbiddenError('Poll is currently closed');
+    throw new ForbiddenError('Voting is currently closed. Please contact the election administrator.');
   }
   if (!pollState.activeElectionType) {
-    throw new ForbiddenError('No election type is currently active');
+    throw new ForbiddenError('No election has been set up yet. Please contact the election administrator.');
   }
   return pollState;
 };

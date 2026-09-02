@@ -47,7 +47,7 @@ votesRouter.post(
   asyncHandler((req, res) => {
     const pollState = getPollState();
     if (!pollState.activeElectionType) {
-      throw new BadRequestError('No election type is currently active');
+      throw new BadRequestError('No election has been set up yet. Please contact the election administrator.');
     }
 
     // Get house from kiosk session (for house elections)
@@ -55,7 +55,7 @@ votesRouter.post(
     const house = kioskSession?.house;
 
     if (pollState.activeElectionType === 'house' && !house) {
-      throw new BadRequestError('House selection is required for house elections');
+      throw new BadRequestError('Please select a house before submitting a vote for house elections.');
     }
 
     const submission = validateVote(req.body, pollState.activeElectionType, house);

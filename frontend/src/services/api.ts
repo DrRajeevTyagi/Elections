@@ -15,6 +15,21 @@ const api = axios.create({
   baseURL: '/api'
 });
 
+// Surface the backend's human-readable "error" message instead of axios's
+// generic "Request failed with status code 4xx" text.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const serverMessage = error?.response?.data?.error;
+    if (typeof serverMessage === 'string' && serverMessage.trim()) {
+      error.message = serverMessage;
+    } else if (!error?.response) {
+      error.message = 'Could not reach the server. Please check your network connection and try again.';
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const fetchPosts = async (house?: HouseId): Promise<PostsResponse> => {
   const params = house ? { house } : {};
   const response = await api.get<PostsResponse>('/posts', { params });

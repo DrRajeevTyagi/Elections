@@ -18,22 +18,22 @@ kioskRouter.post(
   asyncHandler((req, res) => {
     const { secret, house } = req.body as ActivationRequest;
     if (!secret || secret !== env.kioskSecret) {
-      throw new UnauthorizedError('Invalid kiosk activation secret');
+      throw new UnauthorizedError('Incorrect activation key. Please check the key with the election administrator and try again.');
     }
 
     const pollState = getPollState();
     if (!pollState.settings.isOpen) {
-      throw new ForbiddenError('Poll is closed');
+      throw new ForbiddenError('Voting is currently closed. Ask the election administrator to open the poll before activating a ballot.');
     }
 
     if (!pollState.activeElectionType) {
-      throw new ForbiddenError('No election type is currently active');
+      throw new ForbiddenError('No election has been set up yet. Please contact the election administrator.');
     }
 
     // For house elections, house is required
     if (pollState.activeElectionType === 'house') {
       if (!house || !isValidHouseId(house)) {
-        throw new BadRequestError('House selection is required for house elections');
+        throw new BadRequestError('Please select a house before activating a ballot for house elections.');
       }
     }
 

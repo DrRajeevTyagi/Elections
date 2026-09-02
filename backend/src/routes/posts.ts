@@ -13,7 +13,7 @@ postsRouter.get(
   asyncHandler((req, res) => {
     const pollState = getPollState();
     if (!pollState.activeElectionType) {
-      throw new ForbiddenError('No election type is currently active');
+      throw new ForbiddenError('No election has been set up yet. Please contact the election administrator.');
     }
 
     // Get house from query parameter (for house elections)
@@ -52,14 +52,14 @@ postsRouter.get(
     }
 
     if (!pollState.activeElectionType) {
-      throw new ForbiddenError('No election type is currently active');
+      throw new ForbiddenError('No election has been set up yet. Please contact the election administrator.');
     }
 
     // Get house from query parameter (for house elections)
     const house = req.query.house as string | undefined;
     if (pollState.activeElectionType === 'house') {
       if (!house || !isValidHouseId(house)) {
-        throw new BadRequestError('House parameter is required for house elections');
+        throw new BadRequestError('Please select a house before viewing candidates for house elections.');
       }
     }
 
