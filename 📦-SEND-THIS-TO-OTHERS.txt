@@ -1,0 +1,89 @@
+==================================================
+  STUDENT COUNCIL VOTING SYSTEM
+  Installation Instructions
+==================================================
+
+STEP 1: Install Node.js (One-time only)
+----------------------------------------
+Go to: https://nodejs.org/
+Download the LTS version
+Install it (click Next on everything)
+Restart your computer
+
+
+STEP 2: Run the System
+----------------------------------------
+Double-click the file:
+   INSTALL-AND-RUN.bat
+
+Wait for 2 PowerShell windows to open.
+First time takes 1-2 minutes to install packages.
+
+
+STEP 3: Open in Browser
+----------------------------------------
+Go to: http://localhost:5173
+
+
+THAT'S IT! The system is now running on your computer.
+
+
+==================================================
+  USAGE
+==================================================
+
+KIOSK (For Voting):
+  URL: http://localhost:5173/kiosk
+  Secret: unlock-me
+
+ADMIN DASHBOARD (For Managing Poll):
+  URL: http://localhost:5173/admin
+  Secret: admin-secret
+
+
+==================================================
+  TO STOP THE SYSTEM
+==================================================
+
+Close both PowerShell windows that opened.
+
+
+==================================================
+  TO RESTART LATER
+==================================================
+
+Double-click: START-SERVERS.bat
+(No installation needed after first time)
+
+
+==================================================
+  SUPPORT FILES
+==================================================
+
+For detailed help, open these files:
+- START-HERE.md (Quick guide)
+- USER-GUIDE.md (Complete manual)
+- HOW-TO-SHARE.md (Sharing instructions)
+
+
+==================================================
+  REQUIREMENTS
+==================================================
+
+- Windows 7 or later
+- Node.js 18 or newer (free download)
+- 500 MB free disk space
+- Chrome/Firefox/Edge browser
+
+
+==================================================
+
+Questions? See USER-GUIDE.md for troubleshooting.
+
+==================================================
+
+
+
+
+
+

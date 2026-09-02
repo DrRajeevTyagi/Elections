@@ -1,0 +1,18 @@
+import { Router } from 'express';
+import { candidatesRouter } from './candidates.js';
+import { healthRouter } from './health.js';
+import { kioskRouter } from './kiosk.js';
+import { pollRouter } from './poll.js';
+import { postsRouter } from './posts.js';
+import { resultsRouter } from './results.js';
+import { votesRouter } from './votes.js';
+
+export const apiRouter = Router();
+
+apiRouter.use('/health', healthRouter);
+apiRouter.use('/posts', postsRouter);
+apiRouter.use('/votes', votesRouter);
+apiRouter.use('/results', resultsRouter);
+apiRouter.use('/poll', pollRouter);
+apiRouter.use('/kiosk', kioskRouter);
+apiRouter.use('/candidates', candidatesRouter);

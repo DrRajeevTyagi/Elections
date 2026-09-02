@@ -1,0 +1,324 @@
+{
+  "candidates": [
+    {
+      "id": "hb-1",
+      "name": "Alex Johnson",
+      "post": "HB",
+      "electionType": "school"
+    },
+    {
+      "id": "hb-2",
+      "name": "Michael Chen",
+      "post": "HB",
+      "electionType": "school"
+    },
+    {
+      "id": "hb-3",
+      "name": "David Williams",
+      "post": "HB",
+      "electionType": "school"
+    },
+    {
+      "id": "hb-4",
+      "name": "Ryan Patel",
+      "post": "HB",
+      "electionType": "school"
+    },
+    {
+      "id": "hg-1",
+      "name": "Sarah Martinez",
+      "post": "HG",
+      "electionType": "school"
+    },
+    {
+      "id": "hg-2",
+      "name": "Emily Davis",
+      "post": "HG",
+      "electionType": "school"
+    },
+    {
+      "id": "hg-3",
+      "name": "Priya Sharma",
+      "post": "HG",
+      "electionType": "school"
+    },
+    {
+      "id": "hg-4",
+      "name": "Jessica Brown",
+      "post": "HG",
+      "electionType": "school"
+    },
+    {
+      "id": "ssc-1",
+      "name": "James Wilson",
+      "post": "SSC",
+      "electionType": "school"
+    },
+    {
+      "id": "ssc-2",
+      "name": "Chris Anderson",
+      "post": "SSC",
+      "electionType": "school"
+    },
+    {
+      "id": "ssc-3",
+      "name": "Marcus Taylor",
+      "post": "SSC",
+      "electionType": "school"
+    },
+    {
+      "id": "ssc-4",
+      "name": "Kevin Lee",
+      "post": "SSC",
+      "electionType": "school"
+    },
+    {
+      "id": "ssc-5",
+      "name": "Daniel Kim",
+      "post": "SSC",
+      "electionType": "school"
+    },
+    {
+      "id": "src-1",
+      "name": "Sophia Garcia",
+      "post": "SRC",
+      "electionType": "school"
+    },
+    {
+      "id": "src-2",
+      "name": "Olivia Rodriguez",
+      "post": "SRC",
+      "electionType": "school"
+    },
+    {
+      "id": "src-3",
+      "name": "Isabella Thompson",
+      "post": "SRC",
+      "electionType": "school"
+    },
+    {
+      "id": "scc-1",
+      "name": "Emma White",
+      "post": "SCC",
+      "electionType": "school"
+    },
+    {
+      "id": "scc-2",
+      "name": "Mia Jackson",
+      "post": "SCC",
+      "electionType": "school"
+    },
+    {
+      "id": "scc-3",
+      "name": "Ava Harris",
+      "post": "SCC",
+      "electionType": "school"
+    },
+    {
+      "id": "scc-4",
+      "name": "Lily Martin",
+      "post": "SCC",
+      "electionType": "school"
+    },
+    {
+      "id": "anand-hc-1",
+      "name": "Anand House Captain 1",
+      "post": "HC",
+      "electionType": "house",
+      "house": "Anand"
+    },
+    {
+      "id": "anand-hcc-2",
+      "name": "Anand Cultural Captain 2",
+      "post": "HCC",
+      "electionType": "house",
+      "house": "Anand"
+    },
+    {
+      "id": "anand-hsc-3",
+      "name": "Anand Sports Captain 3",
+      "post": "HSC",
+      "electionType": "house",
+      "house": "Anand"
+    },
+    {
+      "id": "dhiraj-hc-1",
+      "name": "Dhiraj House Captain 1",
+      "post": "HC",
+      "electionType": "house",
+      "house": "Dhiraj"
+    },
+    {
+      "id": "dhiraj-hcc-2",
+      "name": "Dhiraj Cultural Captain 2",
+      "post": "HCC",
+      "electionType": "house",
+      "house": "Dhiraj"
+    },
+    {
+      "id": "dhiraj-hsc-3",
+      "name": "Dhiraj Sports Captain 3",
+      "post": "HSC",
+      "electionType": "house",
+      "house": "Dhiraj"
+    },
+    {
+      "id": "kripa-hc-1",
+      "name": "Kripa House Captain 1",
+      "post": "HC",
+      "electionType": "house",
+      "house": "Kripa"
+    },
+    {
+      "id": "kripa-hcc-2",
+      "name": "Kripa Cultural Captain 2",
+      "post": "HCC",
+      "electionType": "house",
+      "house": "Kripa"
+    },
+    {
+      "id": "kripa-hsc-3",
+      "name": "Kripa Sports Captain 3",
+      "post": "HSC",
+      "electionType": "house",
+      "house": "Kripa"
+    },
+    {
+      "id": "prem-hc-1",
+      "name": "Prem House Captain 1",
+      "post": "HC",
+      "electionType": "house",
+      "house": "Prem"
+    },
+    {
+      "id": "prem-hcc-2",
+      "name": "Prem Cultural Captain 2",
+      "post": "HCC",
+      "electionType": "house",
+      "house": "Prem"
+    },
+    {
+      "id": "prem-hsc-3",
+      "name": "Prem Sports Captain 3",
+      "post": "HSC",
+      "electionType": "house",
+      "house": "Prem"
+    },
+    {
+      "id": "namrata-hc-1",
+      "name": "Namrata House Captain 1",
+      "post": "HC",
+      "electionType": "house",
+      "house": "Namrata"
+    },
+    {
+      "id": "namrata-hcc-2",
+      "name": "Namrata Cultural Captain 2",
+      "post": "HCC",
+      "electionType": "house",
+      "house": "Namrata"
+    },
+    {
+      "id": "namrata-hsc-3",
+      "name": "Namrata Sports Captain 3",
+      "post": "HSC",
+      "electionType": "house",
+      "house": "Namrata"
+    },
+    {
+      "id": "nishtha-hc-1",
+      "name": "Nishtha House Captain 1",
+      "post": "HC",
+      "electionType": "house",
+      "house": "Nishtha"
+    },
+    {
+      "id": "nishtha-hcc-2",
+      "name": "Nishtha Cultural Captain 2",
+      "post": "HCC",
+      "electionType": "house",
+      "house": "Nishtha"
+    },
+    {
+      "id": "nishtha-hsc-3",
+      "name": "Nishtha Sports Captain 3",
+      "post": "HSC",
+      "electionType": "house",
+      "house": "Nishtha"
+    },
+    {
+      "id": "satya-hc-1",
+      "name": "Satya House Captain 1",
+      "post": "HC",
+      "electionType": "house",
+      "house": "Satya"
+    },
+    {
+      "id": "satya-hcc-2",
+      "name": "Satya Cultural Captain 2",
+      "post": "HCC",
+      "electionType": "house",
+      "house": "Satya"
+    },
+    {
+      "id": "satya-hsc-3",
+      "name": "Satya Sports Captain 3",
+      "post": "HSC",
+      "electionType": "house",
+      "house": "Satya"
+    },
+    {
+      "id": "shanti-hc-1",
+      "name": "Shanti House Captain 1",
+      "post": "HC",
+      "electionType": "house",
+      "house": "Shanti"
+    },
+    {
+      "id": "shanti-hcc-2",
+      "name": "Shanti Cultural Captain 2",
+      "post": "HCC",
+      "electionType": "house",
+      "house": "Shanti"
+    },
+    {
+      "id": "shanti-hsc-3",
+      "name": "Shanti Sports Captain 3",
+      "post": "HSC",
+      "electionType": "house",
+      "house": "Shanti"
+    }
+  ],
+  "votes": [
+    {
+      "id": "d76c7e4d-6567-4837-bce1-01525f07a072",
+      "timestamp": 1763393174042,
+      "electionType": "house",
+      "house": "Kripa",
+      "selections": {
+        "HC": "kripa-hc-1",
+        "HCC": "kripa-hcc-2",
+        "HSC": "kripa-hsc-3"
+      }
+    },
+    {
+      "id": "0579840a-4cf4-4b47-a1f2-c06299aef4f4",
+      "timestamp": 1763393315572,
+      "electionType": "house",
+      "house": "Anand",
+      "selections": {
+        "HC": "anand-hc-1",
+        "HCC": "anand-hcc-2",
+        "HSC": "anand-hsc-3"
+      }
+    }
+  ],
+  "pollState": {
+    "activeElectionType": "house",
+    "secretKey": "unlock-me",
+    "settings": {
+      "isOpen": false,
+      "allowRevote": false
+    }
+  }
+}
