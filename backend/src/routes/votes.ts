@@ -2,12 +2,12 @@ import { Router } from 'express';
 import { SCHOOL_POST_IDS, HOUSE_POST_IDS } from '../config/posts.js';
 import { listCandidatesByPost } from '../services/candidateService.js';
 import { recordVote, getPollState } from '../services/voteService.js';
-import type { VoteSubmission } from '../types/election.js';
+import type { HouseId, VoteSubmission } from '../types/election.js';
 import { requireKioskSession } from '../middleware/kioskSession.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError } from '../utils/httpError.js';
 
-const validateVote = (body: unknown, electionType: 'school' | 'house', house?: string): VoteSubmission => {
+const validateVote = (body: unknown, electionType: 'school' | 'house', house?: HouseId): VoteSubmission => {
   if (!body || typeof body !== 'object') {
     throw new BadRequestError('Vote payload must be an object');
   }

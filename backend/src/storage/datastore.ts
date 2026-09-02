@@ -1,9 +1,17 @@
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { dirname } from 'path';
 import { randomUUID } from 'crypto';
+import { Firestore } from '@google-cloud/firestore';
 import { env } from '../config/env.js';
 import { DEFAULT_CANDIDATES, POST_IDS, SCHOOL_POST_IDS, HOUSE_POST_IDS } from '../config/posts.js';
 import { Candidate, PollState, StoredVote, ElectionType } from '../types/election.js';
+
+// Single document holds the whole election state. This keeps the in-memory,
+// synchronous DataStore API unchanged; only the persistence backend differs.
+// Because state lives in memory, the service must run with a single Cloud Run
+// instance (max-instances=1) so concurrent instances never diverge.
+const FIRESTORE_COLLECTION = 'school-election';
+const FIRESTORE_DOC_ID = 'state';
 
 interface ElectionData {
   candidates: Candidate[];
@@ -61,11 +69,30 @@ export class DataStore {
   private data: ElectionData = createDefaultData();
   private writeQueue: Promise<void> = Promise.resolve();
   private readonly filePath = env.dataFile;
+  private readonly firestore = env.useFirestore ? new Firestore() : null;
 
   async init(): Promise<void> {
-    await this.loadFromDisk();
+    await this.load();
     this.ensureCandidateCoverage();
     await this.flush();
+  }
+
+  private async load(): Promise<void> {
+    if (this.firestore) {
+      await this.loadFromFirestore();
+    } else {
+      await this.loadFromDisk();
+    }
+  }
+
+  private async loadFromFirestore(): Promise<void> {
+    const snapshot = await this.firestore!.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC_ID).get();
+    if (snapshot.exists) {
+      this.data = this.mergeWithDefaults((snapshot.data() as Partial<ElectionData>) ?? {});
+    } else {
+      this.data = createDefaultData();
+      await this.persist();
+    }
   }
 
   private async loadFromDisk(): Promise<void> {
@@ -123,6 +150,10 @@ export class DataStore {
   }
 
   private async persist(): Promise<void> {
+    if (this.firestore) {
+      await this.firestore.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC_ID).set(JSON.parse(JSON.stringify(this.data)));
+      return;
+    }
     const directory = dirname(this.filePath);
     await mkdir(directory, { recursive: true });
     await writeFile(this.filePath, JSON.stringify(this.data, null, 2), 'utf-8');

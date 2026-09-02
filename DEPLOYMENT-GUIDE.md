@@ -126,7 +126,85 @@ Use tools like:
 
 ---
 
-## Security Notes:
+## Option 5: Google Cloud Run + Firestore (Production, Recommended)
+
+The repo now ships with a `Dockerfile` (builds frontend + backend into one image,
+served by Express) and a Firestore-backed data store, gated by `USE_FIRESTORE=true`.
+Because election state is kept in memory and mirrored to Firestore, **the Cloud Run
+service must run with `--max-instances=1`** so two instances never diverge.
+
+### One-time GCP setup
+
+```bash
+gcloud auth login
+gcloud projects create YOUR_PROJECT_ID   # or use an existing project
+gcloud config set project YOUR_PROJECT_ID
+
+# Enable required APIs
+gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
+  cloudbuild.googleapis.com firestore.googleapis.com
+
+# Create a Native-mode Firestore database (pick a region near you, e.g. asia-south1)
+gcloud firestore databases create --location=asia-south1
+
+# Create an Artifact Registry repo for the container image
+gcloud artifacts repositories create school-election \
+  --repository-format=docker --location=asia-south1
+```
+
+### Manual deploy (from your machine, no GitHub Actions needed)
+
+```bash
+gcloud builds submit --tag asia-south1-docker.pkg.dev/YOUR_PROJECT_ID/school-election/school-election:latest
+
+gcloud run deploy school-election \
+  --image asia-south1-docker.pkg.dev/YOUR_PROJECT_ID/school-election/school-election:latest \
+  --region asia-south1 \
+  --allow-unauthenticated \
+  --max-instances=1 \
+  --set-env-vars USE_FIRESTORE=true,ADMIN_SECRET=your-strong-admin-password,KIOSK_SECRET=your-strong-kiosk-password
+```
+
+Cloud Run automatically grants the default compute service account Firestore
+access within the same project, and injects `PORT` for you (the app already
+listens on `process.env.PORT`).
+
+### Automated deploy via GitHub Actions
+
+`.github/workflows/deploy-cloud-run.yml` deploys on every push to `main`. It needs
+these repository secrets (Settings → Secrets and variables → Actions):
+
+- `GCP_PROJECT_ID`
+- `GCP_WORKLOAD_IDENTITY_PROVIDER` – from a Workload Identity Federation pool (no
+  long-lived JSON keys needed):
+  ```bash
+  gcloud iam service-accounts create gh-deployer
+  gcloud iam workload-identity-pools create github-pool --location=global
+  gcloud iam workload-identity-pools providers create-oidc github-provider \
+    --location=global --workload-identity-pool=github-pool \
+    --issuer-uri=https://token.actions.githubusercontent.com \
+    --attribute-mapping=google.subject=assertion.sub,attribute.repository=assertion.repository \
+    --attribute-condition="assertion.repository=='DrRajeevTyagi/Elections'"
+  gcloud iam service-accounts add-iam-policy-binding \
+    gh-deployer@YOUR_PROJECT_ID.iam.gserviceaccount.com \
+    --role=roles/iam.workloadIdentityUser \
+    --member="principalSet://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/attribute.repository/DrRajeevTyagi/Elections"
+  ```
+- `GCP_SERVICE_ACCOUNT` – `gh-deployer@YOUR_PROJECT_ID.iam.gserviceaccount.com`,
+  granted `roles/run.admin`, `roles/artifactregistry.writer`, `roles/iam.serviceAccountUser`,
+  and `roles/cloudbuild.builds.editor` on the project.
+
+### Ongoing operational notes
+
+- Rotate `ADMIN_SECRET` / `KIOSK_SECRET` away from the defaults before going live —
+  set them as Cloud Run environment variables (or migrate to Secret Manager).
+- Firestore document `school-election/state` holds the entire dataset; back it up
+  via Firestore's export tools before a live election.
+- Local development is unaffected — leave `USE_FIRESTORE` unset to keep using the
+  `backend/data/data.json` file as before.
+
+---
+
 
 ⚠️ **Before sharing externally:**
 1. Change default secrets in backend `.env` file:

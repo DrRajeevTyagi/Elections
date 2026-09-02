@@ -15,5 +15,7 @@ export const env = {
   port: parseNumber(process.env.PORT, 4000),
   adminSecret: process.env.ADMIN_SECRET ?? 'admin-secret',
   kioskSecret: process.env.KIOSK_SECRET ?? 'unlock-me',
-  dataFile: process.env.DATA_FILE ?? fileURLToPath(defaultDataFileUrl)
+  dataFile: process.env.DATA_FILE ?? fileURLToPath(defaultDataFileUrl),
+  useFirestore: process.env.USE_FIRESTORE === 'true',
+  staticDir: process.env.STATIC_DIR ?? null
 };

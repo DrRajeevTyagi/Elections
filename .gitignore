@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 
 # Build outputs
 dist/
@@ -26,6 +25,7 @@ npm-debug.log*
 
 # Testing
 coverage/
+test-output.json
 
 # Data (optional - comment out if you want to include data)
 # data/data.json

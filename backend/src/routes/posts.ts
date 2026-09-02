@@ -29,7 +29,7 @@ postsRouter.get(
     
     const posts = postIds.map((postId) => ({
       post: postId,
-      candidates: listCandidatesByPost(postId, pollState.activeElectionType, house as HouseId | undefined)
+      candidates: listCandidatesByPost(postId, pollState.activeElectionType ?? undefined, house as HouseId | undefined)
     }));
 
     const candidates = listCandidatesForActiveElection(house as HouseId | undefined);
