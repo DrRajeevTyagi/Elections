@@ -162,8 +162,14 @@ gcloud run deploy school-election \
   --region asia-south1 \
   --allow-unauthenticated \
   --max-instances=1 \
-  --set-env-vars USE_FIRESTORE=true,ADMIN_SECRET=your-strong-admin-password,KIOSK_SECRET=your-strong-kiosk-password
+  --set-env-vars="USE_FIRESTORE=true,ADMIN_SECRET=your-strong-admin-password,KIOSK_SECRET=your-strong-kiosk-password"
 ```
+
+> **Windows PowerShell users:** always wrap `--set-env-vars=...` in quotes as shown
+> above (`"--set-env-vars=KEY1=a,KEY2=b"`). Without quotes, PowerShell treats the
+> unquoted commas as argument separators and silently mangles multiple env vars
+> into one broken value — this caused a real outage where `ADMIN_SECRET` got
+> merged into `USE_FIRESTORE`'s value, breaking all admin actions.
 
 Cloud Run automatically grants the default compute service account Firestore
 access within the same project, and injects `PORT` for you (the app already
