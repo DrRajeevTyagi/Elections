@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { env } from '../config/env.js';
 import { getPollState } from '../services/voteService.js';
 import { kioskService } from '../services/kioskService.js';
+import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ForbiddenError, UnauthorizedError, BadRequestError } from '../utils/httpError.js';
 import { isValidHouseId } from '../config/posts.js';
@@ -17,8 +17,10 @@ kioskRouter.post(
   '/activate',
   asyncHandler((req, res) => {
     const { secret, house } = req.body as ActivationRequest;
-    if (!secret || secret !== env.kioskSecret) {
-      throw new UnauthorizedError('Incorrect activation key. Please check the key with the election administrator and try again.');
+    const enteredCode = typeof secret === 'string' ? secret.trim().toUpperCase() : '';
+    const officerCode = enteredCode ? dataStore.findOfficerCode(enteredCode) : undefined;
+    if (!officerCode) {
+      throw new UnauthorizedError('Incorrect officer code. Please check the code with the election administrator and try again.');
     }
 
     const pollState = getPollState();
@@ -37,8 +39,9 @@ kioskRouter.post(
       }
     }
 
-    const session = kioskService.createSession(house && isValidHouseId(house) ? house : undefined);
-    res.status(201).json({ token: session.token });
+    const session = kioskService.createSession(officerCode.code, house && isValidHouseId(house) ? house : undefined);
+    const stationVoteCount = dataStore.countVotesByOfficerCode(officerCode.code);
+    res.status(201).json({ token: session.token, officerName: officerCode.officerName, stationVoteCount });
   })
 );
 

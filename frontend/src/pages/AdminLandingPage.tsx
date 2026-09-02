@@ -9,9 +9,13 @@ import {
   deleteCandidate,
   addCandidate,
   setElectionType,
-  verifyAdminSecret
+  verifyAdminSecret,
+  getOfficerCodes,
+  generateOfficerCodes,
+  updateOfficerCode,
+  deleteOfficerCode
 } from '../services/api';
-import type { PollStatus, PostResult, CandidateResult } from '../types/api';
+import type { PollStatus, PostResult, CandidateResult, OfficerCode } from '../types/api';
 import type { PostId, ElectionType, HouseId } from '../types/election';
 import { AddCandidateForm } from '../components/AddCandidateForm';
 import { CandidateEditor } from '../components/CandidateEditor';
@@ -88,6 +92,10 @@ export const AdminLandingPage = (): JSX.Element => {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [officerCodes, setOfficerCodes] = useState<OfficerCode[]>([]);
+  const [generateCount, setGenerateCount] = useState('10');
+  const [officerCodesLoading, setOfficerCodesLoading] = useState(false);
+  const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -103,6 +111,74 @@ export const AdminLandingPage = (): JSX.Element => {
       setLoading(false);
     }
   }, []);
+
+  const loadOfficerCodes = useCallback(async () => {
+    const secret = sessionStorage.getItem('adminSecret');
+    if (!secret) {
+      return;
+    }
+    try {
+      const response = await getOfficerCodes(secret);
+      setOfficerCodes(response.codes);
+      setOfficerNameDrafts(
+        Object.fromEntries(response.codes.map((entry) => [entry.code, entry.officerName]))
+      );
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load officer codes');
+    }
+  }, []);
+
+  const handleGenerateCodes = async () => {
+    const count = Number(generateCount);
+    if (!Number.isInteger(count) || count < 1 || count > 200) {
+      setError('Enter a number of codes between 1 and 200.');
+      return;
+    }
+    try {
+      setOfficerCodesLoading(true);
+      setError(null);
+      await generateOfficerCodes(count, adminSecret);
+      setMessage(`Generated ${count} new officer code${count === 1 ? '' : 's'}.`);
+      await loadOfficerCodes();
+    } catch (generateError) {
+      setError(generateError instanceof Error ? generateError.message : 'Failed to generate codes');
+    } finally {
+      setOfficerCodesLoading(false);
+    }
+  };
+
+  const handleSaveOfficerName = async (code: string) => {
+    const officerName = officerNameDrafts[code] ?? '';
+    try {
+      setOfficerCodesLoading(true);
+      setError(null);
+      await updateOfficerCode(code, { officerName }, adminSecret);
+      setMessage(`Saved name for code ${code}.`);
+      await loadOfficerCodes();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Failed to save officer name');
+    } finally {
+      setOfficerCodesLoading(false);
+    }
+  };
+
+  const handleDeleteOfficerCode = async (code: string) => {
+    const confirmed = window.confirm(`Delete code ${code}? It will no longer be able to activate a kiosk.`);
+    if (!confirmed) {
+      return;
+    }
+    try {
+      setOfficerCodesLoading(true);
+      setError(null);
+      await deleteOfficerCode(code, adminSecret);
+      setMessage(`Deleted code ${code}.`);
+      await loadOfficerCodes();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete code');
+    } finally {
+      setOfficerCodesLoading(false);
+    }
+  };
 
   // On first load, silently re-use a previously verified secret for this browser tab.
   useEffect(() => {
@@ -154,6 +230,7 @@ export const AdminLandingPage = (): JSX.Element => {
   useEffect(() => {
     if (authenticated) {
       void loadDashboard();
+      void loadOfficerCodes();
     }
   }, [authenticated, loadDashboard]);
 
@@ -662,6 +739,91 @@ export const AdminLandingPage = (): JSX.Element => {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="admin-panel" style={{ marginTop: '1.5rem' }}>
+        <h2>Polling Officer Codes</h2>
+        <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
+          Generate one simple 6-character code per polling officer/station. Each officer uses their own
+          code to activate the kiosk, so votes can be traced back to a station without identifying any voter.
+        </p>
+
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', marginBottom: '1rem' }}>
+          <div>
+            <label className="form-label" htmlFor="generate-count">Number of codes to generate</label>
+            <input
+              id="generate-count"
+              className="form-input"
+              type="number"
+              min={1}
+              max={200}
+              value={generateCount}
+              onChange={(event) => setGenerateCount(event.target.value)}
+              style={{ width: '160px' }}
+            />
+          </div>
+          <button className="button" onClick={handleGenerateCodes} disabled={officerCodesLoading}>
+            Generate Codes
+          </button>
+        </div>
+
+        {officerCodes.length === 0 ? (
+          <p>No codes generated yet.</p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', borderBottom: '2px solid #e5e7eb' }}>
+                  <th style={{ padding: '0.5rem' }}>Code</th>
+                  <th style={{ padding: '0.5rem' }}>Officer Name</th>
+                  <th style={{ padding: '0.5rem' }}>Votes Cast</th>
+                  <th style={{ padding: '0.5rem' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {officerCodes.map((entry) => (
+                  <tr key={entry.code} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    <td style={{ padding: '0.5rem', fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.05em' }}>
+                      {entry.code}
+                    </td>
+                    <td style={{ padding: '0.5rem' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <input
+                          className="form-input"
+                          style={{ margin: 0 }}
+                          value={officerNameDrafts[entry.code] ?? ''}
+                          placeholder="Officer name"
+                          onChange={(event) =>
+                            setOfficerNameDrafts((prev) => ({ ...prev, [entry.code]: event.target.value }))
+                          }
+                        />
+                        <button
+                          className="button"
+                          style={{ backgroundColor: '#6b7280', flexShrink: 0 }}
+                          disabled={officerCodesLoading}
+                          onClick={() => handleSaveOfficerName(entry.code)}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </td>
+                    <td style={{ padding: '0.5rem' }}>{entry.voteCount}</td>
+                    <td style={{ padding: '0.5rem' }}>
+                      <button
+                        className="button"
+                        style={{ backgroundColor: '#dc2626' }}
+                        disabled={officerCodesLoading}
+                        onClick={() => handleDeleteOfficerCode(entry.code)}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {message && <p className="message success">{message}</p>}

@@ -2,6 +2,7 @@ import axios from 'axios';
 import type {
   ActivateRequest,
   ActivateResponse,
+  OfficerCodesResponse,
   PollResponse,
   PostsResponse,
   ResultsResponse,
@@ -112,6 +113,38 @@ export const getResults = async (house?: HouseId): Promise<ResultsResponse> => {
   const params = house ? { house } : {};
   const response = await api.get<ResultsResponse>('/results', { params });
   return response.data;
+};
+
+export const getOfficerCodes = async (adminSecret: string): Promise<OfficerCodesResponse> => {
+  const response = await api.get<OfficerCodesResponse>('/officer-codes', {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data;
+};
+
+export const generateOfficerCodes = async (count: number, adminSecret: string): Promise<OfficerCodesResponse> => {
+  const response = await api.post<OfficerCodesResponse>(
+    '/officer-codes/generate',
+    { count },
+    { headers: { 'x-admin-secret': adminSecret } }
+  );
+  return response.data;
+};
+
+export const updateOfficerCode = async (
+  code: string,
+  updates: { officerName?: string; label?: string },
+  adminSecret: string
+): Promise<void> => {
+  await api.put(`/officer-codes/${code}`, updates, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+};
+
+export const deleteOfficerCode = async (code: string, adminSecret: string): Promise<void> => {
+  await api.delete(`/officer-codes/${code}`, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
 };
 
 export const updateCandidate = async (

@@ -15,7 +15,12 @@ export const ensurePollIsOpen = (): PollState => {
   return pollState;
 };
 
-export const recordVote = (selections: StoredVote['selections'], electionType: ElectionType, house?: HouseId): StoredVote => {
+export const recordVote = (
+  selections: StoredVote['selections'],
+  electionType: ElectionType,
+  house?: HouseId,
+  officerCode?: string
+): StoredVote => {
   ensurePollIsOpen();
-  return dataStore.addVote(selections, electionType, house);
+  return dataStore.addVote(selections, electionType, house, officerCode);
 };

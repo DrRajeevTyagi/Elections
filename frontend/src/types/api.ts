@@ -11,6 +11,8 @@ export interface ActivateRequest {
 
 export interface ActivateResponse {
   token: string;
+  officerName?: string;
+  stationVoteCount?: number;
 }
 
 export interface VoteRequest {
@@ -20,6 +22,7 @@ export interface VoteRequest {
 export interface VoteResponse {
   voteId: string;
   timestamp: number;
+  stationVoteCount?: number;
 }
 
 export interface PollStatus {
@@ -50,4 +53,16 @@ export interface PostResult {
 
 export interface ResultsResponse {
   results: PostResult[];
+}
+
+export interface OfficerCode {
+  code: string;
+  officerName: string;
+  label?: string;
+  createdAt: number;
+  voteCount: number;
+}
+
+export interface OfficerCodesResponse {
+  codes: OfficerCode[];
 }

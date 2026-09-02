@@ -7,6 +7,7 @@ export interface KioskSession {
   activatedAt: number;
   consumedAt?: number;
   house?: HouseId; // Required for house elections
+  officerCode?: string; // Which polling officer's code activated this session
 }
 
 const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -14,12 +15,13 @@ const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
 export class KioskService {
   private sessions = new Map<string, KioskSession>();
 
-  createSession(house?: HouseId): KioskSession {
+  createSession(officerCode?: string, house?: HouseId): KioskSession {
     const token = randomUUID();
     const session: KioskSession = {
       token,
       activatedAt: Date.now(),
-      house
+      house,
+      officerCode
     };
     this.sessions.set(token, session);
     return session;

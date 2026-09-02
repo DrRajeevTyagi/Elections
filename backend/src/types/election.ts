@@ -36,7 +36,15 @@ export interface StoredVote {
   timestamp: number;
   electionType: ElectionType;
   house?: HouseId; // Required for house elections
+  officerCode?: string; // Which polling officer's code activated this vote
   selections: Record<PostId, string>;
+}
+
+export interface OfficerCode {
+  code: string;
+  officerName: string;
+  label?: string;
+  createdAt: number;
 }
 
 export interface PollState {

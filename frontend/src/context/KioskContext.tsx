@@ -8,11 +8,13 @@ export type KioskStatus = 'idle' | 'activating' | 'ready' | 'submitting' | 'comp
 interface VoteConfirmation {
   voteId: string;
   timestamp: number;
+  stationVoteCount?: number;
 }
 
 interface KioskContextValue {
   token: string | null;
   house: HouseId | null;
+  officerName?: string;
   status: KioskStatus;
   error?: string;
   posts: PostCandidateGroup[];
@@ -42,6 +44,7 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
   const [posts, setPosts] = useState<PostCandidateGroup[]>([]);
   const [selections, setSelections] = useState<Record<PostId, string | null>>({} as Record<PostId, string | null>);
   const [confirmation, setConfirmation] = useState<VoteConfirmation | undefined>(undefined);
+  const [officerName, setOfficerName] = useState<string | undefined>(undefined);
 
   const setHouse = useCallback((newHouse: HouseId | null) => {
     setHouseState(newHouse);
@@ -53,9 +56,10 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
     setConfirmation(undefined);
 
     try {
-      const { token: sessionToken } = await activateKiosk(secret.trim(), house || undefined);
+      const { token: sessionToken, officerName: activatedOfficerName } = await activateKiosk(secret.trim(), house || undefined);
       const { posts: fetchedPosts } = await fetchPosts(house || undefined);
       setToken(sessionToken);
+      setOfficerName(activatedOfficerName);
       setPosts(fetchedPosts);
       setSelections(createEmptySelections(fetchedPosts));
       setStatus('ready');
@@ -99,7 +103,7 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
 
       const response = await submitVote(token, payload);
       await deactivateKiosk(token);
-      setConfirmation({ voteId: response.voteId, timestamp: response.timestamp });
+      setConfirmation({ voteId: response.voteId, timestamp: response.timestamp, stationVoteCount: response.stationVoteCount });
       setStatus('completed');
     } catch (submissionError) {
       setStatus('error');
@@ -114,6 +118,7 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
     }
     setToken(null);
     setHouseState(null); // Don't reset house - it persists for the polling booth
+    setOfficerName(undefined);
     setPosts([]);
     setSelections({} as Record<PostId, string | null>);
     setConfirmation(undefined);
@@ -122,8 +127,8 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
   }, [token]);
 
   const value = useMemo<KioskContextValue>(
-    () => ({ token, house, status, error, posts, selections, confirmation, setHouse, activate, updateSelection, submit, reset }),
-    [activate, confirmation, error, house, posts, reset, selections, setHouse, status, submit, token, updateSelection]
+    () => ({ token, house, officerName, status, error, posts, selections, confirmation, setHouse, activate, updateSelection, submit, reset }),
+    [activate, confirmation, error, house, officerName, posts, reset, selections, setHouse, status, submit, token, updateSelection]
   );
 
   return <KioskContext.Provider value={value}>{children}</KioskContext.Provider>;

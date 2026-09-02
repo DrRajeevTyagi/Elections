@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { SCHOOL_POST_IDS, HOUSE_POST_IDS } from '../config/posts.js';
 import { listCandidatesByPost } from '../services/candidateService.js';
 import { recordVote, getPollState } from '../services/voteService.js';
+import { dataStore } from '../storage/datastore.js';
 import type { HouseId, VoteSubmission } from '../types/election.js';
 import { requireKioskSession } from '../middleware/kioskSession.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -53,17 +54,20 @@ votesRouter.post(
     // Get house from kiosk session (for house elections)
     const kioskSession = res.locals.kioskSession;
     const house = kioskSession?.house;
+    const officerCode = kioskSession?.officerCode;
 
     if (pollState.activeElectionType === 'house' && !house) {
       throw new BadRequestError('Please select a house before submitting a vote for house elections.');
     }
 
     const submission = validateVote(req.body, pollState.activeElectionType, house);
-    const vote = recordVote(submission.selections, pollState.activeElectionType, house);
+    const vote = recordVote(submission.selections, pollState.activeElectionType, house, officerCode);
+    const stationVoteCount = officerCode ? dataStore.countVotesByOfficerCode(officerCode) : undefined;
 
     res.status(201).json({
       voteId: vote.id,
-      timestamp: vote.timestamp
+      timestamp: vote.timestamp,
+      stationVoteCount
     });
   })
 );

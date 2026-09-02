@@ -4,7 +4,8 @@ import { randomUUID } from 'crypto';
 import { Firestore } from '@google-cloud/firestore';
 import { env } from '../config/env.js';
 import { DEFAULT_CANDIDATES, POST_IDS, SCHOOL_POST_IDS, HOUSE_POST_IDS } from '../config/posts.js';
-import { Candidate, PollState, StoredVote, ElectionType } from '../types/election.js';
+import { generateUniqueCodes } from '../utils/officerCode.js';
+import { Candidate, PollState, StoredVote, ElectionType, OfficerCode } from '../types/election.js';
 
 // Single document holds the whole election state. This keeps the in-memory,
 // synchronous DataStore API unchanged; only the persistence backend differs.
@@ -17,6 +18,7 @@ interface ElectionData {
   candidates: Candidate[];
   votes: StoredVote[];
   pollState: PollState;
+  officerCodes: OfficerCode[];
 }
 
 const cloneCandidates = (candidates: Candidate[]): Candidate[] =>
@@ -34,7 +36,8 @@ const createDefaultPollState = (): PollState => ({
 const createDefaultData = (): ElectionData => ({
   candidates: cloneCandidates(DEFAULT_CANDIDATES),
   votes: [],
-  pollState: createDefaultPollState()
+  pollState: createDefaultPollState(),
+  officerCodes: []
 });
 
 const isCandidate = (value: unknown): value is Candidate => {
@@ -63,6 +66,14 @@ const isStoredVote = (value: unknown): value is StoredVote => {
     vote.selections !== undefined &&
     typeof vote.selections === 'object'
   );
+};
+
+const isOfficerCode = (value: unknown): value is OfficerCode => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const entry = value as OfficerCode;
+  return typeof entry.code === 'string' && typeof entry.officerName === 'string' && typeof entry.createdAt === 'number';
 };
 
 export class DataStore {
@@ -127,8 +138,13 @@ export class DataStore {
         timestamp: vote.timestamp,
         electionType: vote.electionType,
         house: vote.house,
+        officerCode: vote.officerCode,
         selections: { ...vote.selections }
       }));
+    }
+
+    if (Array.isArray(parsed.officerCodes) && parsed.officerCodes.every((entry) => isOfficerCode(entry))) {
+      defaults.officerCodes = parsed.officerCodes.map((entry) => ({ ...entry }));
     }
 
     if (parsed.pollState && typeof parsed.pollState === 'object') {
@@ -216,12 +232,13 @@ export class DataStore {
     return this.getPollState();
   }
 
-  addVote(selections: StoredVote['selections'], electionType: ElectionType, house?: string): StoredVote {
+  addVote(selections: StoredVote['selections'], electionType: ElectionType, house?: string, officerCode?: string): StoredVote {
     const vote: StoredVote = {
       id: randomUUID(),
       timestamp: Date.now(),
       electionType,
       house: house as StoredVote['house'],
+      officerCode,
       selections: { ...selections }
     };
     this.data.votes.push(vote);
@@ -235,12 +252,55 @@ export class DataStore {
       timestamp: vote.timestamp,
       electionType: vote.electionType,
       house: vote.house,
+      officerCode: vote.officerCode,
       selections: { ...vote.selections }
     }));
   }
 
   resetVotes(): void {
     this.data.votes = [];
+    this.queuePersist();
+  }
+
+  countVotesByOfficerCode(code: string): number {
+    return this.data.votes.filter((vote) => vote.officerCode === code).length;
+  }
+
+  getOfficerCodes(): OfficerCode[] {
+    return this.data.officerCodes.map((entry) => ({ ...entry }));
+  }
+
+  findOfficerCode(code: string): OfficerCode | undefined {
+    const entry = this.data.officerCodes.find((item) => item.code === code);
+    return entry ? { ...entry } : undefined;
+  }
+
+  generateOfficerCodes(count: number): OfficerCode[] {
+    const newCodes = generateUniqueCodes(count, this.data.officerCodes.map((entry) => entry.code));
+    const createdAt = Date.now();
+    const entries: OfficerCode[] = newCodes.map((code) => ({ code, officerName: '', createdAt }));
+    this.data.officerCodes.push(...entries);
+    this.queuePersist();
+    return entries;
+  }
+
+  updateOfficerCode(code: string, updates: { officerName?: string; label?: string }): OfficerCode | undefined {
+    const entry = this.data.officerCodes.find((item) => item.code === code);
+    if (!entry) {
+      return undefined;
+    }
+    if (updates.officerName !== undefined) {
+      entry.officerName = updates.officerName;
+    }
+    if (updates.label !== undefined) {
+      entry.label = updates.label;
+    }
+    this.queuePersist();
+    return { ...entry };
+  }
+
+  deleteOfficerCode(code: string): void {
+    this.data.officerCodes = this.data.officerCodes.filter((entry) => entry.code !== code);
     this.queuePersist();
   }
 }

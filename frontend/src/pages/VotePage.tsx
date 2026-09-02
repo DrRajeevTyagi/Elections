@@ -16,7 +16,7 @@ const POST_NAMES: Record<PostId, string> = {
 };
 
 export const VotePage = (): JSX.Element => {
-  const { posts, selections, updateSelection, submit, status, error, confirmation, reset } = useKiosk();
+  const { posts, selections, updateSelection, submit, status, error, confirmation, officerName, reset } = useKiosk();
   const navigate = useNavigate();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -83,6 +83,19 @@ export const VotePage = (): JSX.Element => {
           confirms your vote was saved &mdash; there is nothing you need to write
           down or keep.
         </p>
+        {typeof confirmation.stationVoteCount === 'number' && (
+          <div style={{ padding: '1rem', backgroundColor: '#f0fdf4', borderRadius: '12px', border: '2px solid #16a34a' }}>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: '#15803d', fontWeight: 600 }}>
+              {officerName ? `Polling officer: ${officerName}` : 'Votes cast at your station'}
+            </p>
+            <p style={{ margin: '0.25rem 0 0 0', fontSize: '1.4rem', fontWeight: 700, color: '#166534' }}>
+              {confirmation.stationVoteCount} vote{confirmation.stationVoteCount === 1 ? '' : 's'} cast so far
+            </p>
+            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: '#6b7280' }}>
+              Check this against your physical voter list.
+            </p>
+          </div>
+        )}
         <div className="page-actions">
           <button className="button" onClick={() => reset().then(() => navigate('/kiosk'))}>
             Finish
