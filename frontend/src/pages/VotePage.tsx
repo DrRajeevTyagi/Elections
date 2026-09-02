@@ -9,7 +9,10 @@ const POST_NAMES: Record<PostId, string> = {
   HG: 'Head Girl',
   SSC: 'School Sports Captain',
   SRC: 'School Resources Captain',
-  SCC: 'School Cultural Captain'
+  SCC: 'School Cultural Captain',
+  HC: 'House Captain',
+  HCC: 'House Cultural Captain',
+  HSC: 'House Sports Captain'
 };
 
 export const VotePage = (): JSX.Element => {
@@ -19,6 +22,8 @@ export const VotePage = (): JSX.Element => {
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | undefined>(undefined);
   const [reviewMode, setReviewMode] = useState(false);
+  // True while the voter is changing a single answer from the review screen.
+  const [editingFromReview, setEditingFromReview] = useState(false);
 
   useEffect(() => {
     if (status === 'idle') {
@@ -37,12 +42,23 @@ export const VotePage = (): JSX.Element => {
   };
 
   const handleNext = () => {
+    if (editingFromReview) {
+      setEditingFromReview(false);
+      setReviewMode(true);
+      return;
+    }
     if (currentIndex < posts.length - 1) {
       setCurrentIndex(currentIndex + 1);
-    } else if (allSelected && !reviewMode) {
+    } else if (allSelected) {
       setReviewMode(true);
       setCurrentIndex(0);
     }
+  };
+
+  const handleChangeChoice = (postIndex: number) => {
+    setCurrentIndex(postIndex);
+    setReviewMode(false);
+    setEditingFromReview(true);
   };
 
   const handleSubmit = async () => {
@@ -62,10 +78,11 @@ export const VotePage = (): JSX.Element => {
       <section className="page-card">
         <h1>Vote Recorded</h1>
         <p>Your ballot was submitted successfully.</p>
-        <p>
-          Receipt: <strong>{confirmation.voteId}</strong>
+        <p style={{ fontSize: '0.9rem', color: '#6b7280' }}>
+          Recorded at {new Date(confirmation.timestamp).toLocaleString()}. This
+          confirms your vote was saved &mdash; there is nothing you need to write
+          down or keep.
         </p>
-        <p>Timestamp: {new Date(confirmation.timestamp).toLocaleString()}</p>
         <div className="page-actions">
           <button className="button" onClick={() => reset().then(() => navigate('/kiosk'))}>
             Finish
@@ -84,6 +101,71 @@ export const VotePage = (): JSX.Element => {
     );
   }
 
+  if (reviewMode) {
+    return (
+      <section className="page-card">
+        <div style={{ marginBottom: '1rem', padding: '0.5rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
+          <p style={{ margin: 0, fontSize: '0.9rem', color: '#6b7280' }}>&#10003; Review Your Choices</p>
+        </div>
+        <h1 style={{ color: '#16a34a' }}>Review Your Selections</h1>
+        <p style={{ fontSize: '0.95rem', color: '#6b7280' }}>
+          Check every choice below. Click "Change" to update any answer, or click
+          "Submit Ballot" once you are sure.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
+          {posts.map((group, index) => {
+            const selectedCandidate = group.candidates.find((c) => c.id === selections[group.post]);
+            return (
+              <div
+                key={group.post}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '1rem',
+                  padding: '1rem',
+                  backgroundColor: '#f0fdf4',
+                  borderRadius: '12px',
+                  border: '2px solid #16a34a'
+                }}
+              >
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: '#15803d', fontWeight: 600 }}>
+                    {POST_NAMES[group.post]} ({group.post})
+                  </p>
+                  <p style={{ margin: '0.25rem 0 0 0', fontSize: '1.1rem', fontWeight: 600, color: '#166534' }}>
+                    {selectedCandidate?.name ?? 'No selection'}
+                  </p>
+                </div>
+                <button
+                  className="button"
+                  style={{ backgroundColor: '#6b7280', flexShrink: 0 }}
+                  onClick={() => handleChangeChoice(index)}
+                >
+                  Change
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {localError && <p style={{ color: '#dc2626', fontWeight: 600 }}>{localError}</p>}
+
+        <div className="page-actions" style={{ width: '100%', marginTop: '1.5rem' }}>
+          <button
+            className="button"
+            onClick={handleSubmit}
+            disabled={submitting}
+            style={{ backgroundColor: '#16a34a', width: '100%' }}
+          >
+            {submitting ? 'Submitting...' : 'Submit Ballot'}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   const selectedCandidate = currentPost.candidates.find(
     (c) => c.id === selections[currentPost.post]
   );
@@ -93,113 +175,77 @@ export const VotePage = (): JSX.Element => {
       {/* Progress indicator */}
       <div style={{ marginBottom: '1rem', padding: '0.5rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
         <p style={{ margin: 0, fontSize: '0.9rem', color: '#6b7280' }}>
-          {reviewMode ? '✓ Review Your Choices' : `Step ${currentIndex + 1} of ${posts.length}`}
+          {editingFromReview ? 'Changing your selection' : `Step ${currentIndex + 1} of ${posts.length}`}
         </p>
       </div>
 
-      {reviewMode ? (
-        <>
-          <h1 style={{ color: '#16a34a' }}>Review Your Selection</h1>
-          <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>
-            {POST_NAMES[currentPost.post]} ({currentPost.post})
-          </p>
-          <div style={{ 
-            padding: '1.5rem', 
-            backgroundColor: '#f0fdf4', 
-            borderRadius: '12px',
-            border: '2px solid #16a34a',
-            marginBottom: '1rem'
-          }}>
-            <p style={{ margin: 0, fontSize: '0.9rem', color: '#15803d', fontWeight: 600 }}>
-              Your choice:
-            </p>
-            <p style={{ margin: '0.5rem 0 0 0', fontSize: '1.2rem', fontWeight: 600, color: '#166534' }}>
-              {selectedCandidate?.name}
-            </p>
-          </div>
-          <p style={{ fontSize: '0.95rem', color: '#6b7280' }}>
-            {currentIndex < posts.length - 1 
-              ? 'Click "Next" to review your next selection.'
-              : 'Click "Submit Ballot" to cast your vote, or "Previous" to review your choices.'}
-          </p>
-        </>
-      ) : (
-        <>
-          <h1>Select Your Candidate</h1>
-          <p style={{ fontSize: '1.1rem', fontWeight: 500, color: '#1f2937' }}>
-            {POST_NAMES[currentPost.post]} ({currentPost.post})
-          </p>
-          <p style={{ fontSize: '0.95rem', color: '#6b7280', marginTop: '-0.5rem' }}>
-            Choose one candidate from the list below:
-          </p>
+      <h1>Select Your Candidate</h1>
+      <p style={{ fontSize: '1.1rem', fontWeight: 500, color: '#1f2937' }}>
+        {POST_NAMES[currentPost.post]} ({currentPost.post})
+      </p>
+      <p style={{ fontSize: '0.95rem', color: '#6b7280', marginTop: '-0.5rem' }}>
+        Choose one candidate from the list below:
+      </p>
 
-          <div className="page-actions" style={{ flexDirection: 'column', gap: '1rem' }}>
-            {currentPost.candidates.map((candidate) => {
-              const isSelected = selections[currentPost.post] === candidate.id;
-              return (
-                <button
-                  key={candidate.id}
-                  className="button"
-                  style={{
-                    width: '100%',
-                    justifyContent: 'space-between',
-                    backgroundColor: isSelected ? '#16a34a' : '#1c64f2'
-                  }}
-                  onClick={() => handleSelect(currentPost.post, candidate.id)}
-                >
-                  <span>{candidate.name}</span>
-                  {isSelected && <span>✓ Selected</span>}
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
+      <div className="page-actions" style={{ flexDirection: 'column', gap: '1rem' }}>
+        {currentPost.candidates.map((candidate) => {
+          const isSelected = selections[currentPost.post] === candidate.id;
+          return (
+            <button
+              key={candidate.id}
+              className="button"
+              style={{
+                width: '100%',
+                justifyContent: 'space-between',
+                backgroundColor: isSelected ? '#16a34a' : '#1c64f2'
+              }}
+              onClick={() => handleSelect(currentPost.post, candidate.id)}
+            >
+              <span>{candidate.name}</span>
+              {isSelected && <span>&#10003; Selected</span>}
+            </button>
+          );
+        })}
+      </div>
 
       {localError && <p style={{ color: '#dc2626', fontWeight: 600 }}>{localError}</p>}
 
       <div className="page-actions" style={{ justifyContent: 'space-between', width: '100%', marginTop: '1rem' }}>
-        <button
-          className="button"
-          style={{ backgroundColor: '#6b7280' }}
-          onClick={() => {
-            if (currentIndex === 0 && reviewMode) {
-              setReviewMode(false);
-            }
-            setCurrentIndex((index) => Math.max(0, index - 1));
-          }}
-          disabled={currentIndex === 0 && !reviewMode}
-        >
-          {reviewMode && currentIndex === 0 ? 'Back to Voting' : 'Previous'}
-        </button>
-
-        {reviewMode ? (
-          currentIndex < posts.length - 1 ? (
-            <button
-              className="button"
-              onClick={handleNext}
-            >
-              Next
-            </button>
-          ) : (
-            <button 
-              className="button" 
-              onClick={handleSubmit} 
-              disabled={submitting}
-              style={{ backgroundColor: '#16a34a' }}
-            >
-              {submitting ? 'Submitting...' : 'Submit Ballot'}
-            </button>
-          )
+        {editingFromReview ? (
+          <button
+            className="button"
+            style={{ backgroundColor: '#6b7280' }}
+            onClick={() => {
+              setEditingFromReview(false);
+              setReviewMode(true);
+            }}
+          >
+            Cancel
+          </button>
         ) : (
           <button
             className="button"
-            onClick={handleNext}
-            disabled={!selections[currentPost.post]}
+            style={{ backgroundColor: '#6b7280' }}
+            onClick={() => setCurrentIndex((index) => Math.max(0, index - 1))}
+            disabled={currentIndex === 0}
           >
-            {currentIndex < posts.length - 1 ? 'Next' : allSelected ? 'Review & Submit' : 'Next'}
+            Previous
           </button>
         )}
+
+        <button
+          className="button"
+          onClick={handleNext}
+          disabled={!selections[currentPost.post]}
+        >
+          {editingFromReview
+            ? 'Back to Review'
+            : currentIndex < posts.length - 1
+            ? 'Next'
+            : allSelected
+            ? 'Review & Submit'
+            : 'Next'}
+        </button>
       </div>
     </section>
   );
