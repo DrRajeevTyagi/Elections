@@ -192,7 +192,17 @@ these repository secrets (Settings → Secrets and variables → Actions):
   ```
 - `GCP_SERVICE_ACCOUNT` – `gh-deployer@YOUR_PROJECT_ID.iam.gserviceaccount.com`,
   granted `roles/run.admin`, `roles/artifactregistry.writer`, `roles/iam.serviceAccountUser`,
-  and `roles/cloudbuild.builds.editor` on the project.
+  `roles/cloudbuild.builds.editor`, `roles/storage.admin`, and `roles/viewer`
+  (the last one is required for `gcloud builds submit` to stream build logs)
+  on the project.
+
+### This project's live deployment (for reference)
+
+- GCP project: `school-election-rt2026` (region `asia-south1`)
+- Cloud Run service: `school-election`
+- Live URL: https://school-election-584391847327.asia-south1.run.app
+- GitHub repo: https://github.com/DrRajeevTyagi/Elections — pushing to `main`
+  automatically rebuilds and redeploys via `.github/workflows/deploy-cloud-run.yml`.
 
 ### Ongoing operational notes
 
