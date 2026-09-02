@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { adminRouter } from './admin.js';
 import { candidatesRouter } from './candidates.js';
 import { healthRouter } from './health.js';
 import { kioskRouter } from './kiosk.js';
@@ -16,3 +17,4 @@ apiRouter.use('/results', resultsRouter);
 apiRouter.use('/poll', pollRouter);
 apiRouter.use('/kiosk', kioskRouter);
 apiRouter.use('/candidates', candidatesRouter);
+apiRouter.use('/admin', adminRouter);

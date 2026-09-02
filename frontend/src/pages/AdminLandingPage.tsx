@@ -8,7 +8,8 @@ import {
   updateCandidate,
   deleteCandidate,
   addCandidate,
-  setElectionType
+  setElectionType,
+  verifyAdminSecret
 } from '../services/api';
 import type { PollStatus, PostResult, CandidateResult } from '../types/api';
 import type { PostId, ElectionType, HouseId } from '../types/election';
@@ -77,6 +78,10 @@ const groupResultsByHouse = (results: PostResult[]): HouseGroupedResult[] => {
 
 export const AdminLandingPage = (): JSX.Element => {
   const [adminSecret, setAdminSecret] = useState('');
+  const [authenticated, setAuthenticated] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
   const [pollStatus, setPollStatus] = useState<PollStatus | null>(null);
   const [results, setResults] = useState<PostResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -99,14 +104,63 @@ export const AdminLandingPage = (): JSX.Element => {
     }
   }, []);
 
+  // On first load, silently re-use a previously verified secret for this browser tab.
   useEffect(() => {
-    void loadDashboard();
-  }, [loadDashboard]);
+    const stored = sessionStorage.getItem('adminSecret');
+    if (!stored) {
+      setCheckingAuth(false);
+      return;
+    }
+    void (async () => {
+      try {
+        await verifyAdminSecret(stored);
+        setAdminSecret(stored);
+        setAuthenticated(true);
+      } catch {
+        sessionStorage.removeItem('adminSecret');
+      } finally {
+        setCheckingAuth(false);
+      }
+    })();
+  }, []);
+
+  const handleUnlock = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!adminSecret.trim()) {
+      setAuthError('Enter the admin secret.');
+      return;
+    }
+    try {
+      setUnlocking(true);
+      setAuthError(null);
+      await verifyAdminSecret(adminSecret.trim());
+      sessionStorage.setItem('adminSecret', adminSecret.trim());
+      setAuthenticated(true);
+    } catch (verifyError) {
+      setAuthError(verifyError instanceof Error ? verifyError.message : 'Incorrect admin secret');
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('adminSecret');
+    setAdminSecret('');
+    setAuthenticated(false);
+    setPollStatus(null);
+    setResults([]);
+  };
+
+  useEffect(() => {
+    if (authenticated) {
+      void loadDashboard();
+    }
+  }, [authenticated, loadDashboard]);
 
   // Auto-refresh results when poll is open
   useEffect(() => {
-    if (!pollStatus?.settings.isOpen) {
-      return; // Don't poll when poll is closed
+    if (!authenticated || !pollStatus?.settings.isOpen) {
+      return; // Don't poll when logged out or poll is closed
     }
 
     // Refresh results every 3 seconds when poll is open
@@ -118,7 +172,7 @@ export const AdminLandingPage = (): JSX.Element => {
     return () => {
       clearInterval(intervalId);
     };
-  }, [pollStatus?.settings.isOpen, loadDashboard]);
+  }, [authenticated, pollStatus?.settings.isOpen, loadDashboard]);
 
   const mutatePoll = async (action: 'open' | 'close') => {
     if (!adminSecret.trim()) {
@@ -267,10 +321,51 @@ export const AdminLandingPage = (): JSX.Element => {
     }
   };
 
+  if (checkingAuth) {
+    return (
+      <section className="page-card admin">
+        <h1>Admin Dashboard</h1>
+        <p>Checking access...</p>
+      </section>
+    );
+  }
+
+  if (!authenticated) {
+    return (
+      <section className="page-card admin">
+        <h1>Admin Login</h1>
+        <p>Enter the admin secret to view or manage the election.</p>
+        <form className="form" onSubmit={handleUnlock} style={{ maxWidth: '320px' }}>
+          <label className="form-label" htmlFor="admin-secret">Admin Secret</label>
+          <input
+            id="admin-secret"
+            className="form-input"
+            type="password"
+            value={adminSecret}
+            onChange={(event) => setAdminSecret(event.target.value)}
+            placeholder="Enter admin secret"
+            autoFocus
+          />
+          {authError && <p style={{ color: '#dc2626', fontWeight: 600 }}>{authError}</p>}
+          <button className="button" type="submit" disabled={unlocking || !adminSecret.trim()}>
+            {unlocking ? 'Checking...' : 'Unlock Admin Dashboard'}
+          </button>
+        </form>
+      </section>
+    );
+  }
+
   return (
     <section className="page-card admin">
-      <h1>Admin Dashboard</h1>
-      <p>Monitor poll status, manage voting, and review live results.</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1>Admin Dashboard</h1>
+          <p>Monitor poll status, manage voting, and review live results.</p>
+        </div>
+        <button className="button" onClick={handleLogout} style={{ backgroundColor: '#6b7280', flexShrink: 0 }}>
+          Log out
+        </button>
+      </div>
 
       <div className="admin-grid">
         <div className="admin-panel">
@@ -320,15 +415,8 @@ export const AdminLandingPage = (): JSX.Element => {
             )}
           </div>
 
-          <label className="form-label" htmlFor="admin-secret">Admin Secret</label>
-          <input
-            id="admin-secret"
-            className="form-input"
-            type="password"
-            value={adminSecret}
-            onChange={(event) => setAdminSecret(event.target.value)}
-            placeholder="Enter admin secret"
-          />
+          <label className="form-label" style={{ marginBottom: '0.5rem', fontWeight: 600 }}>Admin Secret</label>
+          <p className="status" style={{ margin: '0 0 0.75rem 0' }}>✓ Unlocked for this browser session</p>
           <div className="admin-actions">
             <button 
               className="button" 

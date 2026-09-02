@@ -66,6 +66,14 @@ export const getPollStatus = async (): Promise<PollResponse> => {
   return response.data;
 };
 
+export const verifyAdminSecret = async (adminSecret: string): Promise<void> => {
+  await api.post('/admin/verify', undefined, {
+    headers: {
+      'x-admin-secret': adminSecret
+    }
+  });
+};
+
 const updatePoll = async (action: 'open' | 'close', adminSecret: string): Promise<PollResponse> => {
   const response = await api.post<PollResponse>(`/poll/${action}`, undefined, {
     headers: {
