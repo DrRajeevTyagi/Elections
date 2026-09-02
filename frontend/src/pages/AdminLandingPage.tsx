@@ -240,16 +240,17 @@ export const AdminLandingPage = (): JSX.Element => {
       return; // Don't poll when logged out or poll is closed
     }
 
-    // Refresh results every 3 seconds when poll is open
+    // Refresh results and officer vote counts every 3 seconds when poll is open
     const intervalId = setInterval(() => {
       void loadDashboard();
+      void loadOfficerCodes();
     }, 3000); // 3 seconds
 
     // Cleanup interval on unmount or when poll closes
     return () => {
       clearInterval(intervalId);
     };
-  }, [authenticated, pollStatus?.settings.isOpen, loadDashboard]);
+  }, [authenticated, pollStatus?.settings.isOpen, loadDashboard, loadOfficerCodes]);
 
   const mutatePoll = async (action: 'open' | 'close') => {
     if (!adminSecret.trim()) {
@@ -671,14 +672,16 @@ export const AdminLandingPage = (): JSX.Element => {
                       const postResult = houseGroup.posts.find(p => p.post === postId);
                       const postCandidates = postResult?.candidates || [];
                       
+                      const sortedCandidates = [...postCandidates].sort((a, b) => b.total - a.total);
+
                       return (
                         <div key={`${houseGroup.house}-${postId}`} className="result-card">
                           <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.75rem' }}>
                             {postId}
                           </h4>
                           <ul>
-                            {postCandidates.length > 0 ? (
-                              postCandidates.map((candidateResult, index) => (
+                            {sortedCandidates.length > 0 ? (
+                              sortedCandidates.map((candidateResult, index) => (
                                 <li key={candidateResult.candidate.id} style={{ 
                                   backgroundColor: index === 0 && candidateResult.total > 0 ? '#f0fdf4' : 'transparent',
                                   padding: '0.5rem',
@@ -711,11 +714,13 @@ export const AdminLandingPage = (): JSX.Element => {
           ) : (
             // School elections: Group by post only
             <div className="results-grid">
-              {results.map((postResult) => (
+              {results.map((postResult) => {
+                const sortedCandidates = [...postResult.candidates].sort((a, b) => b.total - a.total);
+                return (
                 <div key={postResult.post} className="result-card">
                   <h3>{postResult.post}</h3>
                   <ul>
-                    {postResult.candidates.map((candidateResult, index) => (
+                    {sortedCandidates.map((candidateResult, index) => (
                       <li key={candidateResult.candidate.id} style={{ 
                         backgroundColor: index === 0 && candidateResult.total > 0 ? '#f0fdf4' : 'transparent',
                         padding: '0.5rem',
@@ -734,7 +739,8 @@ export const AdminLandingPage = (): JSX.Element => {
                     ))}
                   </ul>
                 </div>
-              ))}
+                );
+              })}
               {results.length === 0 && <p>No votes recorded yet.</p>}
             </div>
           )}

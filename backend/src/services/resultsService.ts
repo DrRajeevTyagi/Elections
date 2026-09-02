@@ -57,8 +57,6 @@ export const getResults = (house?: HouseId): PostResult[] => {
       total: tally.get(post + ':' + candidate.id) ?? 0
     }));
 
-    candidatesWithTotals.sort((a, b) => b.total - a.total);
-
     return {
       post,
       candidates: candidatesWithTotals
