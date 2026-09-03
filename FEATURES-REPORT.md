@@ -460,4 +460,4 @@ Anand, Dhiraj, Kripa, Prem, Namrata, Nishtha, Satya, Shanti
 
 ---
 
-*Last updated: 2026-09-03, reflecting commit `b0441b6` on `main`.*
+*Last updated: 2026-09-03, reflecting `main`.*
