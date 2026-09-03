@@ -93,7 +93,7 @@ export const AdminLandingPage = (): JSX.Element => {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [officerCodes, setOfficerCodes] = useState<OfficerCode[]>([]);
-  const [generateCount, setGenerateCount] = useState('10');
+  const [generateCount, setGenerateCount] = useState('1');
   const [officerCodesLoading, setOfficerCodesLoading] = useState(false);
   const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
 
@@ -131,6 +131,24 @@ export const AdminLandingPage = (): JSX.Element => {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load officer codes');
     }
   }, []);
+
+  // Used only by the 3-second background poll below. It updates vote totals
+  // (candidate results + per-officer vote counts) and nothing else -- not
+  // pollStatus, not officer name drafts, not the global `loading` flag -- so
+  // it can never interrupt an admin who is mid-edit elsewhere on this page.
+  // Everything else (poll open/close, candidate add/edit/delete, code
+  // generate/save/delete) reloads its own state explicitly after acting.
+  const refreshVoteCounts = useCallback(async () => {
+    try {
+      const resultsResponse = await getResults();
+      setResults(resultsResponse.results);
+      setLastUpdated(Date.now());
+    } catch {
+      // Silent: a background tick failing once isn't worth surfacing an
+      // error banner for; the next tick retries automatically.
+    }
+    await loadOfficerCodes(false);
+  }, [loadOfficerCodes]);
 
   const handleGenerateCodes = async () => {
     const count = Number(generateCount);
@@ -244,17 +262,17 @@ export const AdminLandingPage = (): JSX.Element => {
       return; // Don't poll when logged out or poll is closed
     }
 
-    // Refresh results and officer vote counts every 3 seconds when poll is open
+    // Refresh vote counts only -- see refreshVoteCounts above -- every 3
+    // seconds while the poll is open.
     const intervalId = setInterval(() => {
-      void loadDashboard();
-      void loadOfficerCodes(false);
+      void refreshVoteCounts();
     }, 3000); // 3 seconds
 
     // Cleanup interval on unmount or when poll closes
     return () => {
       clearInterval(intervalId);
     };
-  }, [authenticated, pollStatus?.settings.isOpen, loadDashboard, loadOfficerCodes]);
+  }, [authenticated, pollStatus?.settings.isOpen, refreshVoteCounts]);
 
   const mutatePoll = async (action: 'open' | 'close') => {
     if (!adminSecret.trim()) {
@@ -756,11 +774,12 @@ export const AdminLandingPage = (): JSX.Element => {
         <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
           Generate one simple 6-character code per polling officer/station. Each officer uses their own
           code to activate the kiosk, so votes can be traced back to a station without identifying any voter.
+          Generating adds new codes to the list below &mdash; it does not replace or remove existing ones.
         </p>
 
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', marginBottom: '1rem' }}>
           <div>
-            <label className="form-label" htmlFor="generate-count">Number of codes to generate</label>
+            <label className="form-label" htmlFor="generate-count">Number of new codes to add</label>
             <input
               id="generate-count"
               className="form-input"
