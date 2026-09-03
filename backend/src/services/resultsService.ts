@@ -1,6 +1,7 @@
+import { randomUUID } from 'crypto';
 import { SCHOOL_POST_IDS, HOUSE_POST_IDS } from '../config/posts.js';
 import { dataStore } from '../storage/datastore.js';
-import { Candidate, PostId, StoredVote, ElectionType, HouseId } from '../types/election.js';
+import { Candidate, PostId, StoredVote, ElectionType, HouseId, ElectionArchive } from '../types/election.js';
 import { getPollState } from './voteService.js';
 
 export interface CandidateResult {
@@ -62,4 +63,46 @@ export const getResults = (house?: HouseId): PostResult[] => {
       candidates: candidatesWithTotals
     };
   });
+};
+
+// A full, unfiltered snapshot of the currently active election -- every
+// house's candidates together, plus officer/station turnout -- used both for
+// the "Download Report" button (live, not persisted) and to archive results
+// automatically right before "Reset Poll" clears the votes. Returns null
+// when there's no active election type to snapshot.
+export const buildElectionSnapshot = (): ElectionArchive | null => {
+  const pollState = getPollState();
+  const electionType = pollState.activeElectionType;
+  if (!electionType) {
+    return null;
+  }
+
+  const votes = dataStore.getVotes();
+  const tally = countVotes(votes, electionType);
+  const candidates = dataStore.getCandidates().filter((c) => c.electionType === electionType);
+
+  const results = candidates.map((candidate) => ({
+    candidateId: candidate.id,
+    name: candidate.name,
+    post: candidate.post,
+    house: candidate.house,
+    total: tally.get(candidate.post + ':' + candidate.id) ?? 0
+  }));
+
+  const officerCodes = dataStore.getOfficerCodes().map((entry) => ({
+    code: entry.code,
+    officerName: entry.officerName,
+    voteCount: dataStore.countVotesByOfficerCode(entry.code)
+  }));
+
+  const totalVotes = votes.filter((vote) => vote.electionType === electionType).length;
+
+  return {
+    id: randomUUID(),
+    archivedAt: Date.now(),
+    electionType,
+    totalVotes,
+    results,
+    officerCodes
+  };
 };

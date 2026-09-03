@@ -66,3 +66,45 @@ export interface OfficerCode {
 export interface OfficerCodesResponse {
   codes: OfficerCode[];
 }
+
+export interface ArchivedCandidateResult {
+  candidateId: string;
+  name: string;
+  post: PostId;
+  house?: HouseId;
+  total: number;
+}
+
+export interface ArchivedOfficerCode {
+  code: string;
+  officerName: string;
+  voteCount: number;
+}
+
+export interface ElectionReport {
+  id: string;
+  archivedAt: number;
+  electionType: ElectionType;
+  totalVotes: number;
+  results: ArchivedCandidateResult[];
+  officerCodes: ArchivedOfficerCode[];
+}
+
+export interface ArchiveSummary {
+  id: string;
+  archivedAt: number;
+  electionType: ElectionType;
+  totalVotes: number;
+}
+
+export interface CurrentReportResponse {
+  report: ElectionReport | null;
+}
+
+export interface ArchiveReportResponse {
+  report: ElectionReport;
+}
+
+export interface ArchivesListResponse {
+  archives: ArchiveSummary[];
+}

@@ -1,0 +1,108 @@
+.report-page {
+  width: min(900px, 100%);
+  background: #ffffff;
+  padding: 2rem;
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
+  color: #111827;
+}
+
+.report-status {
+  padding: 2rem;
+  text-align: center;
+  color: #4b5563;
+}
+
+.report-error {
+  color: #dc2626;
+}
+
+.report-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.report-page h1 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.75rem;
+}
+
+.report-meta {
+  margin: 0 0 1.5rem 0;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.report-house {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.report-house h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  border-bottom: 2px solid #3b82f6;
+  padding-bottom: 0.5rem;
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.25rem;
+}
+
+.report-table th {
+  text-align: left;
+  background: #f3f4f6;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.report-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.report-votes {
+  text-align: right;
+  font-weight: 600;
+  width: 8rem;
+}
+
+.report-winner {
+  background: #f0fdf4;
+  font-weight: 600;
+}
+
+.report-empty {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .app-header {
+    display: none !important;
+  }
+
+  .app-main {
+    padding: 0 !important;
+  }
+
+  .report-page {
+    box-shadow: none;
+    width: 100%;
+    padding: 0;
+  }
+
+  .report-house {
+    break-inside: avoid;
+  }
+}

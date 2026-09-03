@@ -52,3 +52,29 @@ export interface PollState {
   settings: PollSettings;
   secretKey: string;
 }
+
+// A permanent snapshot of one election's results, taken automatically right
+// before "Reset Poll" clears the live votes. Deliberately excludes candidate
+// photos/manifesto -- only ids/names/counts -- so archives stay small.
+export interface ArchivedCandidateResult {
+  candidateId: string;
+  name: string;
+  post: PostId;
+  house?: HouseId;
+  total: number;
+}
+
+export interface ArchivedOfficerCode {
+  code: string;
+  officerName: string;
+  voteCount: number;
+}
+
+export interface ElectionArchive {
+  id: string;
+  archivedAt: number;
+  electionType: ElectionType;
+  totalVotes: number;
+  results: ArchivedCandidateResult[];
+  officerCodes: ArchivedOfficerCode[];
+}

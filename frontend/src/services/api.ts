@@ -2,6 +2,9 @@ import axios from 'axios';
 import type {
   ActivateRequest,
   ActivateResponse,
+  ArchiveReportResponse,
+  ArchivesListResponse,
+  CurrentReportResponse,
   OfficerCodesResponse,
   PollResponse,
   PostsResponse,
@@ -179,4 +182,25 @@ export const deleteCandidate = async (
       'x-admin-secret': adminSecret
     }
   });
+};
+
+export const getCurrentReport = async (adminSecret: string): Promise<CurrentReportResponse> => {
+  const response = await api.get<CurrentReportResponse>('/report/current', {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data;
+};
+
+export const getArchivesList = async (adminSecret: string): Promise<ArchivesListResponse> => {
+  const response = await api.get<ArchivesListResponse>('/report/archives', {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data;
+};
+
+export const getArchive = async (id: string, adminSecret: string): Promise<ArchiveReportResponse> => {
+  const response = await api.get<ArchiveReportResponse>(`/report/archives/${id}`, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data;
 };

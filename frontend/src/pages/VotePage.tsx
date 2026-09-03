@@ -2,20 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useKiosk } from '../context/KioskContext';
 import { CandidatePhoto } from '../components/CandidatePhoto';
+import { POST_NAMES } from '../constants/posts';
 import type { PostCandidateGroup, PostId } from '../types/election';
 import './Page.css';
 import './Evm.css';
-
-const POST_NAMES: Record<PostId, string> = {
-  HB: 'Head Boy',
-  HG: 'Head Girl',
-  SSC: 'School Sports Captain',
-  SRC: 'School Resources Captain',
-  SCC: 'School Cultural Captain',
-  HC: 'House Captain',
-  HCC: 'House Cultural Captain',
-  HSC: 'House Sports Captain'
-};
 
 export const VotePage = (): JSX.Element => {
   const { posts, selections, updateSelection, submit, status, error, confirmation, officerName, reset } = useKiosk();

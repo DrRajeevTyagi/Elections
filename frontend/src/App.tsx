@@ -5,6 +5,7 @@ import { ActivationPage } from './pages/ActivationPage';
 import { AdminLandingPage } from './pages/AdminLandingPage';
 import { HouseSelectionPage } from './pages/HouseSelectionPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { ReportPage } from './pages/ReportPage';
 import { VotePage } from './pages/VotePage';
 import { WelcomePage } from './pages/WelcomePage';
 
@@ -19,6 +20,8 @@ const App = (): JSX.Element => {
           <Route path="/kiosk/activate" element={<ActivationPage />} />
           <Route path="/kiosk/vote" element={<VotePage />} />
           <Route path="/admin" element={<AdminLandingPage />} />
+          <Route path="/admin/report" element={<ReportPage />} />
+          <Route path="/admin/report/:archiveId" element={<ReportPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </AppLayout>

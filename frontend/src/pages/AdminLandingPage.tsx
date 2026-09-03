@@ -13,19 +13,18 @@ import {
   getOfficerCodes,
   generateOfficerCodes,
   updateOfficerCode,
-  deleteOfficerCode
+  deleteOfficerCode,
+  getArchivesList
 } from '../services/api';
-import type { PollStatus, PostResult, CandidateResult, OfficerCode } from '../types/api';
+import type { PollStatus, PostResult, CandidateResult, OfficerCode, ArchiveSummary } from '../types/api';
 import type { PostId, ElectionType, HouseId } from '../types/election';
 import { AddCandidateForm } from '../components/AddCandidateForm';
 import { CandidateEditor } from '../components/CandidateEditor';
+import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
 import './Page.css';
 import './admin.css';
 
 const formatTimestamp = (timestamp: number): string => new Date(timestamp).toLocaleString();
-
-const HOUSE_IDS: HouseId[] = ['Anand', 'Dhiraj', 'Kripa', 'Prem', 'Namrata', 'Nishtha', 'Satya', 'Shanti'];
-const HOUSE_POST_IDS: PostId[] = ['HC', 'HCC', 'HSC'];
 
 // Helper to group results by house for house elections
 interface HouseGroupedResult {
@@ -96,6 +95,7 @@ export const AdminLandingPage = (): JSX.Element => {
   const [generateCount, setGenerateCount] = useState('1');
   const [officerCodesLoading, setOfficerCodesLoading] = useState(false);
   const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
+  const [archives, setArchives] = useState<ArchiveSummary[]>([]);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -184,6 +184,19 @@ export const AdminLandingPage = (): JSX.Element => {
     }
   };
 
+  const loadArchives = useCallback(async () => {
+    const secret = sessionStorage.getItem('adminSecret');
+    if (!secret) {
+      return;
+    }
+    try {
+      const response = await getArchivesList(secret);
+      setArchives(response.archives);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load election history');
+    }
+  }, []);
+
   const handleDeleteOfficerCode = async (code: string) => {
     const confirmed = window.confirm(`Delete code ${code}? It will no longer be able to activate a kiosk.`);
     if (!confirmed) {
@@ -253,8 +266,9 @@ export const AdminLandingPage = (): JSX.Element => {
     if (authenticated) {
       void loadDashboard();
       void loadOfficerCodes();
+      void loadArchives();
     }
-  }, [authenticated, loadDashboard]);
+  }, [authenticated, loadDashboard, loadOfficerCodes, loadArchives]);
 
   // Auto-refresh results when poll is open
   useEffect(() => {
@@ -307,7 +321,7 @@ export const AdminLandingPage = (): JSX.Element => {
     }
 
     const confirmed = window.confirm(
-      'Are you sure you want to RESET the poll?\n\nThis will:\n- Delete ALL votes\n- Reset all results to zero\n\nThis action cannot be undone!'
+      'Are you sure you want to RESET the poll?\n\nThis will:\n- Save a snapshot of the current results to Election History\n- Delete ALL votes for both election types\n- Reset all results to zero\n\nVotes cannot be recovered after this, but the snapshot will remain available in Election History.'
     );
 
     if (!confirmed) {
@@ -319,8 +333,9 @@ export const AdminLandingPage = (): JSX.Element => {
       setError(null);
       setMessage(null);
       await resetPoll(adminSecret);
-      setMessage('Poll reset successfully. All votes have been cleared.');
+      setMessage('Poll reset successfully. A snapshot was saved to Election History and all votes have been cleared.');
       await loadDashboard();
+      await loadArchives();
     } catch (resetError) {
       setError(resetError instanceof Error ? resetError.message : 'Reset failed');
     } finally {
@@ -555,6 +570,17 @@ export const AdminLandingPage = (): JSX.Element => {
             </p>
           )}
           {lastUpdated && <p className="status">Last updated: {formatTimestamp(lastUpdated)}</p>}
+          <div className="admin-actions" style={{ marginTop: '0.75rem' }}>
+            <button
+              className="button"
+              onClick={() => window.open('/admin/report', '_blank')}
+              disabled={!pollStatus?.activeElectionType}
+              style={{ backgroundColor: '#4338ca', width: '100%' }}
+              title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable results report in a new tab'}
+            >
+              🖨️ Download Report (current results)
+            </button>
+          </div>
         </div>
 
         <div className="admin-panel">
@@ -849,6 +875,51 @@ export const AdminLandingPage = (): JSX.Element => {
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="admin-panel" style={{ marginTop: '1.5rem' }}>
+        <h2>Election History</h2>
+        <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
+          A snapshot of results and polling-officer turnout is saved here automatically every time "Reset Poll" is
+          used, so a completed election's record survives even after votes are cleared or the election type is
+          switched.
+        </p>
+        {archives.length === 0 ? (
+          <p>No past elections have been archived yet.</p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', borderBottom: '2px solid #e5e7eb' }}>
+                  <th style={{ padding: '0.5rem' }}>Archived</th>
+                  <th style={{ padding: '0.5rem' }}>Election Type</th>
+                  <th style={{ padding: '0.5rem' }}>Total Votes</th>
+                  <th style={{ padding: '0.5rem' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...archives]
+                  .sort((a, b) => b.archivedAt - a.archivedAt)
+                  .map((archive) => (
+                    <tr key={archive.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '0.5rem' }}>{formatTimestamp(archive.archivedAt)}</td>
+                      <td style={{ padding: '0.5rem' }}>{archive.electionType === 'school' ? 'School' : 'House'}</td>
+                      <td style={{ padding: '0.5rem' }}>{archive.totalVotes}</td>
+                      <td style={{ padding: '0.5rem' }}>
+                        <button
+                          className="button"
+                          style={{ backgroundColor: '#4338ca' }}
+                          onClick={() => window.open(`/admin/report/${archive.id}`, '_blank')}
+                        >
+                          View / Print
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>

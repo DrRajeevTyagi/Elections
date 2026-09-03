@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAdminSecret } from '../middleware/adminAuth.js';
 import { kioskService } from '../services/kioskService.js';
 import { getPollState } from '../services/voteService.js';
+import { buildElectionSnapshot } from '../services/resultsService.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError } from '../utils/httpError.js';
@@ -88,6 +89,13 @@ pollRouter.post(
   '/reset',
   requireAdminSecret,
   asyncHandler((_req, res) => {
+    // Snapshot the current election's results before wiping votes, so a
+    // record survives the reset -- see GET /api/report/archives.
+    const snapshot = buildElectionSnapshot();
+    if (snapshot) {
+      dataStore.addArchive(snapshot);
+    }
+
     kioskService.clearSessions();
     dataStore.resetVotes();
     const poll = dataStore.updatePollState((state) => ({
@@ -99,7 +107,7 @@ pollRouter.post(
       }
     }));
 
-    res.json({ 
+    res.json({
       poll: sanitizePoll(poll),
       message: 'All votes cleared and poll closed'
     });

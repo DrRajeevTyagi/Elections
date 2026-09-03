@@ -5,7 +5,7 @@ import { Firestore } from '@google-cloud/firestore';
 import { env } from '../config/env.js';
 import { DEFAULT_CANDIDATES, POST_IDS, SCHOOL_POST_IDS, HOUSE_POST_IDS } from '../config/posts.js';
 import { generateUniqueCodes } from '../utils/officerCode.js';
-import { Candidate, PollState, StoredVote, ElectionType, OfficerCode } from '../types/election.js';
+import { Candidate, PollState, StoredVote, ElectionType, OfficerCode, ElectionArchive } from '../types/election.js';
 
 // Single document holds the whole election state. This keeps the in-memory,
 // synchronous DataStore API unchanged; only the persistence backend differs.
@@ -19,6 +19,7 @@ interface ElectionData {
   votes: StoredVote[];
   pollState: PollState;
   officerCodes: OfficerCode[];
+  archives: ElectionArchive[];
 }
 
 const cloneCandidates = (candidates: Candidate[]): Candidate[] =>
@@ -37,7 +38,8 @@ const createDefaultData = (): ElectionData => ({
   candidates: cloneCandidates(DEFAULT_CANDIDATES),
   votes: [],
   pollState: createDefaultPollState(),
-  officerCodes: []
+  officerCodes: [],
+  archives: []
 });
 
 const isCandidate = (value: unknown): value is Candidate => {
@@ -74,6 +76,21 @@ const isOfficerCode = (value: unknown): value is OfficerCode => {
   }
   const entry = value as OfficerCode;
   return typeof entry.code === 'string' && typeof entry.officerName === 'string' && typeof entry.createdAt === 'number';
+};
+
+const isElectionArchive = (value: unknown): value is ElectionArchive => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const archive = value as ElectionArchive;
+  return (
+    typeof archive.id === 'string' &&
+    typeof archive.archivedAt === 'number' &&
+    (archive.electionType === 'school' || archive.electionType === 'house') &&
+    typeof archive.totalVotes === 'number' &&
+    Array.isArray(archive.results) &&
+    Array.isArray(archive.officerCodes)
+  );
 };
 
 export class DataStore {
@@ -145,6 +162,14 @@ export class DataStore {
 
     if (Array.isArray(parsed.officerCodes) && parsed.officerCodes.every((entry) => isOfficerCode(entry))) {
       defaults.officerCodes = parsed.officerCodes.map((entry) => ({ ...entry }));
+    }
+
+    if (Array.isArray(parsed.archives) && parsed.archives.every((entry) => isElectionArchive(entry))) {
+      defaults.archives = parsed.archives.map((entry) => ({
+        ...entry,
+        results: entry.results.map((r) => ({ ...r })),
+        officerCodes: entry.officerCodes.map((o) => ({ ...o }))
+      }));
     }
 
     if (parsed.pollState && typeof parsed.pollState === 'object') {
@@ -301,6 +326,31 @@ export class DataStore {
 
   deleteOfficerCode(code: string): void {
     this.data.officerCodes = this.data.officerCodes.filter((entry) => entry.code !== code);
+    this.queuePersist();
+  }
+
+  getArchives(): ElectionArchive[] {
+    return this.data.archives.map((entry) => ({
+      ...entry,
+      results: entry.results.map((r) => ({ ...r })),
+      officerCodes: entry.officerCodes.map((o) => ({ ...o }))
+    }));
+  }
+
+  getArchive(id: string): ElectionArchive | undefined {
+    const entry = this.data.archives.find((item) => item.id === id);
+    if (!entry) {
+      return undefined;
+    }
+    return {
+      ...entry,
+      results: entry.results.map((r) => ({ ...r })),
+      officerCodes: entry.officerCodes.map((o) => ({ ...o }))
+    };
+  }
+
+  addArchive(archive: ElectionArchive): void {
+    this.data.archives.push(archive);
     this.queuePersist();
   }
 }
