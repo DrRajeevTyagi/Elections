@@ -1,8 +1,48 @@
-# Student Council & House Elections Software - Features Report
+# Student Council & House Elections Software — Features Report
 
 ## Overview
 
-This is a comprehensive web-based voting system designed for managing student council elections and house-level elections. The software supports both school-wide elections and house-specific elections with separate polling booths and candidate management.
+This is a web-based voting system for managing student council (school-wide) elections
+and house-level elections. It supports a locked-down voting kiosk for voters, and a
+password-gated admin dashboard for election officials to configure candidates, run the
+poll, generate per-polling-officer activation codes, and monitor results live.
+
+The system is deployed to production on **Google Cloud Run**, backed by **Firestore**,
+with automatic deploys from GitHub. See [Deployment](#-deployment) below.
+
+---
+
+## 🆕 What's Changed Since the Original Report
+
+The original report described version 1.0.0 as first built. Since then:
+
+- **Kiosk activation moved from one shared secret to per-officer codes.** Each
+  polling officer/station now gets its own 6-character code, generated, named, and
+  revoked from the admin dashboard, with a live running vote count per code.
+- **The admin dashboard is now password-gated end-to-end.** Nothing renders or
+  fetches until the admin secret is verified; the public site no longer links to it
+  at all.
+- **The voting screen looks and behaves like an EVM ballot unit**, with numbered
+  rows, a lit indicator LED on selection, and a stylized vote button, instead of a
+  plain list of buttons.
+- **Candidates can now have a photo**, uploaded from the admin Edit flow, with a
+  neutral silhouette shown when none is set.
+- **Voting now ends in a single review screen** listing every selection with
+  per-post "Change" buttons, instead of a confirm-per-post flow; the final receipt
+  screen was simplified to protect ballot secrecy.
+- **Errors are human-readable** everywhere in the kiosk and voting flow, not raw
+  HTTP status text.
+- **The admin dashboard's live refresh is now scoped to vote counts only** — earlier
+  it also refreshed data an admin could be mid-editing (officer names, in one
+  release, actually did get wiped by it — since fixed).
+- **Storage moved to a production-grade backend.** The app now deploys to Google
+  Cloud Run with Firestore-backed persistence and auto-deploy from GitHub on every
+  push to `main`; local development is unchanged (JSON file).
+- Several smaller correctness fixes: candidate order no longer shuffles in "Manage
+  Candidates" as votes come in; "Generate Codes" behavior (always additive) is now
+  explained in the UI instead of just being surprising; house selection now actually
+  persists for an entire polling booth as originally intended, instead of resetting
+  after every single vote.
 
 ---
 
@@ -18,8 +58,7 @@ The software manages elections for **5 school-level posts**:
 5. **SCC** - School Cultural Captain
 
 ### School Elections Workflow
-- Single activation secret for all polling booths
-- All voters cast votes for all 5 posts
+- All voters cast votes for all 5 posts in one ballot
 - Unified results dashboard
 - Candidate management by post
 
@@ -47,388 +86,335 @@ The system supports **8 houses**:
 8. Shanti
 
 ### House Elections Workflow
-- **One-time house selection** per polling booth at startup
-- House selection persists across all votes at that booth
-- Each booth is dedicated to one house
+- **One-time house selection per booth** — the polling officer picks a house once;
+  every subsequent voter at that station skips straight to activation
 - Separate candidate pools per house and post
-- House-wise results display
-
----
-
-## 🎛️ Admin Dashboard Features
-
-### Election Type Management
-
-#### Election Type Selection
-- **Toggle between School and House Elections**
-- Only one election type active at a time
-- Automatic session clearing when switching types
-- Poll closes automatically when switching election types
-
-#### Visual Indicators
-- Color-coded buttons showing active election type (green = active, gray = inactive)
-- Current election type displayed prominently
-- Prevents changing type when poll is open
-
-### Poll Controls
-
-#### Poll Management
-- **Open Poll**: Start voting for the active election type
-- **Close Poll**: Stop accepting new votes
-- **Reset Poll**: Clear all votes (only when poll is closed)
-- **Refresh**: Manual refresh of dashboard data
-
-#### Security
-- Admin secret required for all poll operations
-- Confirmation dialogs for critical actions (reset, type switch)
-- Prevents opening poll without election type selected
-
-### Candidate Management
-
-#### School Elections View
-- **Post-based organization**: All candidates grouped by post (HB, HG, SSC, SRC, SCC)
-- Edit, delete, and add candidates for each post
-- Real-time updates after changes
-
-#### House Elections View
-- **House-wise organization**: All 8 houses displayed in order
-  - Anand House → Dhiraj House → Kripa House → ... → Shanti House
-- Within each house, posts displayed vertically:
-  - HC (House Captain) - all candidates together
-  - HCC (House Cultural Captain) - all candidates together
-  - HSC (House Sports Captain) - all candidates together
-- Edit, delete, and add candidates per house and post
-- Visual house headers with borders and styling
-
-#### Candidate Operations
-- **Add Candidate**: 
-  - Click "Add Candidate" button for a post
-  - Enter candidate name
-  - Automatically assigned unique ID
-  - Election type and house automatically determined
-- **Edit Candidate**: 
-  - Edit candidate name inline
-  - Admin secret required
-- **Delete Candidate**: 
-  - Delete candidates with confirmation
-  - Admin secret required
-
-### Results Overview
-
-#### School Elections View
-- Post-based results display
-- Vote counts per candidate
-- Results sorted by vote count (highest first)
-- Visual highlighting for leading candidates (green background)
-
-#### House Elections View
-- **House-wise results organization**:
-  - Each house shown in its own section
-  - Within each house, posts displayed vertically (HC, HCC, HSC)
-  - Vote counts shown per candidate per post
-  - Results sorted by vote count within each post
-
-#### Auto-Refresh Feature
-- **Automatic polling every 3 seconds** when poll is open
-- Real-time vote count updates
-- Last updated timestamp displayed
-- Auto-refresh stops when poll is closed
-- Manual refresh button always available
-
-#### Results Display
-- Total votes calculated and displayed
-- Leading candidates highlighted in green
-- Vote badges showing count (with singular/plural handling)
-- Empty state messages when no candidates/votes exist
+- House-wise results display, grouped in the fixed order above
 
 ---
 
 ## 🗳️ Kiosk/Voting Features
 
-### School Elections Voting Flow
+### Voting Flow (both election types)
 
-1. **Welcome Page**
-   - Landing page for polling booth
-   - Link to officer activation
+1. **Welcome Page** — landing screen; for house elections, redirects to house
+   selection the first time only (see [House Elections Workflow](#house-elections-workflow)).
+2. **House Selection** (house elections only, first voter at a booth) — officer
+   picks one of the 8 houses; every later voter at the same booth skips this step.
+3. **Activation Page** — the polling officer enters their personal **6-character
+   activation code** (see [Per-Officer Activation Codes](#-per-officer-activation-codes)).
+   A single-use ballot session token is issued.
+4. **Voting screen, styled as an EVM ballot unit** — one post at a time, presented as
+   a stylized electronic-voting-machine panel: a numbered row per candidate with the
+   candidate's photo (or a default silhouette), a blue "vote" button, and a red
+   indicator LED that lights up on selection. Must pick one candidate per post before
+   moving on; Previous/Next navigation between posts.
+5. **Review screen** — after the last post, every selection is shown on one screen
+   (post name, candidate photo, candidate name) with a per-post **Change** button that
+   jumps back to that post and returns to the review screen afterward. Nothing is
+   submitted until "Submit Ballot" is pressed here.
+6. **Confirmation** — simple "Vote Recorded" receipt (timestamp only, no candidate
+   choices shown, to protect ballot secrecy) plus the requesting officer's **running
+   vote count for their station**, so they can cross-check against a physical voter
+   list. "Finish" clears the session for the next voter.
 
-2. **Activation Page**
-   - Polling officer enters secret key (`unlock-me`)
-   - Single-use token generated
-   - Redirects to voting page
-
-3. **Voting Page**
-   - Displays all 5 posts (HB, HG, SSC, SRC, SCC)
-   - Candidate selection for each post
-   - Validation: Must select one candidate per post
-   - Review selections before submission
-
-4. **Confirmation**
-   - Vote submitted successfully
-   - Vote ID and timestamp displayed
-   - Option to reset for next voter
-
-### House Elections Voting Flow
-
-1. **Welcome Page**
-   - Checks active election type
-   - Redirects to house selection if house elections active
-
-2. **House Selection Page** (One-time per booth)
-   - Polling officer selects house from 8 options
-   - Grid layout with all houses
-   - Selection stored for entire booth session
-   - Persists across all votes at that booth
-   - Redirects to activation
-
-3. **Activation Page**
-   - Shows selected house (if house elections)
-   - Polling officer enters secret key
-   - House included in activation request
-   - Single-use token generated with house information
-
-4. **Voting Page**
-   - Displays all 3 posts (HC, HCC, HSC)
-   - Candidates filtered by selected house
-   - Validation: Must select one candidate per post
-   - Review selections before submission
-
-5. **Confirmation**
-   - Vote submitted successfully
-   - Vote ID and timestamp displayed
-   - House information stored with vote
-   - Option to reset for next voter (house persists)
+### Candidate Photos
+- Candidates can have a photo, uploaded from the admin "Manage Candidates" **Edit**
+  flow (see below). Uploads are resized/compressed in the browser before saving.
+- A candidate with no uploaded photo shows a neutral, unisex silhouette everywhere a
+  photo would appear — the ballot, the review screen, and the admin candidate list —
+  so the UI never looks broken or gendered by default.
 
 ### Voting Security Features
+- **Per-officer single-use tokens**: each activation creates a unique session token
+- **Token expiration**: tokens expire after 10 minutes if unused
+- **Consumed tokens**: invalidated immediately after a vote is submitted
+- **Poll state validation**: cannot activate a ballot if the poll is closed
+- **Election type validation**: cannot activate if no election type is active
+- **Human-readable errors**: activation/voting failures (wrong code, poll closed, no
+  election configured, expired session, etc.) show a plain-language message instead
+  of a raw HTTP status code
 
-- **Single-use tokens**: Each activation creates a unique token
-- **Token expiration**: Tokens expire after 10 minutes
-- **Consumed tokens**: Tokens are invalidated after vote submission
-- **Poll state validation**: Cannot activate if poll is closed
-- **Election type validation**: Cannot activate if no election type is active
+---
+
+## 🎛️ Admin Dashboard Features
+
+### Access Control
+- The entire admin dashboard is **hidden behind a password screen**. Nothing about
+  poll status, candidates, or results is visible or fetched until the admin secret is
+  verified against the server.
+- The verified secret is kept for the browser tab (`sessionStorage`) so it doesn't
+  need to be re-entered on every page reload; "Log out" clears it.
+- The public site navigation only ever links to the kiosk — there is no admin link
+  for a voter to stumble onto.
+
+### Election Type Management
+- **Toggle between School and House Elections** — only one is active at a time
+- Switching types requires the poll to be closed first, and clears active kiosk
+  sessions
+- Color-coded buttons show which type is active; disabled while the poll is open
+
+### Poll Controls
+- **Open Poll** / **Close Poll** / **Reset Poll** (clears all votes; only when
+  closed, with a confirmation dialog) / **Refresh** (manual refresh of the whole
+  dashboard)
+- All poll-changing actions require the admin secret and confirm destructive ones
+
+### Manage Candidates
+- **School view**: candidates grouped by post (HB, HG, SSC, SRC, SCC)
+- **House view**: all 8 houses in a fixed order, each with its 3 posts (HC, HCC, HSC)
+  listed vertically
+- **Add candidate**: name only, per post (and house, for house elections)
+- **Edit candidate**: update the name and/or **photo** inline — upload a new photo,
+  or "Remove photo" to fall back to the silhouette
+- **Delete candidate**: with a confirmation prompt
+- The candidate list order here is **stable** — it no longer reshuffles as votes come
+  in (previously it briefly shared sort order with the live Results panel; now each
+  panel sorts independently for its own purpose)
+
+### Results Overview
+- Results grouped the same way as Manage Candidates (by post, or by house then post)
+- Candidates sorted **leading-candidate-first** within each post, with the current
+  leader highlighted in green
+- Vote badges with singular/plural handling ("1 vote" / "3 votes")
+- **Auto-refreshes vote counts every 3 seconds** while the poll is open — and only
+  vote counts. It does not touch poll status, candidate data, or any in-progress
+  admin edit, so an admin can safely add/edit a candidate or a polling officer's name
+  while voting is underway without losing what they're typing.
+- Manual "Refresh" always available; auto-refresh stops automatically once the poll
+  is closed
+
+### Per-Officer Activation Codes
+This replaced the old single shared kiosk password:
+
+- **Generate codes**: enter how many new codes to add and click "Generate Codes".
+  Each is a random 6-character code (ambiguous characters like `I`/`O`/`0`/`1`
+  excluded so it's easy to read aloud or copy by hand). **Generating always adds to
+  the existing list — it never replaces or clears previously generated codes.**
+- **Name a code**: attach a polling officer's name to a code for reference
+- **Delete a code**: revokes that officer's ability to activate a kiosk, with a
+  confirmation prompt
+- **Live "Votes Cast" column**: shows each code's running vote total, refreshed every
+  3 seconds while the poll is open
+- Because each code is tied to one officer/station, votes can be traced back to a
+  station for auditing without ever recording which voter cast which ballot
 
 ---
 
 ## 🔐 Security Features
 
 ### Authentication & Authorization
-
-#### Admin Authentication
-- **Admin Secret**: `admin-secret` (configurable via environment)
-- Required for:
-  - Opening/closing poll
-  - Resetting poll
-  - Changing election type
-  - Managing candidates (add/edit/delete)
-
-#### Kiosk Authentication
-- **Kiosk Secret**: `unlock-me` (configurable via environment)
-- Required for ballot activation
-- Single-use token generation
-- Token validation for vote submission
+- **Admin Secret** (`ADMIN_SECRET` env var): required to view the admin dashboard at
+  all, and for every poll/candidate/officer-code mutation
+- **Per-officer activation codes**: each polling officer/station gets their own
+  6-character code (generated and managed from the admin dashboard) instead of one
+  shared secret for the whole election
+- The legacy single `KIOSK_SECRET` is no longer used to activate a kiosk; the
+  variable is kept only for backward compatibility with older data
 
 ### Data Protection
-- **Session management**: Tokens stored in memory with expiration
-- **Vote integrity**: Each vote has unique ID and timestamp
-- **Poll state protection**: Cannot vote when poll is closed
-- **Election type isolation**: Votes tagged with election type
+- Session tokens held in memory server-side with a 10-minute expiry and single-use
+  consumption
+- Every vote has a unique ID and timestamp
+- Votes tagged with election type, house (if applicable), and the officer code that
+  activated the session — never with anything identifying the voter
+- Cannot vote when the poll is closed; cannot activate without a valid, unrevoked
+  officer code
 
 ---
 
 ## 📊 Data Management
 
 ### Data Storage
-- **JSON-based storage**: Lightweight file-based database
-- **Automatic persistence**: Changes saved immediately
-- **Data structure**:
-  - Candidates with election type and house information
-  - Votes with timestamp and selections
-  - Poll state with active election type
+- **Local development**: JSON file (`backend/data/data.json`), written on every
+  change
+- **Production (Cloud Run)**: **Google Firestore**, gated by the `USE_FIRESTORE`
+  environment variable — same in-memory data model, mirrored to Firestore instead of
+  disk
+- Because election state lives in a single in-memory document, the Cloud Run service
+  must run with `--max-instances=1` so two instances can never diverge
+- Candidate photos are stored inline as small, browser-compressed JPEG data URLs
+  (capped in size on the backend) rather than as separate uploaded files, so no
+  additional file storage is required
 
 ### Data Validation
-- **Candidate validation**: Post must match election type
-- **House validation**: Required for house elections
-- **Vote validation**: Must select candidate for all posts
-- **Type checking**: Ensures data integrity
+- Candidate's post must match the active election type
+- House required for house-election candidates
+- A vote must include a valid candidate selection for every post of the active
+  election type
+- Uploaded candidate photos are validated server-side for type and size
 
 ---
 
 ## 🎨 User Interface Features
 
 ### Design Elements
-- **Modern, clean interface**: Card-based layout
-- **Responsive design**: Works on different screen sizes
-- **Color coding**: 
-  - Green for active/success states
-  - Red for errors/warnings
-  - Blue for informational elements
-- **Visual hierarchy**: Clear sections and headings
+- Card-based, modern layout with consistent color coding (green = active/success,
+  red = errors/destructive, blue = informational/primary action)
+- **EVM-style ballot unit** on the voting screen — numbered rows, candidate photo,
+  a lit/unlit red LED, and a stylized blue vote button — deliberately generic
+  styling (no official government marks) evoking a real ballot machine rather than a
+  plain button list
+- Candidate photos with a neutral silhouette fallback wherever no photo is set
 
-### Navigation
-- **Clear routing**: Separate pages for each step
-- **Breadcrumb awareness**: Users know where they are
-- **Error messages**: Clear, actionable error feedback
-- **Loading states**: Visual indicators during operations
-
-### Accessibility
-- **Form labels**: All inputs properly labeled
-- **Button states**: Disabled states prevent invalid actions
-- **Error feedback**: Clear error messages
-- **Status indicators**: Visual feedback for all actions
+### Navigation & Feedback
+- Clear step-by-step routing through the kiosk flow, with a step indicator
+  ("Step X of Y") and a review screen before final submission
+- Human-readable error messages throughout (kiosk activation, voting, admin actions)
+- Loading/disabled states prevent double-submits and invalid actions mid-request
 
 ---
 
 ## 🔄 Real-Time Features
 
-### Auto-Refresh Dashboard
-- **3-second polling interval** when poll is open
-- **Automatic updates**: No manual refresh needed
-- **Efficient updates**: Only refreshes when poll is open
-- **Last updated timestamp**: Shows when data was last refreshed
+### Scoped Auto-Refresh (Admin Dashboard)
+- Every 3 seconds while the poll is open, the dashboard refreshes **vote counts
+  only** — candidate results and each officer code's running vote total
+- Deliberately does **not** refresh anything an admin might be mid-editing (poll
+  status, an in-progress candidate edit, an officer name being typed) — those update
+  only when an explicit action (save, generate, open/close poll, etc.) completes
+- Stops automatically when the poll is closed; a manual "Refresh" is always available
 
-### Live Results
-- **Real-time vote counts**: Updates as votes are cast
-- **Leading candidate highlighting**: Visual indication of winners
-- **Total vote calculations**: Automatic aggregation
+### Live Vote Feedback (Kiosk)
+- After submitting, a voter's confirmation screen shows their station's running vote
+  count, sourced from the same officer-code vote tally the admin dashboard uses
 
 ---
 
 ## 📱 Operational Features
 
-### Poll Lifecycle Management
-
-#### Opening Poll
-1. Select election type (School/House)
-2. Configure candidates
-3. Enter admin secret
-4. Click "Open Poll"
-5. Validation: Election type must be selected
-
-#### During Voting
-- Auto-refresh active on admin dashboard
-- Real-time results updating
-- Vote counting and display
-- Session management for kiosks
-
-#### Closing Poll
-1. Enter admin secret
-2. Click "Close Poll"
-3. All active sessions cleared
-4. Auto-refresh stops
-5. No new votes accepted
-
-#### Resetting Poll
-1. Close poll first (safety requirement)
-2. Enter admin secret
-3. Confirm action
-4. All votes deleted
-5. Results reset to zero
+### Poll Lifecycle
+1. **Setup**: pick election type, configure candidates, generate officer codes
+2. **Open**: requires an election type to be selected
+3. **During voting**: admin dashboard auto-refreshes vote counts; officers activate
+   kiosks with their codes
+4. **Close**: stops new ballot activations and votes; clears active sessions
+5. **Reset** (optional, only while closed): deletes all votes, confirmed via dialog
 
 ---
 
 ## 🔧 Technical Features
 
 ### Backend Architecture
-- **Node.js + Express**: RESTful API server
-- **TypeScript**: Type-safe codebase
-- **Modular structure**: Separate routes, services, middleware
-- **Error handling**: Comprehensive error middleware
-- **CORS enabled**: Network access support
+- **Node.js + Express**, **TypeScript** throughout
+- Modular routes/services/middleware structure
+- Centralized error-handling middleware translating internal errors into
+  human-readable API responses
+- CORS enabled
 
 ### Frontend Architecture
-- **React + TypeScript**: Modern UI framework
-- **Vite**: Fast development and build
-- **React Router**: Client-side routing
-- **Context API**: State management for kiosk
-- **Axios**: HTTP client for API calls
+- **React + TypeScript**, built with **Vite**
+- **React Router** for client-side routing
+- **Context API** (`KioskProvider`) for kiosk session state
+- **Axios** for API calls, with a response interceptor that surfaces the backend's
+  plain-language error message instead of a generic HTTP status message
 
 ### API Endpoints
 
+#### Admin
+- `POST /api/admin/verify` — check the admin secret is correct (used to gate the
+  dashboard) before revealing any content
+
 #### Poll Management
-- `GET /api/poll` - Get poll status
-- `POST /api/poll/open` - Open poll (requires admin secret)
-- `POST /api/poll/close` - Close poll (requires admin secret)
-- `POST /api/poll/reset` - Reset poll (requires admin secret)
-- `POST /api/poll/set-type` - Set election type (requires admin secret)
+- `GET /api/poll` — get poll status
+- `POST /api/poll/open` / `close` / `reset` / `set-type` — admin secret required
 
 #### Kiosk Operations
-- `POST /api/kiosk/activate` - Activate ballot (requires secret + house for house elections)
-- `POST /api/kiosk/deactivate` - Deactivate session
+- `POST /api/kiosk/activate` — activate a ballot with an officer code (+ house, for
+  house elections)
+- `POST /api/kiosk/deactivate` — end a session
 
 #### Voting
-- `POST /api/votes` - Submit vote (requires kiosk token)
+- `POST /api/votes` — submit a vote (requires kiosk session token)
 
 #### Candidates
-- `GET /api/posts` - Get posts and candidates (filtered by election type)
-- `POST /api/candidates` - Add candidate (requires admin secret)
-- `PUT /api/candidates/:id` - Update candidate (requires admin secret)
-- `DELETE /api/candidates/:id` - Delete candidate (requires admin secret)
+- `GET /api/posts` — posts + candidates for the active election (and house, if set)
+- `POST /api/candidates` / `PUT /api/candidates/:id` / `DELETE /api/candidates/:id`
+  — admin secret required; `PUT`/`POST` accept an optional photo (`imageUrl`)
 
 #### Results
-- `GET /api/results` - Get results (filtered by election type, optional house filter)
+- `GET /api/results` — results for the active election type (optional house filter)
+
+#### Polling Officer Codes
+- `GET /api/officer-codes` — list codes with live vote counts (admin secret
+  required)
+- `POST /api/officer-codes/generate` — generate `count` new codes, added to the
+  existing list
+- `PUT /api/officer-codes/:code` — update an officer's name
+- `DELETE /api/officer-codes/:code` — revoke a code
+
+#### Health
+- `GET /api/health` — liveness check (used by Cloud Run)
 
 ---
 
 ## 📝 Configuration
 
 ### Environment Variables (Backend)
-- `PORT`: Server port (default: 4000)
-- `ADMIN_SECRET`: Admin authentication secret (default: `admin-secret`)
-- `KIOSK_SECRET`: Kiosk activation secret (default: `unlock-me`)
-- `DATA_FILE`: Path to data JSON file (default: `../data/data.json`)
+- `PORT` — server port (default: 4000; Cloud Run injects this automatically)
+- `ADMIN_SECRET` — admin dashboard/API authentication secret
+- `KIOSK_SECRET` — **legacy, no longer used** to activate a kiosk; kept only for
+  backward-compatible data structures
+- `DATA_FILE` — path to the local JSON data file (ignored when `USE_FIRESTORE=true`)
+- `USE_FIRESTORE` — `true` in production to persist state in Firestore instead of a
+  local file
+- `STATIC_DIR` — directory of the built frontend to serve (used by the Docker image;
+  set automatically there)
 
 ### Network Configuration
-- **Backend**: Listens on `0.0.0.0` (accessible from network)
-- **Frontend**: Proxy configured for API calls
-- **Development**: Backend on port 4000, Frontend on port 5173
+- Backend listens on `0.0.0.0` (reachable from other devices on the network in local
+  dev)
+- Frontend dev server proxies `/api` to the backend
+- Local dev ports: backend `4000`, frontend `5173`
 
 ---
 
-## 🚀 Deployment Features
+## 🚀 Deployment
 
-### Easy Startup
-- **Batch scripts**: `START-SERVERS.bat` for Windows
-- **Installer script**: `INSTALL-AND-RUN.bat` for first-time setup
-- **Dependency checking**: Verifies Node.js and dependencies
-- **Clear instructions**: Helpful messages and guides
+### Production: Google Cloud Run + Firestore
+- Ships as a single Docker image (frontend build served by the Express backend)
+- Live service (for reference):
+  - GCP project: `school-election-rt2026` (region `asia-south1`)
+  - Cloud Run service: `school-election`
+  - Live URL: https://school-election-584391847327.asia-south1.run.app
+- **Auto-deploy on push**: `.github/workflows/deploy-cloud-run.yml` builds and
+  redeploys automatically on every push to `main`, using Workload Identity
+  Federation (no long-lived service-account keys in GitHub)
+- Runs with `--max-instances=1` (required — see [Data Storage](#data-storage))
+- Firestore document `school-election/state` holds the entire election dataset
 
-### Production Ready
-- **Build support**: TypeScript compilation
-- **Separate dev/prod modes**: Different configurations
-- **Error logging**: Console error tracking
-- **Data persistence**: Automatic data saving
+### Local Development
+- `npm run dev` in `backend/` and `frontend/` (see each `package.json`)
+- Leave `USE_FIRESTORE` unset to use the local JSON file automatically
+
+Full setup/redeploy instructions, IAM roles, and operational notes live in
+`DEPLOYMENT-GUIDE.md`.
 
 ---
 
 ## 📋 Summary of Key Features
 
 ### ✅ Core Capabilities
-- Dual election type support (School + House)
-- Separate candidate pools per election type
-- House-wise organization for house elections
-- Real-time results with auto-refresh
-- Secure voting with single-use tokens
-- Comprehensive admin controls
+- Dual election type support (School + House), one active at a time
+- Separate candidate pools per election type (and per house)
+- Real-time vote-count refresh, scoped so it never interrupts admin edits
+- Per-polling-officer activation codes with live per-station vote tallies
+- Candidate photos with a graceful silhouette fallback
+- EVM-styled voting screen
 
 ### ✅ User Experience
-- Intuitive interface
-- Clear visual feedback
-- Error prevention and validation
-- Responsive design
-- Easy navigation
+- Single review screen with per-post "Change" before final submission
+- Human-readable error messages everywhere
+- Password-gated admin dashboard; no admin link in public navigation
 
 ### ✅ Security & Integrity
-- Authentication for admin and kiosk
-- Single-use voting tokens
-- Poll state validation
-- Data integrity checks
-- Session management
+- Per-officer single-use, time-limited voting tokens
+- Poll-state and election-type validation before any vote
+- Votes traceable to a station, never to a voter
 
 ### ✅ Operational Features
-- One-time house selection per booth
-- House persistence across votes
-- Automatic data persistence
-- Real-time dashboard updates
-- Comprehensive candidate management
+- Automatic data persistence (Firestore in production, JSON file locally)
+- Auto-deploy to Cloud Run on every push to `main`
 
 ---
 
@@ -439,66 +425,31 @@ The system supports **8 houses**:
 | **Posts** | 5 posts (HB, HG, SSC, SRC, SCC) | 3 posts (HC, HCC, HSC) |
 | **Organization** | Post-based | House-based, then post-based |
 | **Candidate Pool** | Global (all students) | Per house |
-| **Activation** | Direct to activation | House selection first |
-| **Voting Flow** | Simple (activate → vote) | Two-step (select house → activate → vote) |
+| **Activation** | Officer code → activation | House selection → officer code → activation |
 | **Results Display** | Post-wise | House-wise, then post-wise |
-| **Booth Dedication** | General purpose | One house per booth |
 
 ---
 
-## 🎯 Use Cases Supported
+## ⚠️ Known Issues
 
-1. **Complete School Elections**
-   - Manage all 5 school posts
-   - Multiple polling booths
-   - Unified results
-
-2. **Complete House Elections**
-   - Manage all 8 houses
-   - 3 posts per house
-   - Dedicated booths per house
-   - House-specific results
-
-3. **Sequential Elections**
-   - Run school elections first
-   - Switch to house elections
-   - Independent vote counts
-   - Separate candidate pools
-
-4. **Live Monitoring**
-   - Real-time dashboard updates
-   - Live vote counts
-   - Progress tracking
-
-5. **Candidate Management**
-   - Add candidates before opening poll
-   - Edit candidate names
-   - Remove candidates
-   - Manage by post (school) or house+post (house)
-
----
-
-## 🔮 Current Limitations & Notes
-
-1. **One Election at a Time**: Only one election type (school OR house) can be active simultaneously
-2. **House Selection**: One house per booth, selected once at startup
-3. **Manual Refresh**: Manual refresh button always available in addition to auto-refresh
-4. **Data Storage**: Currently uses JSON file storage (can be upgraded to database)
-5. **Network Access**: Backend listens on all interfaces for network access
+1. Two `Candidate` fields — `manifesto` and an officer-code `label` — are accepted by
+   the API and stored, but neither is exposed in any admin UI yet.
 
 ---
 
 ## 📞 Quick Reference
 
-### Default Secrets
-- **Admin Secret**: `admin-secret`
-- **Kiosk Secret**: `unlock-me`
+### Default Secrets (change before any real election)
+- **Admin Secret**: `admin-secret` (local default; set via `ADMIN_SECRET` in
+  production)
+- Kiosk activation no longer uses a shared secret — see
+  [Per-Officer Activation Codes](#-per-officer-activation-codes)
 
-### URLs (Development)
-- **Frontend**: `http://localhost:5173`
-- **Admin Dashboard**: `http://localhost:5173/admin`
-- **Kiosk**: `http://localhost:5173/kiosk`
-- **Backend API**: `http://localhost:4000/api`
+### URLs
+- **Production**: https://school-election-584391847327.asia-south1.run.app
+  (`/kiosk` and `/admin`)
+- **Local dev frontend**: `http://localhost:5173`
+- **Local dev backend API**: `http://localhost:4000/api`
 
 ### Posts
 - **School**: HB, HG, SSC, SRC, SCC
@@ -509,6 +460,4 @@ Anand, Dhiraj, Kripa, Prem, Namrata, Nishtha, Satya, Shanti
 
 ---
 
-*Last Updated: Based on current implementation*
-*Software Version: 1.0.0*
-
+*Last updated: 2026-09-03, reflecting commit `b0441b6` on `main`.*

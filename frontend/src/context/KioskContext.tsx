@@ -117,7 +117,8 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
       await deactivateKiosk(token).catch(() => undefined);
     }
     setToken(null);
-    setHouseState(null); // Don't reset house - it persists for the polling booth
+    // Deliberately not clearing house here - it persists for the polling booth
+    // across every voter, not just the first.
     setOfficerName(undefined);
     setPosts([]);
     setSelections({} as Record<PostId, string | null>);
