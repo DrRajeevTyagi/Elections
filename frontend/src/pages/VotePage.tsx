@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useKiosk } from '../context/KioskContext';
+import { CandidatePhoto } from '../components/CandidatePhoto';
 import type { PostCandidateGroup, PostId } from '../types/election';
 import './Page.css';
+import './Evm.css';
 
 const POST_NAMES: Record<PostId, string> = {
   HB: 'Head Boy',
@@ -143,13 +145,18 @@ export const VotePage = (): JSX.Element => {
                   border: '2px solid #16a34a'
                 }}
               >
-                <div>
-                  <p style={{ margin: 0, fontSize: '0.85rem', color: '#15803d', fontWeight: 600 }}>
-                    {POST_NAMES[group.post]} ({group.post})
-                  </p>
-                  <p style={{ margin: '0.25rem 0 0 0', fontSize: '1.1rem', fontWeight: 600, color: '#166534' }}>
-                    {selectedCandidate?.name ?? 'No selection'}
-                  </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+                  {selectedCandidate && (
+                    <CandidatePhoto imageUrl={selectedCandidate.imageUrl} name={selectedCandidate.name} size={40} />
+                  )}
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#15803d', fontWeight: 600 }}>
+                      {POST_NAMES[group.post]} ({group.post})
+                    </p>
+                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '1.1rem', fontWeight: 600, color: '#166534' }}>
+                      {selectedCandidate?.name ?? 'No selection'}
+                    </p>
+                  </div>
                 </div>
                 <button
                   className="button"
@@ -200,25 +207,28 @@ export const VotePage = (): JSX.Element => {
         Choose one candidate from the list below:
       </p>
 
-      <div className="page-actions" style={{ flexDirection: 'column', gap: '1rem' }}>
-        {currentPost.candidates.map((candidate) => {
-          const isSelected = selections[currentPost.post] === candidate.id;
-          return (
-            <button
-              key={candidate.id}
-              className="button"
-              style={{
-                width: '100%',
-                justifyContent: 'space-between',
-                backgroundColor: isSelected ? '#16a34a' : '#1c64f2'
-              }}
-              onClick={() => handleSelect(currentPost.post, candidate.id)}
-            >
-              <span>{candidate.name}</span>
-              {isSelected && <span>&#10003; Selected</span>}
-            </button>
-          );
-        })}
+      <div className="evm-panel">
+        <div className="evm-header">
+          {POST_NAMES[currentPost.post]} &mdash; Ballot Unit
+        </div>
+        <div className="evm-rows">
+          {currentPost.candidates.map((candidate, index) => {
+            const isSelected = selections[currentPost.post] === candidate.id;
+            return (
+              <button
+                key={candidate.id}
+                className={`evm-row${isSelected ? ' selected' : ''}`}
+                onClick={() => handleSelect(currentPost.post, candidate.id)}
+              >
+                <span className="evm-slno">{index + 1}</span>
+                <CandidatePhoto imageUrl={candidate.imageUrl} name={candidate.name} size={40} />
+                <span className="evm-name">{candidate.name}</span>
+                <span className="evm-led" aria-hidden="true" />
+                <span className="evm-vote-swatch" aria-hidden="true" />
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {localError && <p style={{ color: '#dc2626', fontWeight: 600 }}>{localError}</p>}

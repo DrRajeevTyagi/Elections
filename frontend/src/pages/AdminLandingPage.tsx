@@ -306,11 +306,11 @@ export const AdminLandingPage = (): JSX.Element => {
     }
   };
 
-  const handleUpdateCandidate = async (candidateId: string, name: string) => {
+  const handleUpdateCandidate = async (candidateId: string, name: string, imageUrl: string) => {
     if (!adminSecret.trim()) {
       throw new Error('Admin secret required');
     }
-    await updateCandidate(candidateId, { name }, adminSecret);
+    await updateCandidate(candidateId, { name, imageUrl }, adminSecret);
     await loadDashboard();
     setMessage(`Candidate updated successfully.`);
   };

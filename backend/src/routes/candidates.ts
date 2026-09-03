@@ -8,6 +8,23 @@ import { isValidPostId, SCHOOL_POST_IDS, HOUSE_POST_IDS, isValidHouseId } from '
 
 export const candidatesRouter = Router();
 
+// Photos are stored inline as compressed base64 data URLs (see datastore.ts
+// for why: election state is a single JSON document with a size ceiling).
+// This caps each candidate's photo well below that ceiling.
+const MAX_IMAGE_DATA_URL_LENGTH = 60_000;
+
+const validateImageUrl = (imageUrl: string): void => {
+  if (imageUrl.length === 0) {
+    return;
+  }
+  if (!/^data:image\/(png|jpe?g|webp);base64,/.test(imageUrl)) {
+    throw new BadRequestError('Candidate photo must be an uploaded image');
+  }
+  if (imageUrl.length > MAX_IMAGE_DATA_URL_LENGTH) {
+    throw new BadRequestError('Candidate photo is too large');
+  }
+};
+
 candidatesRouter.put(
   '/:candidateId',
   requireAdminSecret,
@@ -41,7 +58,9 @@ candidatesRouter.put(
     }
 
     if (imageUrl !== undefined) {
-      candidate.imageUrl = typeof imageUrl === 'string' ? imageUrl.trim() : undefined;
+      const trimmedImageUrl = typeof imageUrl === 'string' ? imageUrl.trim() : '';
+      validateImageUrl(trimmedImageUrl);
+      candidate.imageUrl = trimmedImageUrl.length > 0 ? trimmedImageUrl : undefined;
     }
 
     dataStore.setCandidates(candidates);
@@ -89,9 +108,14 @@ candidatesRouter.post(
     }
 
     const candidates = dataStore.getCandidates();
-    
+
     if (candidates.some((c) => c.id === id)) {
       throw new BadRequestError('Candidate ID already exists');
+    }
+
+    const trimmedImageUrl = imageUrl?.trim();
+    if (trimmedImageUrl) {
+      validateImageUrl(trimmedImageUrl);
     }
 
     const newCandidate: Candidate = {
@@ -101,7 +125,7 @@ candidatesRouter.post(
       electionType: determinedElectionType,
       house: determinedElectionType === 'house' ? (house as HouseId) : undefined,
       manifesto: manifesto?.trim(),
-      imageUrl: imageUrl?.trim()
+      imageUrl: trimmedImageUrl
     };
 
     candidates.push(newCandidate);
