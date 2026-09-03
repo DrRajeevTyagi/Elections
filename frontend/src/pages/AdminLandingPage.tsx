@@ -112,7 +112,9 @@ export const AdminLandingPage = (): JSX.Element => {
     }
   }, []);
 
-  const loadOfficerCodes = useCallback(async () => {
+  // syncDrafts is false for the background 3-second poll, so it can refresh
+  // vote counts without clobbering officer names the admin is mid-typing.
+  const loadOfficerCodes = useCallback(async (syncDrafts: boolean = true) => {
     const secret = sessionStorage.getItem('adminSecret');
     if (!secret) {
       return;
@@ -120,9 +122,11 @@ export const AdminLandingPage = (): JSX.Element => {
     try {
       const response = await getOfficerCodes(secret);
       setOfficerCodes(response.codes);
-      setOfficerNameDrafts(
-        Object.fromEntries(response.codes.map((entry) => [entry.code, entry.officerName]))
-      );
+      if (syncDrafts) {
+        setOfficerNameDrafts(
+          Object.fromEntries(response.codes.map((entry) => [entry.code, entry.officerName]))
+        );
+      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load officer codes');
     }
@@ -243,7 +247,7 @@ export const AdminLandingPage = (): JSX.Element => {
     // Refresh results and officer vote counts every 3 seconds when poll is open
     const intervalId = setInterval(() => {
       void loadDashboard();
-      void loadOfficerCodes();
+      void loadOfficerCodes(false);
     }, 3000); // 3 seconds
 
     // Cleanup interval on unmount or when poll closes
