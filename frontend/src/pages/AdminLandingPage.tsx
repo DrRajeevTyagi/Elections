@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import {
   closePoll,
   getPollStatus,
@@ -22,6 +22,7 @@ import type { PostId, ElectionType, HouseId } from '../types/election';
 import { AddCandidateForm } from '../components/AddCandidateForm';
 import { CandidateEditor } from '../components/CandidateEditor';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
+import { POST_NAMES } from '../constants/posts';
 import './Page.css';
 import './admin.css';
 
@@ -93,11 +94,21 @@ export const AdminLandingPage = (): JSX.Element => {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [officerCodes, setOfficerCodes] = useState<OfficerCode[]>([]);
-  const [generateCount, setGenerateCount] = useState('1');
+  const [houseCodeCount, setHouseCodeCount] = useState('1');
+  const [schoolCodeCount, setSchoolCodeCount] = useState('1');
   const [generateHouse, setGenerateHouse] = useState<HouseId | ''>('');
   const [officerCodesLoading, setOfficerCodesLoading] = useState(false);
   const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
   const [archives, setArchives] = useState<ArchiveSummary[]>([]);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'results' | 'codes' | 'history'>('dashboard');
+  const liveResultsRef = useRef<HTMLDivElement | null>(null);
+
+  const handlePresentFullScreen = () => {
+    liveResultsRef.current?.requestFullscreen?.().catch(() => {
+      // Fullscreen can be denied by the browser/OS -- the tab still works
+      // fine without it, just not edge-to-edge.
+    });
+  };
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -152,33 +163,10 @@ export const AdminLandingPage = (): JSX.Element => {
     await loadOfficerCodes(false);
   }, [loadOfficerCodes]);
 
-  const handleGenerateCodes = async () => {
-    const count = Number(generateCount);
-    if (!Number.isInteger(count) || count < 1 || count > 200) {
-      setError('Enter a number of codes between 1 and 200.');
-      return;
-    }
-    try {
-      setOfficerCodesLoading(true);
-      setError(null);
-      await generateOfficerCodes(count, adminSecret, generateHouse || undefined);
-      setMessage(
-        generateHouse
-          ? `Generated ${count} new code${count === 1 ? '' : 's'} for ${generateHouse} House.`
-          : `Generated ${count} new officer code${count === 1 ? '' : 's'}.`
-      );
-      await loadOfficerCodes();
-    } catch (generateError) {
-      setError(generateError instanceof Error ? generateError.message : 'Failed to generate codes');
-    } finally {
-      setOfficerCodesLoading(false);
-    }
-  };
-
   // Generates the same number of house-bound codes for every one of the 8
   // houses in one go, instead of the admin having to repeat "Generate" 8 times.
-  const handleGenerateCodesForAllHouses = async () => {
-    const perHouseCount = Number(generateCount);
+  const handleGenerateHouseCodesForAll = async () => {
+    const perHouseCount = Number(houseCodeCount);
     if (!Number.isInteger(perHouseCount) || perHouseCount < 1 || perHouseCount > 200) {
       setError('Enter a number of codes between 1 and 200.');
       return;
@@ -193,6 +181,50 @@ export const AdminLandingPage = (): JSX.Element => {
       await loadOfficerCodes();
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : 'Failed to generate codes for all houses');
+    } finally {
+      setOfficerCodesLoading(false);
+    }
+  };
+
+  // Tops up a single house (e.g. a code was lost) without regenerating for
+  // every house.
+  const handleGenerateSingleHouseCodes = async () => {
+    if (!generateHouse) {
+      setError('Choose a house first.');
+      return;
+    }
+    const count = Number(houseCodeCount);
+    if (!Number.isInteger(count) || count < 1 || count > 200) {
+      setError('Enter a number of codes between 1 and 200.');
+      return;
+    }
+    try {
+      setOfficerCodesLoading(true);
+      setError(null);
+      await generateOfficerCodes(count, adminSecret, generateHouse);
+      setMessage(`Generated ${count} new code${count === 1 ? '' : 's'} for ${generateHouse} House.`);
+      await loadOfficerCodes();
+    } catch (generateError) {
+      setError(generateError instanceof Error ? generateError.message : 'Failed to generate codes');
+    } finally {
+      setOfficerCodesLoading(false);
+    }
+  };
+
+  const handleGenerateSchoolCodes = async () => {
+    const count = Number(schoolCodeCount);
+    if (!Number.isInteger(count) || count < 1 || count > 200) {
+      setError('Enter a number of codes between 1 and 200.');
+      return;
+    }
+    try {
+      setOfficerCodesLoading(true);
+      setError(null);
+      await generateOfficerCodes(count, adminSecret);
+      setMessage(`Generated ${count} new school code${count === 1 ? '' : 's'}.`);
+      await loadOfficerCodes();
+    } catch (generateError) {
+      setError(generateError instanceof Error ? generateError.message : 'Failed to generate codes');
     } finally {
       setOfficerCodesLoading(false);
     }
@@ -446,6 +478,36 @@ export const AdminLandingPage = (): JSX.Element => {
     return null;
   }, [results, pollStatus?.activeElectionType]);
 
+  // Groups the officer-code table by house (in a fixed house order), with
+  // unbound/school codes in their own group at the end -- so it reads as
+  // "n codes for Anand House, then n for Dhiraj House, etc." rather than
+  // whatever order they happened to be generated in.
+  const groupedOfficerCodes = useMemo(() => {
+    const byHouse = new Map<HouseId, OfficerCode[]>();
+    const unbound: OfficerCode[] = [];
+    for (const entry of officerCodes) {
+      if (entry.house) {
+        const list = byHouse.get(entry.house) ?? [];
+        list.push(entry);
+        byHouse.set(entry.house, list);
+      } else {
+        unbound.push(entry);
+      }
+    }
+
+    const groups: { label: string; codes: OfficerCode[] }[] = [];
+    for (const houseId of HOUSE_IDS) {
+      const codes = byHouse.get(houseId);
+      if (codes && codes.length > 0) {
+        groups.push({ label: `${houseId} House`, codes: [...codes].sort((a, b) => a.createdAt - b.createdAt) });
+      }
+    }
+    if (unbound.length > 0) {
+      groups.push({ label: 'School Posts', codes: [...unbound].sort((a, b) => a.createdAt - b.createdAt) });
+    }
+    return groups;
+  }, [officerCodes]);
+
   const handleSetElectionType = async (electionType: ElectionType) => {
     if (!adminSecret.trim()) {
       setError('Enter the admin secret to change election type.');
@@ -525,6 +587,32 @@ export const AdminLandingPage = (): JSX.Element => {
         </button>
       </div>
 
+      <div className="admin-tabs" style={{ display: 'flex', gap: '0.5rem', margin: '1rem 0', borderBottom: '2px solid #e5e7eb' }}>
+        {(
+          [
+            { key: 'dashboard', label: 'Dashboard' },
+            { key: 'results', label: 'Live Results' },
+            { key: 'codes', label: `Polling Officer Codes${officerCodes.length > 0 ? ` (${officerCodes.length})` : ''}` },
+            { key: 'history', label: 'Election History' }
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.key}
+            className="button"
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              backgroundColor: activeTab === tab.key ? '#1c64f2' : 'transparent',
+              color: activeTab === tab.key ? '#ffffff' : '#374151',
+              borderRadius: '8px 8px 0 0',
+              boxShadow: 'none'
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'dashboard' && (
       <div className="admin-grid">
         <div className="admin-panel">
           <h2>Poll Controls</h2>
@@ -837,68 +925,205 @@ export const AdminLandingPage = (): JSX.Element => {
           )}
         </div>
       </div>
+      )}
 
-      <div className="admin-panel" style={{ marginTop: '1.5rem' }}>
-        <h2>Polling Officer Codes</h2>
-        <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
-          Generate one simple 6-character code per polling officer/station. Each officer uses their own
-          code to activate the kiosk, so votes can be traced back to a station without identifying any voter.
-          Generating adds new codes to the list below &mdash; it does not replace or remove existing ones.
-          {pollStatus?.activeElectionType === 'house' && (
-            <>
-              {' '}Bind a code to a house and the kiosk skips house selection entirely for that code &mdash;
-              it opens straight into that house's ballot.
-            </>
-          )}
-        </p>
-
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', marginBottom: '1rem', flexWrap: 'wrap' }}>
+      {activeTab === 'results' && (
+      <div className="admin-panel" ref={liveResultsRef} style={{ backgroundColor: '#ffffff' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
           <div>
-            <label className="form-label" htmlFor="generate-count">Number of new codes to add</label>
-            <input
-              id="generate-count"
-              className="form-input"
-              type="number"
-              min={1}
-              max={200}
-              value={generateCount}
-              onChange={(event) => setGenerateCount(event.target.value)}
-              style={{ width: '160px' }}
-            />
+            <h2 style={{ fontSize: '2rem', margin: 0 }}>
+              {pollStatus?.activeElectionType === 'house' ? 'House Elections' : 'School Elections'} &mdash; Live Results
+            </h2>
+            <p style={{ color: '#6b7280', margin: '0.25rem 0 0 0' }}>
+              {pollStatus?.settings.isOpen ? '🔄 Auto-refreshing every 3 seconds' : 'Poll is closed — results will not auto-refresh'}
+              {lastUpdated && ` · Last updated ${formatTimestamp(lastUpdated)}`}
+            </p>
           </div>
-          {pollStatus?.activeElectionType === 'house' && (
-            <div>
-              <label className="form-label" htmlFor="generate-house">House (optional)</label>
-              <select
-                id="generate-house"
-                className="form-input"
-                value={generateHouse}
-                onChange={(event) => setGenerateHouse(event.target.value as HouseId | '')}
-                style={{ width: '180px' }}
-              >
-                <option value="">Not bound to a house</option>
-                {HOUSE_IDS.map((houseId) => (
-                  <option key={houseId} value={houseId}>
-                    {houseId}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          <button className="button" onClick={handleGenerateCodes} disabled={officerCodesLoading}>
-            Generate Codes
-          </button>
-          {pollStatus?.activeElectionType === 'house' && (
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button className="button" onClick={() => void loadDashboard()} disabled={loading} style={{ backgroundColor: '#6b7280' }}>
+              Refresh
+            </button>
             <button
               className="button"
+              onClick={handlePresentFullScreen}
               style={{ backgroundColor: '#4338ca' }}
-              onClick={handleGenerateCodesForAllHouses}
-              disabled={officerCodesLoading}
-              title="Generate this many codes for every one of the 8 houses in one go"
+              title="Fill the screen with just this tab -- press Esc to exit"
             >
-              Generate for All 8 Houses
+              🖥️ Present Full Screen
             </button>
-          )}
+          </div>
+        </div>
+
+        {pollStatus?.activeElectionType === 'house' && houseGroupedResults ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+            {houseGroupedResults.map((houseGroup) => (
+              <div
+                key={houseGroup.house}
+                style={{ border: '2px solid #e5e7eb', borderRadius: '16px', padding: '1.5rem' }}
+              >
+                <h3 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '2px solid #3b82f6', paddingBottom: '0.5rem' }}>
+                  🏠 {houseGroup.house}
+                </h3>
+                {HOUSE_POST_IDS.map((postId) => {
+                  const postResult = houseGroup.posts.find((p) => p.post === postId);
+                  const sortedCandidates = [...(postResult?.candidates ?? [])].sort((a, b) => b.total - a.total);
+                  return (
+                    <div key={postId} style={{ marginBottom: '1.25rem' }}>
+                      <p style={{ fontWeight: 700, fontSize: '1.1rem', margin: '0 0 0.4rem 0', color: '#374151' }}>
+                        {POST_NAMES[postId]}
+                      </p>
+                      {sortedCandidates.length > 0 ? (
+                        sortedCandidates.map((candidateResult, index) => (
+                          <div
+                            key={candidateResult.candidate.id}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              fontSize: '1.3rem',
+                              fontWeight: index === 0 && candidateResult.total > 0 ? 700 : 400,
+                              color: index === 0 && candidateResult.total > 0 ? '#16a34a' : '#111827',
+                              padding: '0.25rem 0'
+                            }}
+                          >
+                            <span>{candidateResult.candidate.name}</span>
+                            <span>{candidateResult.total}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <p style={{ color: '#9ca3af', fontStyle: 'italic' }}>No candidates</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+            {results.map((postResult) => {
+              const sortedCandidates = [...postResult.candidates].sort((a, b) => b.total - a.total);
+              return (
+                <div key={postResult.post} style={{ border: '2px solid #e5e7eb', borderRadius: '16px', padding: '1.5rem' }}>
+                  <h3 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '2px solid #3b82f6', paddingBottom: '0.5rem' }}>
+                    {POST_NAMES[postResult.post]}
+                  </h3>
+                  {sortedCandidates.map((candidateResult, index) => (
+                    <div
+                      key={candidateResult.candidate.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '1.4rem',
+                        fontWeight: index === 0 && candidateResult.total > 0 ? 700 : 400,
+                        color: index === 0 && candidateResult.total > 0 ? '#16a34a' : '#111827',
+                        padding: '0.4rem 0',
+                        borderBottom: '1px solid #f3f4f6'
+                      }}
+                    >
+                      <span>{candidateResult.candidate.name}</span>
+                      <span>{candidateResult.total}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+            {results.length === 0 && <p>No votes recorded yet.</p>}
+          </div>
+        )}
+      </div>
+      )}
+
+      {activeTab === 'codes' && (
+      <div className="admin-panel">
+        <h2>Polling Officer Codes</h2>
+        <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
+          Generate codes here, hand them out, then come back and type each officer's name against their code so
+          you know who has which one. Generating adds new codes to the list below &mdash; it never replaces or
+          removes existing ones.
+        </p>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', marginBottom: '1.5rem' }}>
+          <div style={{ flex: '1 1 340px', padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
+            <label className="form-label" style={{ fontWeight: 600, display: 'block' }}>
+              Generate codes for House Elections
+            </label>
+            <p style={{ fontSize: '0.85rem', color: '#6b7280', margin: '0.25rem 0 0.75rem 0' }}>
+              Each code opens straight into its house's ballot on the kiosk &mdash; no house-selection step.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div>
+                <label className="form-label" htmlFor="house-code-count">Codes per house</label>
+                <input
+                  id="house-code-count"
+                  className="form-input"
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={houseCodeCount}
+                  onChange={(event) => setHouseCodeCount(event.target.value)}
+                  style={{ width: '120px' }}
+                />
+              </div>
+              <button className="button" onClick={handleGenerateHouseCodesForAll} disabled={officerCodesLoading}>
+                Generate for All 8 Houses
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+              <div>
+                <label className="form-label" htmlFor="single-house">Or just one house</label>
+                <select
+                  id="single-house"
+                  className="form-input"
+                  value={generateHouse}
+                  onChange={(event) => setGenerateHouse(event.target.value as HouseId | '')}
+                  style={{ width: '160px' }}
+                >
+                  <option value="">Choose a house&hellip;</option>
+                  {HOUSE_IDS.map((houseId) => (
+                    <option key={houseId} value={houseId}>
+                      {houseId}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                className="button"
+                style={{ backgroundColor: '#6b7280' }}
+                onClick={handleGenerateSingleHouseCodes}
+                disabled={officerCodesLoading || !generateHouse}
+                title="Add more codes to just this one house, e.g. to replace a lost code"
+              >
+                Add to This House
+              </button>
+            </div>
+          </div>
+
+          <div style={{ flex: '1 1 260px', padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
+            <label className="form-label" style={{ fontWeight: 600, display: 'block' }}>
+              Generate codes for School Posts
+            </label>
+            <p style={{ fontSize: '0.85rem', color: '#6b7280', margin: '0.25rem 0 0.75rem 0' }}>
+              Not tied to any house &mdash; for Head Boy/Girl and other whole-school posts.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+              <div>
+                <label className="form-label" htmlFor="school-code-count">Number of codes</label>
+                <input
+                  id="school-code-count"
+                  className="form-input"
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={schoolCodeCount}
+                  onChange={(event) => setSchoolCodeCount(event.target.value)}
+                  style={{ width: '120px' }}
+                />
+              </div>
+              <button className="button" onClick={handleGenerateSchoolCodes} disabled={officerCodesLoading}>
+                Generate School Codes
+              </button>
+            </div>
+          </div>
         </div>
 
         {officerCodes.length === 0 ? (
@@ -909,89 +1134,99 @@ export const AdminLandingPage = (): JSX.Element => {
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: '2px solid #e5e7eb' }}>
                   <th style={{ padding: '0.5rem' }}>Code</th>
-                  <th style={{ padding: '0.5rem' }}>House</th>
                   <th style={{ padding: '0.5rem' }}>Officer Name</th>
                   <th style={{ padding: '0.5rem' }}>Votes Cast</th>
                   <th style={{ padding: '0.5rem' }}>Status</th>
                   <th style={{ padding: '0.5rem' }}></th>
                 </tr>
               </thead>
-              <tbody>
-                {officerCodes.map((entry) => {
-                  const isClosed = Boolean(entry.closedAt);
-                  return (
-                    <tr
-                      key={entry.code}
-                      style={{
-                        borderBottom: '1px solid #f3f4f6',
-                        backgroundColor: isClosed ? '#fef2f2' : undefined
-                      }}
+              {groupedOfficerCodes.map((group) => (
+                <tbody key={group.label}>
+                  <tr>
+                    <td
+                      colSpan={5}
+                      style={{ padding: '0.5rem', fontWeight: 700, backgroundColor: '#eef2ff', color: '#3730a3' }}
                     >
-                      <td style={{ padding: '0.5rem', fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.05em' }}>
-                        {entry.code}
-                      </td>
-                      <td style={{ padding: '0.5rem' }}>{entry.house ?? '—'}</td>
-                      <td style={{ padding: '0.5rem' }}>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          <input
-                            className="form-input"
-                            style={{ margin: 0 }}
-                            value={officerNameDrafts[entry.code] ?? ''}
-                            placeholder="Officer name"
-                            onChange={(event) =>
-                              setOfficerNameDrafts((prev) => ({ ...prev, [entry.code]: event.target.value }))
-                            }
-                          />
-                          <button
-                            className="button"
-                            style={{ backgroundColor: '#6b7280', flexShrink: 0 }}
-                            disabled={officerCodesLoading}
-                            onClick={() => handleSaveOfficerName(entry.code)}
-                          >
-                            Save
-                          </button>
-                        </div>
-                      </td>
-                      <td style={{ padding: '0.5rem' }}>{entry.voteCount}</td>
-                      <td style={{ padding: '0.5rem' }}>
-                        {isClosed ? (
-                          <span style={{ color: '#dc2626', fontWeight: 700 }}>CLOSED</span>
-                        ) : (
-                          <span style={{ color: '#16a34a', fontWeight: 600 }}>Open</span>
-                        )}
-                      </td>
-                      <td style={{ padding: '0.5rem' }}>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          {isClosed && (
+                      {group.label} ({group.codes.length})
+                    </td>
+                  </tr>
+                  {group.codes.map((entry) => {
+                    const isClosed = Boolean(entry.closedAt);
+                    return (
+                      <tr
+                        key={entry.code}
+                        style={{
+                          borderBottom: '1px solid #f3f4f6',
+                          backgroundColor: isClosed ? '#fef2f2' : undefined
+                        }}
+                      >
+                        <td style={{ padding: '0.5rem', fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.05em' }}>
+                          {entry.code}
+                        </td>
+                        <td style={{ padding: '0.5rem' }}>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <input
+                              className="form-input"
+                              style={{ margin: 0 }}
+                              value={officerNameDrafts[entry.code] ?? ''}
+                              placeholder="Officer name"
+                              onChange={(event) =>
+                                setOfficerNameDrafts((prev) => ({ ...prev, [entry.code]: event.target.value }))
+                              }
+                            />
                             <button
                               className="button"
-                              style={{ backgroundColor: '#16a34a' }}
+                              style={{ backgroundColor: '#6b7280', flexShrink: 0 }}
                               disabled={officerCodesLoading}
-                              onClick={() => handleReopenOfficerCode(entry.code)}
+                              onClick={() => handleSaveOfficerName(entry.code)}
                             >
-                              Reopen
+                              Save
                             </button>
+                          </div>
+                        </td>
+                        <td style={{ padding: '0.5rem' }}>{entry.voteCount}</td>
+                        <td style={{ padding: '0.5rem' }}>
+                          {isClosed ? (
+                            <span style={{ color: '#dc2626', fontWeight: 700 }}>CLOSED</span>
+                          ) : (
+                            <span style={{ color: '#16a34a', fontWeight: 600 }}>Open</span>
                           )}
-                          <button
-                            className="button"
-                            style={{ backgroundColor: '#dc2626' }}
-                            disabled={officerCodesLoading}
-                            onClick={() => handleDeleteOfficerCode(entry.code)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
+                        </td>
+                        <td style={{ padding: '0.5rem' }}>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            {isClosed && (
+                              <button
+                                className="button"
+                                style={{ backgroundColor: '#16a34a' }}
+                                disabled={officerCodesLoading}
+                                onClick={() => handleReopenOfficerCode(entry.code)}
+                              >
+                                Reopen
+                              </button>
+                            )}
+                            <button
+                              className="button"
+                              style={{ backgroundColor: '#dc2626' }}
+                              disabled={officerCodesLoading}
+                              onClick={() => handleDeleteOfficerCode(entry.code)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              ))}
             </table>
           </div>
         )}
       </div>
+      )}
 
-      <div className="admin-panel" style={{ marginTop: '1.5rem' }}>
+      {activeTab === 'history' && (
+      <div className="admin-panel">
         <h2>Election History</h2>
         <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
           A snapshot of results and polling-officer turnout is saved here automatically every time "Reset Poll" is
@@ -1035,6 +1270,7 @@ export const AdminLandingPage = (): JSX.Element => {
           </div>
         )}
       </div>
+      )}
 
       {message && <p className="message success">{message}</p>}
       {error && <p className="message error">{error}</p>}
