@@ -3,7 +3,7 @@ import { AppLayout } from './layout/AppLayout';
 import { KioskProvider } from './context/KioskContext';
 import { ActivationPage } from './pages/ActivationPage';
 import { AdminLandingPage } from './pages/AdminLandingPage';
-import { HouseSelectionPage } from './pages/HouseSelectionPage';
+import { ClosePollingPage } from './pages/ClosePollingPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ReportPage } from './pages/ReportPage';
 import { VotePage } from './pages/VotePage';
@@ -16,8 +16,8 @@ const App = (): JSX.Element => {
         <Routes>
           <Route path="/" element={<Navigate to="/kiosk" replace />} />
           <Route path="/kiosk" element={<WelcomePage />} />
-          <Route path="/kiosk/select-house" element={<HouseSelectionPage />} />
           <Route path="/kiosk/activate" element={<ActivationPage />} />
+          <Route path="/kiosk/close-booth" element={<ClosePollingPage />} />
           <Route path="/kiosk/vote" element={<VotePage />} />
           <Route path="/admin" element={<AdminLandingPage />} />
           <Route path="/admin/report" element={<ReportPage />} />

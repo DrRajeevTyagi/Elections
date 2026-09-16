@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useKiosk } from '../context/KioskContext';
 import { CandidatePhoto } from '../components/CandidatePhoto';
 import { POST_NAMES } from '../constants/posts';
+import { playVoteBeep } from '../utils/beep';
 import type { PostCandidateGroup, PostId } from '../types/election';
 import './Page.css';
 import './Evm.css';
@@ -16,6 +17,9 @@ export const VotePage = (): JSX.Element => {
   const [reviewMode, setReviewMode] = useState(false);
   // True while the voter is changing a single answer from the review screen.
   const [editingFromReview, setEditingFromReview] = useState(false);
+  // Buffers a re-pick made while editingFromReview so "Cancel" can truly
+  // discard it instead of the click having already overwritten `selections`.
+  const [pendingSelection, setPendingSelection] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === 'idle') {
@@ -29,13 +33,23 @@ export const VotePage = (): JSX.Element => {
   const allSelected = useMemo(() => posts.every((group) => Boolean(selections[group.post])), [posts, selections]);
 
   const handleSelect = (post: PostId, candidateId: string) => {
-    updateSelection(post, candidateId);
+    if (editingFromReview) {
+      // Buffered only -- not written to `selections` until the voter
+      // confirms with "Back to Review", so "Cancel" can discard it.
+      setPendingSelection(candidateId);
+    } else {
+      updateSelection(post, candidateId);
+    }
     setLocalError(undefined);
   };
 
   const handleNext = () => {
     if (editingFromReview) {
+      if (pendingSelection) {
+        updateSelection(currentPost.post, pendingSelection);
+      }
       setEditingFromReview(false);
+      setPendingSelection(null);
       setReviewMode(true);
       return;
     }
@@ -48,6 +62,7 @@ export const VotePage = (): JSX.Element => {
   };
 
   const handleChangeChoice = (postIndex: number) => {
+    setPendingSelection(selections[posts[postIndex].post]);
     setCurrentIndex(postIndex);
     setReviewMode(false);
     setEditingFromReview(true);
@@ -58,6 +73,7 @@ export const VotePage = (): JSX.Element => {
     setLocalError(undefined);
     try {
       await submit();
+      playVoteBeep();
     } catch (submitError) {
       setLocalError(submitError instanceof Error ? submitError.message : 'Unable to submit vote');
     } finally {
@@ -176,9 +192,8 @@ export const VotePage = (): JSX.Element => {
     );
   }
 
-  const selectedCandidate = currentPost.candidates.find(
-    (c) => c.id === selections[currentPost.post]
-  );
+  const activeSelection = editingFromReview ? pendingSelection : selections[currentPost.post];
+  const selectedCandidate = currentPost.candidates.find((c) => c.id === activeSelection);
 
   return (
     <section className="page-card">
@@ -203,7 +218,7 @@ export const VotePage = (): JSX.Element => {
         </div>
         <div className="evm-rows">
           {currentPost.candidates.map((candidate, index) => {
-            const isSelected = selections[currentPost.post] === candidate.id;
+            const isSelected = activeSelection === candidate.id;
             return (
               <button
                 key={candidate.id}
@@ -230,6 +245,7 @@ export const VotePage = (): JSX.Element => {
             style={{ backgroundColor: '#6b7280' }}
             onClick={() => {
               setEditingFromReview(false);
+              setPendingSelection(null);
               setReviewMode(true);
             }}
           >
@@ -249,7 +265,7 @@ export const VotePage = (): JSX.Element => {
         <button
           className="button"
           onClick={handleNext}
-          disabled={!selections[currentPost.post]}
+          disabled={!activeSelection}
         >
           {editingFromReview
             ? 'Back to Review'

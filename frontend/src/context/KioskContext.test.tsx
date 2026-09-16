@@ -4,12 +4,12 @@ import { KioskProvider, useKiosk } from './KioskContext';
 import type { PostCandidateGroup } from '../types/election';
 import type { ReactNode } from 'react';
 
-const mockApi = {
+const mockApi = vi.hoisted(() => ({
   activateKiosk: vi.fn(),
   fetchPosts: vi.fn(),
   submitVote: vi.fn(),
   deactivateKiosk: vi.fn()
-};
+}));
 
 vi.mock('../services/api', () => mockApi);
 
@@ -25,8 +25,8 @@ describe('KioskProvider', () => {
       {
         post: 'HB',
         candidates: [
-          { id: 'hb-1', name: 'Candidate A', post: 'HB' },
-          { id: 'hb-2', name: 'Candidate B', post: 'HB' }
+          { id: 'hb-1', name: 'Candidate A', post: 'HB', electionType: 'school' },
+          { id: 'hb-2', name: 'Candidate B', post: 'HB', electionType: 'school' }
         ]
       }
     ];
@@ -49,7 +49,7 @@ describe('KioskProvider', () => {
     const posts: PostCandidateGroup[] = [
       {
         post: 'HB',
-        candidates: [{ id: 'hb-1', name: 'Candidate A', post: 'HB' }]
+        candidates: [{ id: 'hb-1', name: 'Candidate A', post: 'HB', electionType: 'school' }]
       }
     ];
 

@@ -3,6 +3,7 @@ import { requireAdminSecret } from '../middleware/adminAuth.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError } from '../utils/httpError.js';
+import { isValidHouseId } from '../config/posts.js';
 
 export const officerCodesRouter = Router();
 
@@ -23,12 +24,15 @@ officerCodesRouter.get(
 officerCodesRouter.post(
   '/generate',
   asyncHandler((req, res) => {
-    const { count } = req.body as { count?: number };
+    const { count, house } = req.body as { count?: number; house?: string };
     const parsedCount = Number(count);
     if (!Number.isInteger(parsedCount) || parsedCount < 1 || parsedCount > 200) {
       throw new BadRequestError('Enter a number of codes between 1 and 200');
     }
-    const codes = dataStore.generateOfficerCodes(parsedCount);
+    if (house !== undefined && !isValidHouseId(house)) {
+      throw new BadRequestError('Invalid house');
+    }
+    const codes = dataStore.generateOfficerCodes(parsedCount, house);
     res.status(201).json({ codes });
   })
 );
@@ -42,6 +46,18 @@ officerCodesRouter.put(
       officerName: typeof officerName === 'string' ? officerName.trim() : undefined,
       label: typeof label === 'string' ? label.trim() : undefined
     });
+    if (!updated) {
+      throw new BadRequestError('Code not found');
+    }
+    res.json({ code: updated });
+  })
+);
+
+officerCodesRouter.post(
+  '/:code/reopen',
+  asyncHandler((req, res) => {
+    const { code } = req.params;
+    const updated = dataStore.reopenOfficerCode(code.toUpperCase());
     if (!updated) {
       throw new BadRequestError('Code not found');
     }

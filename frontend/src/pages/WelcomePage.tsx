@@ -1,45 +1,17 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useKiosk } from '../context/KioskContext';
-import { getPollStatus } from '../services/api';
 import './Page.css';
 
 export const WelcomePage = (): JSX.Element => {
   const { status, house } = useKiosk();
   const navigate = useNavigate();
-  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     if (status === 'ready') {
       navigate('/kiosk/vote');
-      return;
     }
-
-    const checkElectionType = async () => {
-      try {
-        const { poll } = await getPollStatus();
-        if (poll.activeElectionType === 'house' && !house) {
-          // House elections active but no house selected, go to house selection
-          navigate('/kiosk/select-house');
-          return;
-        }
-        setChecking(false);
-      } catch (err) {
-        console.error('Failed to check election type:', err);
-        setChecking(false);
-      }
-    };
-    void checkElectionType();
-  }, [navigate, status, house]);
-
-  if (checking) {
-    return (
-      <section className="page-card">
-        <h1>Loading...</h1>
-        <p>Please wait...</p>
-      </section>
-    );
-  }
+  }, [navigate, status]);
 
   return (
     <section className="page-card">
@@ -54,10 +26,15 @@ export const WelcomePage = (): JSX.Element => {
         </p>
       )}
       <div className="page-actions">
-        <Link className="button" to={house ? "/kiosk/activate" : "/kiosk/select-house"}>
+        <Link className="button" to="/kiosk/activate">
           Officer Activation
         </Link>
       </div>
+      <p style={{ marginTop: '2rem' }}>
+        <Link to="/kiosk/close-booth" style={{ fontSize: '0.85rem', color: '#6b7280' }}>
+          Close polling at this booth
+        </Link>
+      </p>
     </section>
   );
 };

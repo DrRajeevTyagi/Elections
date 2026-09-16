@@ -44,7 +44,9 @@ export interface OfficerCode {
   code: string;
   officerName: string;
   label?: string;
+  house?: HouseId; // Bound house for a house-election code; undefined works for any house (legacy/manual flow)
   createdAt: number;
+  closedAt?: number; // Set when the polling officer closes this booth; blocks further activations
 }
 
 export interface PollState {

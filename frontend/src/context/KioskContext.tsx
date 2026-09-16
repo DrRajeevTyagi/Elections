@@ -20,8 +20,9 @@ interface KioskContextValue {
   posts: PostCandidateGroup[];
   selections: Record<PostId, string | null>;
   confirmation?: VoteConfirmation;
+  stationVoteCount?: number;
   setHouse: (house: HouseId | null) => void;
-  activate: (secret: string) => Promise<void>;
+  activate: (secret: string, houseOverride?: HouseId) => Promise<void>;
   updateSelection: (post: PostId, candidateId: string) => void;
   submit: () => Promise<void>;
   reset: () => Promise<void>;
@@ -45,21 +46,39 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
   const [selections, setSelections] = useState<Record<PostId, string | null>>({} as Record<PostId, string | null>);
   const [confirmation, setConfirmation] = useState<VoteConfirmation | undefined>(undefined);
   const [officerName, setOfficerName] = useState<string | undefined>(undefined);
+  // Deliberately kept separate from `confirmation` (and not cleared by reset())
+  // so the station's running tally stays visible on-device across every
+  // "Finish" -> next voter cycle, not just on the post-vote confirmation screen.
+  const [stationVoteCount, setStationVoteCount] = useState<number | undefined>(undefined);
 
   const setHouse = useCallback((newHouse: HouseId | null) => {
     setHouseState(newHouse);
   }, []);
 
-  const activate = useCallback(async (secret: string) => {
+  const activate = useCallback(async (secret: string, houseOverride?: HouseId) => {
     setStatus('activating');
     setError(undefined);
     setConfirmation(undefined);
 
     try {
-      const { token: sessionToken, officerName: activatedOfficerName } = await activateKiosk(secret.trim(), house || undefined);
-      const { posts: fetchedPosts } = await fetchPosts(house || undefined);
+      const requestedHouse = houseOverride ?? house ?? undefined;
+      const {
+        token: sessionToken,
+        officerName: activatedOfficerName,
+        // The server resolves the house from the code itself when the code
+        // is house-bound, which may differ from (or be absent from) what we
+        // requested -- always trust the response over our own guess.
+        house: resolvedHouse,
+        stationVoteCount: activatedStationVoteCount
+      } = await activateKiosk(secret.trim(), requestedHouse);
+      const effectiveHouse = resolvedHouse ?? requestedHouse;
+      const { posts: fetchedPosts } = await fetchPosts(effectiveHouse);
+      if (effectiveHouse) {
+        setHouseState(effectiveHouse);
+      }
       setToken(sessionToken);
       setOfficerName(activatedOfficerName);
+      setStationVoteCount(activatedStationVoteCount);
       setPosts(fetchedPosts);
       setSelections(createEmptySelections(fetchedPosts));
       setStatus('ready');
@@ -104,6 +123,7 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
       const response = await submitVote(token, payload);
       await deactivateKiosk(token);
       setConfirmation({ voteId: response.voteId, timestamp: response.timestamp, stationVoteCount: response.stationVoteCount });
+      setStationVoteCount(response.stationVoteCount);
       setStatus('completed');
     } catch (submissionError) {
       setStatus('error');
@@ -128,8 +148,38 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
   }, [token]);
 
   const value = useMemo<KioskContextValue>(
-    () => ({ token, house, officerName, status, error, posts, selections, confirmation, setHouse, activate, updateSelection, submit, reset }),
-    [activate, confirmation, error, house, officerName, posts, reset, selections, setHouse, status, submit, token, updateSelection]
+    () => ({
+      token,
+      house,
+      officerName,
+      status,
+      error,
+      posts,
+      selections,
+      confirmation,
+      stationVoteCount,
+      setHouse,
+      activate,
+      updateSelection,
+      submit,
+      reset
+    }),
+    [
+      activate,
+      confirmation,
+      error,
+      house,
+      officerName,
+      posts,
+      reset,
+      selections,
+      setHouse,
+      status,
+      stationVoteCount,
+      submit,
+      token,
+      updateSelection
+    ]
   );
 
   return <KioskContext.Provider value={value}>{children}</KioskContext.Provider>;

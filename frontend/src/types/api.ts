@@ -12,6 +12,7 @@ export interface ActivateRequest {
 export interface ActivateResponse {
   token: string;
   officerName?: string;
+  house?: HouseId;
   stationVoteCount?: number;
 }
 
@@ -59,7 +60,9 @@ export interface OfficerCode {
   code: string;
   officerName: string;
   label?: string;
+  house?: HouseId;
   createdAt: number;
+  closedAt?: number;
   voteCount: number;
 }
 

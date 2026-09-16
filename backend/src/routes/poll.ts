@@ -29,9 +29,27 @@ pollRouter.post(
       throw new BadRequestError('Invalid election type. Must be "school" or "house"');
     }
 
+    const currentState = getPollState();
+    const outgoingType = currentState.activeElectionType;
+
+    // Switching away from a type that still has uncounted votes would
+    // otherwise leave them sitting in the store, invisible until the admin
+    // switches back -- at which point they'd silently reappear in results.
+    // Archive and clear them now, same as Reset Poll does.
+    if (outgoingType && outgoingType !== electionType) {
+      const outgoingVotes = dataStore.getVotes().filter((vote) => vote.electionType === outgoingType);
+      if (outgoingVotes.length > 0) {
+        const snapshot = buildElectionSnapshot();
+        if (snapshot) {
+          dataStore.addArchive(snapshot);
+        }
+        dataStore.resetVotesByType(outgoingType);
+      }
+    }
+
     // Clear sessions when switching election types
     kioskService.clearSessions();
-    
+
     const poll = dataStore.updatePollState((state) => ({
       ...state,
       activeElectionType: electionType as ElectionType,

@@ -139,6 +139,7 @@ export const ReportPage = (): JSX.Element => {
         </button>
       </div>
 
+      <p className="report-school-name">Mount Carmel School</p>
       <h1>{report.electionType === 'school' ? 'School Elections' : 'House Elections'} — Results Report</h1>
       <p className="report-meta">
         {archiveId ? 'Archived' : 'Generated'} {formatTimestamp(report.archivedAt)}

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
-import { 
-  closePoll, 
-  getPollStatus, 
-  getResults, 
-  openPoll, 
-  resetPoll, 
+import {
+  closePoll,
+  getPollStatus,
+  getResults,
+  openPoll,
+  resetPoll,
   updateCandidate,
   deleteCandidate,
   addCandidate,
@@ -14,6 +14,7 @@ import {
   generateOfficerCodes,
   updateOfficerCode,
   deleteOfficerCode,
+  reopenOfficerCode,
   getArchivesList
 } from '../services/api';
 import type { PollStatus, PostResult, CandidateResult, OfficerCode, ArchiveSummary } from '../types/api';
@@ -93,6 +94,7 @@ export const AdminLandingPage = (): JSX.Element => {
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [officerCodes, setOfficerCodes] = useState<OfficerCode[]>([]);
   const [generateCount, setGenerateCount] = useState('1');
+  const [generateHouse, setGenerateHouse] = useState<HouseId | ''>('');
   const [officerCodesLoading, setOfficerCodesLoading] = useState(false);
   const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
   const [archives, setArchives] = useState<ArchiveSummary[]>([]);
@@ -159,11 +161,52 @@ export const AdminLandingPage = (): JSX.Element => {
     try {
       setOfficerCodesLoading(true);
       setError(null);
-      await generateOfficerCodes(count, adminSecret);
-      setMessage(`Generated ${count} new officer code${count === 1 ? '' : 's'}.`);
+      await generateOfficerCodes(count, adminSecret, generateHouse || undefined);
+      setMessage(
+        generateHouse
+          ? `Generated ${count} new code${count === 1 ? '' : 's'} for ${generateHouse} House.`
+          : `Generated ${count} new officer code${count === 1 ? '' : 's'}.`
+      );
       await loadOfficerCodes();
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : 'Failed to generate codes');
+    } finally {
+      setOfficerCodesLoading(false);
+    }
+  };
+
+  // Generates the same number of house-bound codes for every one of the 8
+  // houses in one go, instead of the admin having to repeat "Generate" 8 times.
+  const handleGenerateCodesForAllHouses = async () => {
+    const perHouseCount = Number(generateCount);
+    if (!Number.isInteger(perHouseCount) || perHouseCount < 1 || perHouseCount > 200) {
+      setError('Enter a number of codes between 1 and 200.');
+      return;
+    }
+    try {
+      setOfficerCodesLoading(true);
+      setError(null);
+      for (const houseId of HOUSE_IDS) {
+        await generateOfficerCodes(perHouseCount, adminSecret, houseId);
+      }
+      setMessage(`Generated ${perHouseCount} code${perHouseCount === 1 ? '' : 's'} for each of the 8 houses.`);
+      await loadOfficerCodes();
+    } catch (generateError) {
+      setError(generateError instanceof Error ? generateError.message : 'Failed to generate codes for all houses');
+    } finally {
+      setOfficerCodesLoading(false);
+    }
+  };
+
+  const handleReopenOfficerCode = async (code: string) => {
+    try {
+      setOfficerCodesLoading(true);
+      setError(null);
+      await reopenOfficerCode(code, adminSecret);
+      setMessage(`Reopened code ${code}. It can be used to activate a ballot again.`);
+      await loadOfficerCodes();
+    } catch (reopenError) {
+      setError(reopenError instanceof Error ? reopenError.message : 'Failed to reopen code');
     } finally {
       setOfficerCodesLoading(false);
     }
@@ -801,9 +844,15 @@ export const AdminLandingPage = (): JSX.Element => {
           Generate one simple 6-character code per polling officer/station. Each officer uses their own
           code to activate the kiosk, so votes can be traced back to a station without identifying any voter.
           Generating adds new codes to the list below &mdash; it does not replace or remove existing ones.
+          {pollStatus?.activeElectionType === 'house' && (
+            <>
+              {' '}Bind a code to a house and the kiosk skips house selection entirely for that code &mdash;
+              it opens straight into that house's ballot.
+            </>
+          )}
         </p>
 
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', marginBottom: '1rem', flexWrap: 'wrap' }}>
           <div>
             <label className="form-label" htmlFor="generate-count">Number of new codes to add</label>
             <input
@@ -817,9 +866,39 @@ export const AdminLandingPage = (): JSX.Element => {
               style={{ width: '160px' }}
             />
           </div>
+          {pollStatus?.activeElectionType === 'house' && (
+            <div>
+              <label className="form-label" htmlFor="generate-house">House (optional)</label>
+              <select
+                id="generate-house"
+                className="form-input"
+                value={generateHouse}
+                onChange={(event) => setGenerateHouse(event.target.value as HouseId | '')}
+                style={{ width: '180px' }}
+              >
+                <option value="">Not bound to a house</option>
+                {HOUSE_IDS.map((houseId) => (
+                  <option key={houseId} value={houseId}>
+                    {houseId}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <button className="button" onClick={handleGenerateCodes} disabled={officerCodesLoading}>
             Generate Codes
           </button>
+          {pollStatus?.activeElectionType === 'house' && (
+            <button
+              className="button"
+              style={{ backgroundColor: '#4338ca' }}
+              onClick={handleGenerateCodesForAllHouses}
+              disabled={officerCodesLoading}
+              title="Generate this many codes for every one of the 8 houses in one go"
+            >
+              Generate for All 8 Houses
+            </button>
+          )}
         </div>
 
         {officerCodes.length === 0 ? (
@@ -830,51 +909,82 @@ export const AdminLandingPage = (): JSX.Element => {
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: '2px solid #e5e7eb' }}>
                   <th style={{ padding: '0.5rem' }}>Code</th>
+                  <th style={{ padding: '0.5rem' }}>House</th>
                   <th style={{ padding: '0.5rem' }}>Officer Name</th>
                   <th style={{ padding: '0.5rem' }}>Votes Cast</th>
+                  <th style={{ padding: '0.5rem' }}>Status</th>
                   <th style={{ padding: '0.5rem' }}></th>
                 </tr>
               </thead>
               <tbody>
-                {officerCodes.map((entry) => (
-                  <tr key={entry.code} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '0.5rem', fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.05em' }}>
-                      {entry.code}
-                    </td>
-                    <td style={{ padding: '0.5rem' }}>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <input
-                          className="form-input"
-                          style={{ margin: 0 }}
-                          value={officerNameDrafts[entry.code] ?? ''}
-                          placeholder="Officer name"
-                          onChange={(event) =>
-                            setOfficerNameDrafts((prev) => ({ ...prev, [entry.code]: event.target.value }))
-                          }
-                        />
-                        <button
-                          className="button"
-                          style={{ backgroundColor: '#6b7280', flexShrink: 0 }}
-                          disabled={officerCodesLoading}
-                          onClick={() => handleSaveOfficerName(entry.code)}
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </td>
-                    <td style={{ padding: '0.5rem' }}>{entry.voteCount}</td>
-                    <td style={{ padding: '0.5rem' }}>
-                      <button
-                        className="button"
-                        style={{ backgroundColor: '#dc2626' }}
-                        disabled={officerCodesLoading}
-                        onClick={() => handleDeleteOfficerCode(entry.code)}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {officerCodes.map((entry) => {
+                  const isClosed = Boolean(entry.closedAt);
+                  return (
+                    <tr
+                      key={entry.code}
+                      style={{
+                        borderBottom: '1px solid #f3f4f6',
+                        backgroundColor: isClosed ? '#fef2f2' : undefined
+                      }}
+                    >
+                      <td style={{ padding: '0.5rem', fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.05em' }}>
+                        {entry.code}
+                      </td>
+                      <td style={{ padding: '0.5rem' }}>{entry.house ?? '—'}</td>
+                      <td style={{ padding: '0.5rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <input
+                            className="form-input"
+                            style={{ margin: 0 }}
+                            value={officerNameDrafts[entry.code] ?? ''}
+                            placeholder="Officer name"
+                            onChange={(event) =>
+                              setOfficerNameDrafts((prev) => ({ ...prev, [entry.code]: event.target.value }))
+                            }
+                          />
+                          <button
+                            className="button"
+                            style={{ backgroundColor: '#6b7280', flexShrink: 0 }}
+                            disabled={officerCodesLoading}
+                            onClick={() => handleSaveOfficerName(entry.code)}
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </td>
+                      <td style={{ padding: '0.5rem' }}>{entry.voteCount}</td>
+                      <td style={{ padding: '0.5rem' }}>
+                        {isClosed ? (
+                          <span style={{ color: '#dc2626', fontWeight: 700 }}>CLOSED</span>
+                        ) : (
+                          <span style={{ color: '#16a34a', fontWeight: 600 }}>Open</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '0.5rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          {isClosed && (
+                            <button
+                              className="button"
+                              style={{ backgroundColor: '#16a34a' }}
+                              disabled={officerCodesLoading}
+                              onClick={() => handleReopenOfficerCode(entry.code)}
+                            >
+                              Reopen
+                            </button>
+                          )}
+                          <button
+                            className="button"
+                            style={{ backgroundColor: '#dc2626' }}
+                            disabled={officerCodesLoading}
+                            onClick={() => handleDeleteOfficerCode(entry.code)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

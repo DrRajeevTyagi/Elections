@@ -24,6 +24,15 @@
   margin-bottom: 1.5rem;
 }
 
+.report-school-name {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #4b5563;
+}
+
 .report-page h1 {
   margin: 0 0 0.25rem 0;
   font-size: 1.75rem;
@@ -88,7 +97,8 @@
     display: none !important;
   }
 
-  .app-header {
+  .app-header,
+  .election-type-banner {
     display: none !important;
   }
 

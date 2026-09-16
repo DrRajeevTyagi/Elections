@@ -19,6 +19,14 @@
   flex-direction: column;
 }
 
+.brand-school {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
 .brand-title {
   font-size: 1.4rem;
   font-weight: 600;
@@ -27,6 +35,37 @@
 .brand-subtitle {
   font-size: 0.85rem;
   opacity: 0.85;
+}
+
+.station-count-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 0.5rem 1rem;
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+}
+
+.station-count-label {
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.station-count-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.election-type-banner {
+  padding: 0.6rem 2rem;
+  background-color: #fef3c7;
+  color: #92400e;
+  font-weight: 600;
+  text-align: center;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
 }
 
 .app-nav {

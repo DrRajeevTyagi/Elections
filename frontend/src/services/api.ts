@@ -25,10 +25,16 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     const serverMessage = error?.response?.data?.error;
+    const serverCode = error?.response?.data?.code;
     if (typeof serverMessage === 'string' && serverMessage.trim()) {
       error.message = serverMessage;
     } else if (!error?.response) {
       error.message = 'Could not reach the server. Please check your network connection and try again.';
+    }
+    // Named `errorCode` (not `.code`) so it doesn't collide with axios's own
+    // built-in error.code (e.g. "ERR_BAD_REQUEST").
+    if (typeof serverCode === 'string') {
+      error.errorCode = serverCode;
     }
     return Promise.reject(error);
   }
@@ -63,6 +69,11 @@ export const submitVote = async (
 
 export const deactivateKiosk = async (token: string): Promise<void> => {
   await api.post('/kiosk/deactivate', { token });
+};
+
+export const closeBooth = async (secret: string): Promise<{ message: string }> => {
+  const response = await api.post<{ message: string }>('/kiosk/close-booth', { secret: secret.trim() });
+  return response.data;
 };
 
 export const getPollStatus = async (): Promise<PollResponse> => {
@@ -125,13 +136,23 @@ export const getOfficerCodes = async (adminSecret: string): Promise<OfficerCodes
   return response.data;
 };
 
-export const generateOfficerCodes = async (count: number, adminSecret: string): Promise<OfficerCodesResponse> => {
+export const generateOfficerCodes = async (
+  count: number,
+  adminSecret: string,
+  house?: HouseId
+): Promise<OfficerCodesResponse> => {
   const response = await api.post<OfficerCodesResponse>(
     '/officer-codes/generate',
-    { count },
+    house ? { count, house } : { count },
     { headers: { 'x-admin-secret': adminSecret } }
   );
   return response.data;
+};
+
+export const reopenOfficerCode = async (code: string, adminSecret: string): Promise<void> => {
+  await api.post(`/officer-codes/${code}/reopen`, undefined, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
 };
 
 export const updateOfficerCode = async (

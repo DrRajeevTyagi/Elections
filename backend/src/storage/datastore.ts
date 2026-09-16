@@ -5,7 +5,7 @@ import { Firestore } from '@google-cloud/firestore';
 import { env } from '../config/env.js';
 import { DEFAULT_CANDIDATES, POST_IDS, SCHOOL_POST_IDS, HOUSE_POST_IDS } from '../config/posts.js';
 import { generateUniqueCodes } from '../utils/officerCode.js';
-import { Candidate, PollState, StoredVote, ElectionType, OfficerCode, ElectionArchive } from '../types/election.js';
+import { Candidate, PollState, StoredVote, ElectionType, OfficerCode, ElectionArchive, HouseId } from '../types/election.js';
 
 // Single document holds the whole election state. This keeps the in-memory,
 // synchronous DataStore API unchanged; only the persistence backend differs.
@@ -287,6 +287,11 @@ export class DataStore {
     this.queuePersist();
   }
 
+  resetVotesByType(electionType: ElectionType): void {
+    this.data.votes = this.data.votes.filter((vote) => vote.electionType !== electionType);
+    this.queuePersist();
+  }
+
   countVotesByOfficerCode(code: string): number {
     return this.data.votes.filter((vote) => vote.officerCode === code).length;
   }
@@ -300,13 +305,33 @@ export class DataStore {
     return entry ? { ...entry } : undefined;
   }
 
-  generateOfficerCodes(count: number): OfficerCode[] {
+  generateOfficerCodes(count: number, house?: HouseId): OfficerCode[] {
     const newCodes = generateUniqueCodes(count, this.data.officerCodes.map((entry) => entry.code));
     const createdAt = Date.now();
-    const entries: OfficerCode[] = newCodes.map((code) => ({ code, officerName: '', createdAt }));
+    const entries: OfficerCode[] = newCodes.map((code) => ({ code, officerName: '', house, createdAt }));
     this.data.officerCodes.push(...entries);
     this.queuePersist();
     return entries;
+  }
+
+  closeOfficerCode(code: string): OfficerCode | undefined {
+    const entry = this.data.officerCodes.find((item) => item.code === code);
+    if (!entry) {
+      return undefined;
+    }
+    entry.closedAt = Date.now();
+    this.queuePersist();
+    return { ...entry };
+  }
+
+  reopenOfficerCode(code: string): OfficerCode | undefined {
+    const entry = this.data.officerCodes.find((item) => item.code === code);
+    if (!entry) {
+      return undefined;
+    }
+    entry.closedAt = undefined;
+    this.queuePersist();
+    return { ...entry };
   }
 
   updateOfficerCode(code: string, updates: { officerName?: string; label?: string }): OfficerCode | undefined {
