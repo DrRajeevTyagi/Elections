@@ -105,4 +105,37 @@ describe('AdminLandingPage tabs', () => {
     await screen.findByText('Poll Controls');
     expect(screen.queryByText('No past elections have been archived yet.')).not.toBeInTheDocument();
   });
+
+  it('splits School Elections live results into a Head Boy/Head Girl row and a second row for the other three posts', async () => {
+    mockApi.verifyAdminSecret.mockResolvedValue(undefined);
+    mockApi.getPollStatus.mockResolvedValue({
+      poll: { activeElectionType: 'school', settings: { isOpen: false, allowRevote: false } }
+    });
+    mockApi.getResults.mockResolvedValue({
+      results: [
+        { post: 'HB', candidates: [{ candidate: { id: 'hb-1', name: 'Alex', post: 'HB', electionType: 'school' }, total: 5 }] },
+        { post: 'HG', candidates: [{ candidate: { id: 'hg-1', name: 'Sara', post: 'HG', electionType: 'school' }, total: 4 }] },
+        { post: 'SSC', candidates: [{ candidate: { id: 'ssc-1', name: 'Kim', post: 'SSC', electionType: 'school' }, total: 2 }] },
+        { post: 'SRC', candidates: [{ candidate: { id: 'src-1', name: 'Dan', post: 'SRC', electionType: 'school' }, total: 1 }] },
+        { post: 'SCC', candidates: [{ candidate: { id: 'scc-1', name: 'Mia', post: 'SCC', electionType: 'school' }, total: 3 }] }
+      ]
+    });
+    mockApi.getOfficerCodes.mockResolvedValue({ codes: [] });
+    mockApi.getArchivesList.mockResolvedValue({ archives: [] });
+
+    await unlockAsAdmin();
+    fireEvent.click(screen.getByRole('button', { name: 'Live Results' }));
+    await screen.findByText('Alex');
+
+    const row2 = document.querySelector('.live-school-row-2');
+    const row3 = document.querySelector('.live-school-row-3');
+    expect(row2).toBeInTheDocument();
+    expect(row3).toBeInTheDocument();
+    expect(row2?.textContent).toContain('Head Boy');
+    expect(row2?.textContent).toContain('Head Girl');
+    expect(row2?.textContent).not.toContain('Sports Captain');
+    expect(row3?.textContent).toContain('School Sports Captain');
+    expect(row3?.textContent).toContain('School Resources Captain');
+    expect(row3?.textContent).toContain('School Cultural Captain');
+  });
 });

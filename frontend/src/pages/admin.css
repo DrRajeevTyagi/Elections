@@ -99,7 +99,7 @@
   max-height: none;
   overflow: auto;
   box-sizing: border-box;
-  padding: 1.5rem 2rem;
+  padding: 0.6rem 0.75rem !important;
 }
 
 /* A deterministic 4-across grid (2 rows for 8 houses) instead of
@@ -108,7 +108,7 @@
 .live-house-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 @media (max-width: 1200px) {
@@ -126,20 +126,21 @@
 .live-house-card {
   background: #ffffff;
   border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  padding: 0.35rem 0.5rem;
 }
 
 .live-house-card h3 {
-  margin: 0 0 0.4rem 0;
-  font-size: 1.15rem;
+  margin: 0 0 0.15rem 0;
+  font-size: 0.95rem;
   font-weight: 700;
   color: #1f2937;
+  line-height: 1.2;
 }
 
 .live-house-post {
-  padding: 0.4rem 0;
-  border-top: 1px solid #e5e7eb;
+  padding: 0.2rem 0;
+  border-top: 1px solid #9ca3af;
 }
 
 .live-house-post:first-of-type {
@@ -148,24 +149,69 @@
 }
 
 .live-house-post-label {
-  margin: 0 0 0.2rem 0;
-  font-size: 0.7rem;
+  margin: 0 0 0.05rem 0;
+  font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #6b7280;
+  letter-spacing: 0.03em;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  color: #374151;
 }
 
 .live-candidate-row {
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
-  font-size: 0.85rem;
-  padding: 0.05rem 0;
+  font-size: 0.74rem;
+  line-height: 1.25;
+  padding: 0;
   color: #111827;
 }
 
 .live-candidate-row.leader {
   font-weight: 700;
   color: #16a34a;
+}
+
+/* School Elections live results: Head Boy/Head Girl on their own row,
+   then the other three posts on a second row, rather than an
+   unpredictable auto-fit wrap. */
+.live-school-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.live-school-row-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.live-school-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .live-school-row-2,
+  .live-school-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.live-post-card {
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+}
+
+.live-post-card h3 {
+  margin: 0 0 0.3rem 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1f2937;
 }

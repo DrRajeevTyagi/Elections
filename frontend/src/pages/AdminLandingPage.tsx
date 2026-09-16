@@ -18,7 +18,7 @@ import {
   getArchivesList
 } from '../services/api';
 import type { PollStatus, PostResult, CandidateResult, OfficerCode, ArchiveSummary } from '../types/api';
-import type { PostId, ElectionType, HouseId } from '../types/election';
+import type { PostId, ElectionType, HouseId, SchoolPostId } from '../types/election';
 import { AddCandidateForm } from '../components/AddCandidateForm';
 import { CandidateEditor } from '../components/CandidateEditor';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
@@ -468,6 +468,32 @@ export const AdminLandingPage = (): JSX.Element => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Renders one school post's card for the Live Results tab -- pulled out
+  // so the two fixed rows (Head Boy/Head Girl, then the other three posts)
+  // can both call it instead of duplicating the card markup.
+  const renderSchoolPostCard = (postId: SchoolPostId) => {
+    const postResult = results.find((r) => r.post === postId);
+    const sortedCandidates = [...(postResult?.candidates ?? [])].sort((a, b) => b.total - a.total);
+    return (
+      <div key={postId} className="live-post-card">
+        <h3>{POST_NAMES[postId]}</h3>
+        {sortedCandidates.length > 0 ? (
+          sortedCandidates.map((candidateResult, index) => (
+            <div
+              key={candidateResult.candidate.id}
+              className={`live-candidate-row${index === 0 && candidateResult.total > 0 ? ' leader' : ''}`}
+            >
+              <span>{candidateResult.candidate.name}</span>
+              <span>{candidateResult.total}</span>
+            </div>
+          ))
+        ) : (
+          <p style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: '0.85rem', margin: 0 }}>No candidates</p>
+        )}
+      </div>
+    );
   };
 
   // Group results by house for house elections
@@ -928,25 +954,29 @@ export const AdminLandingPage = (): JSX.Element => {
       )}
 
       {activeTab === 'results' && (
-      <div className="admin-panel" ref={liveResultsRef} style={{ backgroundColor: '#ffffff' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+      <div className="admin-panel" ref={liveResultsRef} style={{ backgroundColor: '#ffffff', padding: '0.6rem 0.75rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
           <div>
-            <h2 style={{ fontSize: '2rem', margin: 0 }}>
+            <h2 style={{ fontSize: '1.05rem', margin: 0, lineHeight: 1.2 }}>
               {pollStatus?.activeElectionType === 'house' ? 'House Elections' : 'School Elections'} &mdash; Live Results
             </h2>
-            <p style={{ color: '#6b7280', margin: '0.25rem 0 0 0' }}>
-              {pollStatus?.settings.isOpen ? '🔄 Auto-refreshing every 3 seconds' : 'Poll is closed — results will not auto-refresh'}
-              {lastUpdated && ` · Last updated ${formatTimestamp(lastUpdated)}`}
+            <p style={{ color: '#6b7280', margin: '0.15rem 0 0 0', fontSize: '0.75rem' }}>
+              Last updated on: {lastUpdated ? formatTimestamp(lastUpdated) : '—'}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button className="button" onClick={() => void loadDashboard()} disabled={loading} style={{ backgroundColor: '#6b7280' }}>
+          <div style={{ display: 'flex', gap: '0.4rem' }}>
+            <button
+              className="button"
+              onClick={() => void loadDashboard()}
+              disabled={loading}
+              style={{ backgroundColor: '#6b7280', padding: '0.35rem 0.7rem', fontSize: '0.8rem' }}
+            >
               Refresh
             </button>
             <button
               className="button"
               onClick={handlePresentFullScreen}
-              style={{ backgroundColor: '#4338ca' }}
+              style={{ backgroundColor: '#4338ca', padding: '0.35rem 0.7rem', fontSize: '0.8rem' }}
               title="Fill the screen with just this tab -- press Esc to exit"
             >
               🖥️ Present Full Screen
@@ -985,34 +1015,9 @@ export const AdminLandingPage = (): JSX.Element => {
             ))}
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
-            {results.map((postResult) => {
-              const sortedCandidates = [...postResult.candidates].sort((a, b) => b.total - a.total);
-              return (
-                <div key={postResult.post} style={{ border: '2px solid #e5e7eb', borderRadius: '16px', padding: '1.5rem' }}>
-                  <h3 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '2px solid #3b82f6', paddingBottom: '0.5rem' }}>
-                    {POST_NAMES[postResult.post]}
-                  </h3>
-                  {sortedCandidates.map((candidateResult, index) => (
-                    <div
-                      key={candidateResult.candidate.id}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        fontSize: '1.4rem',
-                        fontWeight: index === 0 && candidateResult.total > 0 ? 700 : 400,
-                        color: index === 0 && candidateResult.total > 0 ? '#16a34a' : '#111827',
-                        padding: '0.4rem 0',
-                        borderBottom: '1px solid #f3f4f6'
-                      }}
-                    >
-                      <span>{candidateResult.candidate.name}</span>
-                      <span>{candidateResult.total}</span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
+          <div className="live-school-grid">
+            <div className="live-school-row-2">{(['HB', 'HG'] as const).map(renderSchoolPostCard)}</div>
+            <div className="live-school-row-3">{(['SSC', 'SRC', 'SCC'] as const).map(renderSchoolPostCard)}</div>
             {results.length === 0 && <p>No votes recorded yet.</p>}
           </div>
         )}
