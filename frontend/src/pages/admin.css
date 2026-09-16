@@ -87,3 +87,85 @@
 .message.error {
   color: #dc2626;
 }
+
+/* Live Results tab: escape the admin page's normal width cap when
+   presented full-screen, so it actually uses the whole monitor instead of
+   staying capped at the admin page's max-width. */
+.admin-panel:fullscreen,
+.admin-panel:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 1.5rem 2rem;
+}
+
+/* A deterministic 4-across grid (2 rows for 8 houses) instead of
+   auto-fit, which can wrap unevenly and waste space depending on the
+   monitor width. */
+.live-house-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+@media (max-width: 1200px) {
+  .live-house-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .live-house-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.live-house-card {
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+}
+
+.live-house-card h3 {
+  margin: 0 0 0.4rem 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.live-house-post {
+  padding: 0.4rem 0;
+  border-top: 1px solid #e5e7eb;
+}
+
+.live-house-post:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.live-house-post-label {
+  margin: 0 0 0.2rem 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+
+.live-candidate-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  padding: 0.05rem 0;
+  color: #111827;
+}
+
+.live-candidate-row.leader {
+  font-weight: 700;
+  color: #16a34a;
+}

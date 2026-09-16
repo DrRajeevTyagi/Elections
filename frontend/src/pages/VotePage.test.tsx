@@ -122,3 +122,49 @@ describe('VotePage review Change/Cancel flow', () => {
     });
   });
 });
+
+describe('VotePage house indicator', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows which house is active when a house-bound code auto-selects it', async () => {
+    mockApi.activateKiosk.mockResolvedValue({
+      token: 'token-1',
+      officerName: 'Officer X',
+      house: 'Anand',
+      stationVoteCount: 0
+    });
+    mockApi.fetchPosts.mockResolvedValue({ posts });
+    mockApi.submitVote.mockResolvedValue({ voteId: 'vote-1', timestamp: 1700000000000, stationVoteCount: 1 });
+    mockApi.deactivateKiosk.mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter initialEntries={['/kiosk/vote']}>
+        <KioskProvider>
+          <Harness />
+        </KioskProvider>
+      </MemoryRouter>
+    );
+
+    // The house the code auto-selected must be visible on the ballot screen
+    // itself, not just implied by which candidates happen to show up.
+    await screen.findByText('Select Your Candidate');
+    expect(screen.getAllByText('Anand House').length).toBeGreaterThan(0);
+
+    fireEvent.click(await screen.findByText('Alice'));
+    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(await screen.findByText('Carol'));
+    fireEvent.click(screen.getByText('Review & Submit'));
+
+    // Still shown on the review screen.
+    expect(await screen.findByText('Review Your Selections')).toBeInTheDocument();
+    expect(screen.getAllByText('Anand House').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByText('Submit Ballot'));
+
+    // And on the post-vote confirmation screen.
+    await screen.findByText('Vote Recorded');
+    expect(screen.getAllByText('Anand House').length).toBeGreaterThan(0);
+  });
+});

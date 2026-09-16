@@ -955,42 +955,28 @@ export const AdminLandingPage = (): JSX.Element => {
         </div>
 
         {pollStatus?.activeElectionType === 'house' && houseGroupedResults ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+          <div className="live-house-grid">
             {houseGroupedResults.map((houseGroup) => (
-              <div
-                key={houseGroup.house}
-                style={{ border: '2px solid #e5e7eb', borderRadius: '16px', padding: '1.5rem' }}
-              >
-                <h3 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '2px solid #3b82f6', paddingBottom: '0.5rem' }}>
-                  🏠 {houseGroup.house}
-                </h3>
+              <div key={houseGroup.house} className="live-house-card">
+                <h3>🏠 {houseGroup.house}</h3>
                 {HOUSE_POST_IDS.map((postId) => {
                   const postResult = houseGroup.posts.find((p) => p.post === postId);
                   const sortedCandidates = [...(postResult?.candidates ?? [])].sort((a, b) => b.total - a.total);
                   return (
-                    <div key={postId} style={{ marginBottom: '1.25rem' }}>
-                      <p style={{ fontWeight: 700, fontSize: '1.1rem', margin: '0 0 0.4rem 0', color: '#374151' }}>
-                        {POST_NAMES[postId]}
-                      </p>
+                    <div key={postId} className="live-house-post">
+                      <p className="live-house-post-label">{POST_NAMES[postId]}</p>
                       {sortedCandidates.length > 0 ? (
                         sortedCandidates.map((candidateResult, index) => (
                           <div
                             key={candidateResult.candidate.id}
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              fontSize: '1.3rem',
-                              fontWeight: index === 0 && candidateResult.total > 0 ? 700 : 400,
-                              color: index === 0 && candidateResult.total > 0 ? '#16a34a' : '#111827',
-                              padding: '0.25rem 0'
-                            }}
+                            className={`live-candidate-row${index === 0 && candidateResult.total > 0 ? ' leader' : ''}`}
                           >
                             <span>{candidateResult.candidate.name}</span>
                             <span>{candidateResult.total}</span>
                           </div>
                         ))
                       ) : (
-                        <p style={{ color: '#9ca3af', fontStyle: 'italic' }}>No candidates</p>
+                        <p style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: '0.85rem', margin: 0 }}>No candidates</p>
                       )}
                     </div>
                   );

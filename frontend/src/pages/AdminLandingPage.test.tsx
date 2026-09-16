@@ -80,6 +80,11 @@ describe('AdminLandingPage tabs', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Present Full Screen/ })).toBeInTheDocument();
     expect(screen.queryByText('Poll Controls')).not.toBeInTheDocument();
+    // Locks in the compact, deterministic house grid (see admin.css
+    // .live-house-grid) so a future change can't silently regress back to
+    // an auto-fit layout that wastes space and won't fit all 8 houses.
+    expect(document.querySelector('.live-house-grid')).toBeInTheDocument();
+    expect(document.querySelector('.live-house-card')).toBeInTheDocument();
 
     // Switch to Officer Codes tab.
     fireEvent.click(screen.getByRole('button', { name: /Polling Officer Codes/ }));

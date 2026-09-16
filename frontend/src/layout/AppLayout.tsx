@@ -16,7 +16,7 @@ const POLL_STATUS_REFRESH_MS = 5000;
 export const AppLayout = ({ children }: PropsWithChildren): JSX.Element => {
   const [electionType, setElectionType] = useState<ElectionType | null>(null);
   const location = useLocation();
-  const { stationVoteCount } = useKiosk();
+  const { stationVoteCount, house } = useKiosk();
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +41,13 @@ export const AppLayout = ({ children }: PropsWithChildren): JSX.Element => {
   }, []);
 
   const showStationCount = location.pathname.startsWith('/kiosk') && typeof stationVoteCount === 'number';
+  const isKioskRoute = location.pathname.startsWith('/kiosk');
+  const bannerText =
+    electionType === 'house' && house && isKioskRoute
+      ? `Election for House Posts — ${house} House`
+      : electionType
+      ? ELECTION_TYPE_LABEL[electionType]
+      : null;
 
   return (
     <div className="app-shell">
@@ -57,7 +64,7 @@ export const AppLayout = ({ children }: PropsWithChildren): JSX.Element => {
           </div>
         )}
       </header>
-      {electionType && <div className="election-type-banner">{ELECTION_TYPE_LABEL[electionType]}</div>}
+      {bannerText && <div className="election-type-banner">{bannerText}</div>}
       <main className="app-main">{children}</main>
     </div>
   );

@@ -9,7 +9,7 @@ import './Page.css';
 import './Evm.css';
 
 export const VotePage = (): JSX.Element => {
-  const { posts, selections, updateSelection, submit, status, error, confirmation, officerName, reset } = useKiosk();
+  const { posts, selections, updateSelection, submit, status, error, confirmation, officerName, house, reset } = useKiosk();
   const navigate = useNavigate();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -85,6 +85,11 @@ export const VotePage = (): JSX.Element => {
     return (
       <section className="page-card">
         <h1>Vote Recorded</h1>
+        {house && (
+          <p style={{ fontSize: '0.9rem', color: '#16a34a', fontWeight: 700, marginTop: '-0.5rem' }}>
+            {house} House
+          </p>
+        )}
         <p>Your ballot was submitted successfully.</p>
         <p style={{ fontSize: '0.9rem', color: '#6b7280' }}>
           Recorded at {new Date(confirmation.timestamp).toLocaleString()}. This
@@ -129,6 +134,11 @@ export const VotePage = (): JSX.Element => {
           <p style={{ margin: 0, fontSize: '0.9rem', color: '#6b7280' }}>&#10003; Review Your Choices</p>
         </div>
         <h1 style={{ color: '#16a34a' }}>Review Your Selections</h1>
+        {house && (
+          <p style={{ fontSize: '0.9rem', color: '#16a34a', fontWeight: 700, marginTop: '-0.5rem' }}>
+            {house} House
+          </p>
+        )}
         <p style={{ fontSize: '0.95rem', color: '#6b7280' }}>
           Check every choice below. Click "Change" to update any answer, or click
           "Submit Ballot" once you are sure.
@@ -205,6 +215,11 @@ export const VotePage = (): JSX.Element => {
       </div>
 
       <h1>Select Your Candidate</h1>
+      {house && (
+        <p style={{ fontSize: '0.9rem', color: '#16a34a', fontWeight: 700, marginTop: '-0.5rem' }}>
+          {house} House
+        </p>
+      )}
       <p style={{ fontSize: '1.1rem', fontWeight: 500, color: '#1f2937' }}>
         {POST_NAMES[currentPost.post]} ({currentPost.post})
       </p>
@@ -214,6 +229,7 @@ export const VotePage = (): JSX.Element => {
 
       <div className="evm-panel">
         <div className="evm-header">
+          {house ? `${house} House — ` : ''}
           {POST_NAMES[currentPost.post]} &mdash; Ballot Unit
         </div>
         <div className="evm-rows">
