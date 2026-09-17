@@ -15,12 +15,12 @@ export const ensurePollIsOpen = (): PollState => {
   return pollState;
 };
 
-export const recordVote = (
+export const recordVote = async (
   selections: StoredVote['selections'],
   electionType: ElectionType,
   house?: HouseId,
   officerCode?: string
-): StoredVote => {
+): Promise<StoredVote> => {
   ensurePollIsOpen();
   return dataStore.addVote(selections, electionType, house, officerCode);
 };

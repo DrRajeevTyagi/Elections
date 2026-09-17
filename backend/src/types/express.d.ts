@@ -4,6 +4,7 @@ declare global {
   namespace Express {
     interface Locals {
       kioskSession?: KioskSession;
+      kioskToken?: string;
     }
   }
 }

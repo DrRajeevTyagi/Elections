@@ -5,6 +5,7 @@ import { recordVote, getPollState } from '../services/voteService.js';
 import { dataStore } from '../storage/datastore.js';
 import type { HouseId, VoteSubmission } from '../types/election.js';
 import { requireKioskSession } from '../middleware/kioskSession.js';
+import { kioskService } from '../services/kioskService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError } from '../utils/httpError.js';
 
@@ -45,7 +46,7 @@ export const votesRouter = Router();
 votesRouter.post(
   '/',
   requireKioskSession,
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const pollState = getPollState();
     if (!pollState.activeElectionType) {
       throw new BadRequestError('No election has been set up yet. Please contact the election administrator.');
@@ -60,8 +61,14 @@ votesRouter.post(
       throw new BadRequestError('Please select a house before submitting a vote for house elections.');
     }
 
+    // Validated before the one-time token is marked used, so a rejected
+    // payload (or a candidate that was edited/removed mid-vote) never burns
+    // the voter's code without a vote having been recorded -- see
+    // kioskService.getActiveSession/markConsumed.
     const submission = validateVote(req.body, pollState.activeElectionType, house);
-    const vote = recordVote(submission.selections, pollState.activeElectionType, house, officerCode);
+    kioskService.markConsumed(res.locals.kioskToken!);
+
+    const vote = await recordVote(submission.selections, pollState.activeElectionType, house, officerCode);
     const stationVoteCount = officerCode ? dataStore.countVotesByOfficerCode(officerCode) : undefined;
 
     res.status(201).json({

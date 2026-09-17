@@ -1,12 +1,25 @@
 import { Router } from 'express';
 import { requireAdminSecret } from '../middleware/adminAuth.js';
 import { dataStore } from '../storage/datastore.js';
+import { getPollState } from '../services/voteService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { BadRequestError } from '../utils/httpError.js';
+import { BadRequestError, ForbiddenError } from '../utils/httpError.js';
 import type { Candidate, ElectionType, HouseId } from '../types/election.js';
 import { isValidPostId, SCHOOL_POST_IDS, HOUSE_POST_IDS, isValidHouseId } from '../config/posts.js';
 
 export const candidatesRouter = Router();
+
+// Editing candidates while voters are actively casting ballots can change or
+// remove a candidate ID an in-flight ballot references -- that vote then
+// fails validation after the one-time token is already spent (see votes.ts).
+// Require the poll to be closed first.
+const ensurePollIsClosed = (): void => {
+  if (getPollState().settings.isOpen) {
+    throw new ForbiddenError(
+      'Close the poll before adding, editing, or deleting candidates -- changing candidates while voting is open can strand an in-progress ballot.'
+    );
+  }
+};
 
 // Photos are stored inline as compressed base64 data URLs (see datastore.ts
 // for why: election state is a single JSON document with a size ceiling).
@@ -29,6 +42,7 @@ candidatesRouter.put(
   '/:candidateId',
   requireAdminSecret,
   asyncHandler((req, res) => {
+    ensurePollIsClosed();
     const { candidateId } = req.params;
     const { name, manifesto, imageUrl } = req.body as Partial<Candidate>;
 
@@ -73,6 +87,7 @@ candidatesRouter.post(
   '/',
   requireAdminSecret,
   asyncHandler((req, res) => {
+    ensurePollIsClosed();
     const { id, name, post, electionType, house, manifesto, imageUrl } = req.body as Partial<Candidate>;
 
     if (!id || !name || !post) {
@@ -139,6 +154,7 @@ candidatesRouter.delete(
   '/:candidateId',
   requireAdminSecret,
   asyncHandler((req, res) => {
+    ensurePollIsClosed();
     const { candidateId } = req.params;
 
     if (!candidateId) {

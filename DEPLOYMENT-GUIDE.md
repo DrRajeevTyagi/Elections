@@ -162,7 +162,7 @@ gcloud run deploy school-election \
   --region asia-south1 \
   --allow-unauthenticated \
   --max-instances=1 \
-  --set-env-vars="USE_FIRESTORE=true,ADMIN_SECRET=your-strong-admin-password,KIOSK_SECRET=your-strong-kiosk-password"
+  --set-env-vars="USE_FIRESTORE=true,ADMIN_SECRET=your-strong-admin-password"
 ```
 
 > **Windows PowerShell users:** always wrap `--set-env-vars=...` in quotes as shown
@@ -212,8 +212,10 @@ these repository secrets (Settings → Secrets and variables → Actions):
 
 ### Ongoing operational notes
 
-- Rotate `ADMIN_SECRET` / `KIOSK_SECRET` away from the defaults before going live —
-  set them as Cloud Run environment variables (or migrate to Secret Manager).
+- Rotate `ADMIN_SECRET` away from the default before going live, and periodically
+  thereafter — set it as a Cloud Run environment variable (or migrate to Secret
+  Manager). `KIOSK_SECRET` no longer exists; ballot activation is entirely
+  officer-code based now, so remove it from Cloud Run's env vars if still present.
 - Firestore document `school-election/state` holds the entire dataset; back it up
   via Firestore's export tools before a live election.
 - Local development is unaffected — leave `USE_FIRESTORE` unset to keep using the
@@ -223,10 +225,9 @@ these repository secrets (Settings → Secrets and variables → Actions):
 
 
 ⚠️ **Before sharing externally:**
-1. Change default secrets in backend `.env` file:
+1. Change the default secret in backend `.env` file:
    ```
    ADMIN_SECRET=your-strong-admin-password
-   KIOSK_SECRET=your-strong-kiosk-password
    ```
 
 2. Consider using HTTPS (ngrok provides this automatically)

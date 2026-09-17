@@ -11,7 +11,9 @@ export const requireKioskSession: RequestHandler = (req, res, next) => {
     throw new UnauthorizedError('Kiosk session token missing');
   }
 
-  const session = kioskService.consumeSession(token.trim());
+  const trimmedToken = token.trim();
+  const session = kioskService.getActiveSession(trimmedToken);
   res.locals.kioskSession = session;
+  res.locals.kioskToken = trimmedToken;
   next();
 };

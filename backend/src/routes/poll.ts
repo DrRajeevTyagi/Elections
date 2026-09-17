@@ -3,6 +3,7 @@ import { requireAdminSecret } from '../middleware/adminAuth.js';
 import { kioskService } from '../services/kioskService.js';
 import { getPollState } from '../services/voteService.js';
 import { buildElectionSnapshot } from '../services/resultsService.js';
+import { findMissingCandidateCoverage } from '../services/candidateService.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError } from '../utils/httpError.js';
@@ -70,6 +71,13 @@ pollRouter.post(
     const currentState = getPollState();
     if (!currentState.activeElectionType) {
       throw new BadRequestError('Please set an election type before opening the poll');
+    }
+
+    const missingCoverage = findMissingCandidateCoverage(currentState.activeElectionType);
+    if (missingCoverage.length > 0) {
+      throw new BadRequestError(
+        `Cannot open the poll: no candidates yet for ${missingCoverage.join(', ')}. Add at least one candidate for each before opening, or a voter reaching that post will get stuck.`
+      );
     }
 
     const poll = dataStore.updatePollState((state) => ({

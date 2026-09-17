@@ -27,14 +27,14 @@ export class KioskService {
     return session;
   }
 
-  consumeSession(token: string): KioskSession {
+  // Validates a token without consuming it, so a request that fails
+  // validation *after* this check (bad payload, a candidate removed
+  // mid-vote, etc.) never burns the voter's one-time code. Call
+  // markConsumed() only once the vote is actually about to be recorded.
+  getActiveSession(token: string): KioskSession {
     const session = this.sessions.get(token);
     if (!session) {
       throw new UnauthorizedError('Invalid kiosk session token');
-    }
-
-    if (session.consumedAt) {
-      throw new ForbiddenError('Kiosk session already used');
     }
 
     if (session.activatedAt + SESSION_TTL_MS < Date.now()) {
@@ -42,8 +42,27 @@ export class KioskService {
       throw new ForbiddenError('Kiosk session expired');
     }
 
+    if (session.consumedAt) {
+      // Deliberately not deleted on consumption (see markConsumed) so a
+      // retry after a dropped response -- the vote was recorded, but the
+      // confirmation never reached the browser -- gets this specific,
+      // reassuring message instead of a generic "invalid token" error.
+      throw new ForbiddenError(
+        'This ballot has already been submitted. If the officer already saw a confirmation or vote count for this voter, do not vote again -- ask the election administrator if unsure.'
+      );
+    }
+
+    return session;
+  }
+
+  // Marks the token used. Only call this once the vote has passed
+  // validation and is about to be persisted -- see getActiveSession above.
+  markConsumed(token: string): KioskSession {
+    const session = this.sessions.get(token);
+    if (!session) {
+      throw new UnauthorizedError('Invalid kiosk session token');
+    }
     session.consumedAt = Date.now();
-    this.sessions.delete(token);
     return session;
   }
 

@@ -76,4 +76,8 @@ jobs:
           service: ${{ env.SERVICE }}
           region: ${{ env.REGION }}
           image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE }}/${{ env.SERVICE }}:${{ github.sha }}
-          flags: --max-instances=1 --allow-unauthenticated
+          # --no-cpu-throttling keeps CPU allocated outside of request
+          # handling so the async Firestore write queued after a vote is
+          # recorded (see datastore.ts) can actually finish instead of being
+          # frozen mid-flight if the instance idles or scales down.
+          flags: --max-instances=1 --allow-unauthenticated --no-cpu-throttling

@@ -22,7 +22,6 @@ describe('resultsService', () => {
     mockedDataStore.getCandidates.mockReturnValue(candidates);
     mockedDataStore.getPollState.mockReturnValue({
       activeElectionType: 'school',
-      secretKey: 'unlock-me',
       settings: { isOpen: true, allowRevote: false }
     });
     mockedDataStore.getVotes.mockReturnValue([

@@ -52,7 +52,6 @@ export interface OfficerCode {
 export interface PollState {
   activeElectionType: ElectionType | null;
   settings: PollSettings;
-  secretKey: string;
 }
 
 // A permanent snapshot of one election's results, taken automatically right

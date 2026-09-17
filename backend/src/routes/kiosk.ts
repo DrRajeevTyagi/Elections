@@ -5,6 +5,7 @@ import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ForbiddenError, UnauthorizedError, BadRequestError } from '../utils/httpError.js';
 import { isValidHouseId } from '../config/posts.js';
+import { kioskGuessLimiter } from '../middleware/rateLimit.js';
 
 interface ActivationRequest {
   secret?: string;
@@ -15,6 +16,7 @@ export const kioskRouter = Router();
 
 kioskRouter.post(
   '/activate',
+  kioskGuessLimiter,
   asyncHandler((req, res) => {
     const { secret, house: requestedHouse } = req.body as ActivationRequest;
     const enteredCode = typeof secret === 'string' ? secret.trim().toUpperCase() : '';
@@ -75,6 +77,7 @@ kioskRouter.post(
 
 kioskRouter.post(
   '/close-booth',
+  kioskGuessLimiter,
   asyncHandler((req, res) => {
     const { secret } = req.body as { secret?: string };
     const enteredCode = typeof secret === 'string' ? secret.trim().toUpperCase() : '';

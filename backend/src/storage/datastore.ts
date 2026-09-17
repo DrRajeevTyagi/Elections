@@ -30,8 +30,7 @@ const createDefaultPollState = (): PollState => ({
   settings: {
     isOpen: false,
     allowRevote: false
-  },
-  secretKey: env.kioskSecret
+  }
 });
 
 const createDefaultData = (): ElectionData => ({
@@ -176,10 +175,9 @@ export class DataStore {
       const pollState = parsed.pollState as Partial<PollState>;
       const basePollState = defaults.pollState;
       defaults.pollState = {
-        activeElectionType: pollState.activeElectionType === 'school' || pollState.activeElectionType === 'house' 
-          ? pollState.activeElectionType 
+        activeElectionType: pollState.activeElectionType === 'school' || pollState.activeElectionType === 'house'
+          ? pollState.activeElectionType
           : (basePollState.activeElectionType ?? null),
-        secretKey: typeof pollState.secretKey === 'string' ? pollState.secretKey : basePollState.secretKey,
         settings: {
           isOpen: pollState.settings?.isOpen ?? basePollState.settings.isOpen,
           allowRevote: pollState.settings?.allowRevote ?? basePollState.settings.allowRevote
@@ -200,12 +198,17 @@ export class DataStore {
     await writeFile(this.filePath, JSON.stringify(this.data, null, 2), 'utf-8');
   }
 
-  private queuePersist(): void {
-    this.writeQueue = this.writeQueue
-      .then(() => this.persist())
-      .catch((error) => {
-        console.error('Failed to persist election data', error);
-      });
+  // Returns a promise for THIS write specifically, so a caller that needs to
+  // know a particular change is durable (e.g. a cast vote, before telling
+  // the voter it was recorded) can await it. The shared this.writeQueue is
+  // kept alive even if this write fails (via the trailing .catch below), so
+  // one failed persist never wedges every write after it.
+  private queuePersist(): Promise<void> {
+    const attempt = this.writeQueue.then(() => this.persist());
+    this.writeQueue = attempt.catch((error) => {
+      console.error('Failed to persist election data', error);
+    });
+    return attempt;
   }
 
   private async flush(): Promise<void> {
@@ -246,7 +249,6 @@ export class DataStore {
   getPollState(): PollState {
     return {
       activeElectionType: this.data.pollState.activeElectionType ?? null,
-      secretKey: this.data.pollState.secretKey,
       settings: { ...this.data.pollState.settings }
     };
   }
@@ -257,7 +259,15 @@ export class DataStore {
     return this.getPollState();
   }
 
-  addVote(selections: StoredVote['selections'], electionType: ElectionType, house?: string, officerCode?: string): StoredVote {
+  // Awaits persistence before resolving -- a vote is only reported as
+  // "recorded" to the voter once it is actually durable, not just sitting
+  // in memory (Cloud Run can throttle/stop this instance between requests).
+  async addVote(
+    selections: StoredVote['selections'],
+    electionType: ElectionType,
+    house?: string,
+    officerCode?: string
+  ): Promise<StoredVote> {
     const vote: StoredVote = {
       id: randomUUID(),
       timestamp: Date.now(),
@@ -267,7 +277,9 @@ export class DataStore {
       selections: { ...selections }
     };
     this.data.votes.push(vote);
-    this.queuePersist();
+    // Left in memory even if the persist below throws -- it will be
+    // included in the next successful write instead of being dropped.
+    await this.queuePersist();
     return vote;
   }
 

@@ -26,7 +26,6 @@ Environment variables (optional, defaults shown):
 ```
 PORT=4000
 ADMIN_SECRET=admin-secret
-KIOSK_SECRET=unlock-me
 DATA_FILE=../data/data.json
 ```
 
