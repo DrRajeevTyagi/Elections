@@ -124,7 +124,7 @@ describe('AdminLandingPage tabs', () => {
     expect(screen.queryByText('No past elections have been archived yet.')).not.toBeInTheDocument();
   });
 
-  it('splits School Elections live results into a Head Boy/Head Girl row and a second row for the other three posts', async () => {
+  it('shows all 5 School Elections posts together in one live results grid', async () => {
     mockApi.verifyAdminSecret.mockResolvedValue(undefined);
     mockApi.getPollStatus.mockResolvedValue({
       poll: { activeElectionType: 'school', settings: { isOpen: false, allowRevote: false } }
@@ -146,15 +146,18 @@ describe('AdminLandingPage tabs', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Live Results' }));
     await screen.findByText('Alex');
 
-    const row2 = document.querySelector('.live-school-row-2');
-    const row3 = document.querySelector('.live-school-row-3');
-    expect(row2).toBeInTheDocument();
-    expect(row3).toBeInTheDocument();
-    expect(row2?.textContent).toContain('Head Boy');
-    expect(row2?.textContent).toContain('Head Girl');
-    expect(row2?.textContent).not.toContain('Sports Captain');
-    expect(row3?.textContent).toContain('School Sports Captain');
-    expect(row3?.textContent).toContain('School Resources Captain');
-    expect(row3?.textContent).toContain('School Cultural Captain');
+    const grid = document.querySelector('.live-school-grid');
+    expect(grid).toBeInTheDocument();
+    expect(grid?.textContent).toContain('Head Boy');
+    expect(grid?.textContent).toContain('Head Girl');
+    expect(grid?.textContent).toContain('School Sports Captain');
+    expect(grid?.textContent).toContain('School Resources Captain');
+    expect(grid?.textContent).toContain('School Cultural Captain');
+    // Every post's card gets its own distinct header color (see
+    // constants/postColors.ts) rather than an identical black heading.
+    const headings = Array.from(grid?.querySelectorAll('.live-post-card h3') ?? []);
+    expect(headings).toHaveLength(5);
+    const backgroundColors = new Set(headings.map((h) => (h as HTMLElement).style.backgroundColor));
+    expect(backgroundColors.size).toBe(5);
   });
 });

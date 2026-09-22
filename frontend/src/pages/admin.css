@@ -13,10 +13,48 @@
   background: #f9fafb;
   border-radius: 18px;
   padding: 1.5rem;
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08), inset 0 0 0 1px rgba(15, 23, 42, 0.05);
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+/* The tab strip itself: a distinct pill-shaped segmented control (its own
+   background/shadow) with clear space below before the content panel, so
+   the tabs read as their own UI element rather than blending into the
+   page and the panel below it. */
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.35rem;
+  margin: 1.25rem 0 1.5rem 0;
+  background: #e2e8f5;
+  border-radius: 14px;
+  box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.admin-tab-button {
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-tab-button:hover {
+  background: rgba(28, 100, 242, 0.12);
+  color: #1c64f2;
+}
+
+.admin-tab-button.active {
+  background: #1c64f2;
+  color: #ffffff;
+  box-shadow: 0 6px 14px rgba(28, 100, 242, 0.35);
 }
 
 .admin-actions {
@@ -302,32 +340,18 @@
   color: #16a34a;
 }
 
-/* School Elections live results: Head Boy/Head Girl on their own row,
-   then the other three posts on a second row, rather than an
-   unpredictable auto-fit wrap. */
+/* School Elections live results: all 5 posts share one grid with a capped
+   card width, instead of the old fixed 2-then-3 row split -- that split
+   forced Head Boy/Head Girl into two half-screen-wide cards, which is why
+   a candidate's name and their vote count used to sit with a large,
+   awkward gap between them (justify-content: space-between stretched
+   across the whole half-width card). Capping card width here keeps every
+   post's card the same compact size and the name/count pairing tight,
+   regardless of screen width. */
 .live-school-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.live-school-row-2 {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(190px, 240px));
   gap: 0.75rem;
-}
-
-.live-school-row-3 {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.75rem;
-}
-
-@media (max-width: 900px) {
-  .live-school-row-2,
-  .live-school-row-3 {
-    grid-template-columns: 1fr;
-  }
 }
 
 .live-post-card {
@@ -335,11 +359,17 @@
   border: 2px solid #e5e7eb;
   border-radius: 10px;
   padding: 0.5rem 0.75rem;
+  overflow: hidden;
 }
 
+/* The heading bleeds to the card's edges (negative margin matching the
+   card's own padding) so each post gets a distinct colored header band
+   -- set inline per post via POST_COLORS -- rather than a plain black
+   heading identical across every card. */
 .live-post-card h3 {
-  margin: 0 0 0.3rem 0;
-  font-size: 1rem;
+  margin: -0.5rem -0.75rem 0.5rem -0.75rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
   font-weight: 700;
-  color: #1f2937;
+  border-radius: 8px 8px 0 0;
 }

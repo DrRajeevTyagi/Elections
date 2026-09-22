@@ -29,6 +29,7 @@ import { AddCandidateForm } from '../components/AddCandidateForm';
 import { CandidateEditor } from '../components/CandidateEditor';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
 import { POST_NAMES } from '../constants/posts';
+import { POST_COLORS } from '../constants/postColors';
 import './Page.css';
 import './admin.css';
 
@@ -698,14 +699,14 @@ export const AdminLandingPage = (): JSX.Element => {
   };
 
   // Renders one school post's card for the Live Results tab -- pulled out
-  // so the two fixed rows (Head Boy/Head Girl, then the other three posts)
-  // can both call it instead of duplicating the card markup.
+  // so all 5 posts can share the same card markup and colored header.
   const renderSchoolPostCard = (postId: SchoolPostId) => {
     const postResult = results.find((r) => r.post === postId);
     const sortedCandidates = [...(postResult?.candidates ?? [])].sort((a, b) => b.total - a.total);
+    const color = POST_COLORS[postId];
     return (
       <div key={postId} className="live-post-card">
-        <h3>{POST_NAMES[postId]}</h3>
+        <h3 style={{ backgroundColor: color.background, color: color.text }}>{POST_NAMES[postId]}</h3>
         {sortedCandidates.length > 0 ? (
           sortedCandidates.map((candidateResult, index) => (
             <div
@@ -909,7 +910,7 @@ export const AdminLandingPage = (): JSX.Element => {
           </p>
         </div>
       )}
-      <div className="admin-tabs" style={{ display: 'flex', gap: '0.5rem', margin: '1rem 0', borderBottom: '2px solid #e5e7eb' }}>
+      <div className="admin-tabs">
         {(
           [
             { key: 'dashboard', label: 'Dashboard' },
@@ -921,14 +922,8 @@ export const AdminLandingPage = (): JSX.Element => {
         ).map((tab) => (
           <button
             key={tab.key}
-            className="button"
+            className={`admin-tab-button${activeTab === tab.key ? ' active' : ''}`}
             onClick={() => handleTabChange(tab.key)}
-            style={{
-              backgroundColor: activeTab === tab.key ? '#1c64f2' : 'transparent',
-              color: activeTab === tab.key ? '#ffffff' : '#374151',
-              borderRadius: '8px 8px 0 0',
-              boxShadow: 'none'
-            }}
           >
             {tab.label}
           </button>
@@ -1243,7 +1238,9 @@ export const AdminLandingPage = (): JSX.Element => {
                   const sortedCandidates = [...(postResult?.candidates ?? [])].sort((a, b) => b.total - a.total);
                   return (
                     <div key={postId} className="live-house-post">
-                      <p className="live-house-post-label">{POST_NAMES[postId]}</p>
+                      <p className="live-house-post-label" style={{ color: POST_COLORS[postId].accent }}>
+                        {POST_NAMES[postId]}
+                      </p>
                       {sortedCandidates.length > 0 ? (
                         sortedCandidates.map((candidateResult, index) => (
                           <div
@@ -1265,8 +1262,7 @@ export const AdminLandingPage = (): JSX.Element => {
           </div>
         ) : (
           <div className="live-school-grid">
-            <div className="live-school-row-2">{(['HB', 'HG'] as const).map(renderSchoolPostCard)}</div>
-            <div className="live-school-row-3">{(['SSC', 'SRC', 'SCC'] as const).map(renderSchoolPostCard)}</div>
+            {(['HB', 'HG', 'SSC', 'SRC', 'SCC'] as const).map(renderSchoolPostCard)}
             {results.length === 0 && <p>No votes recorded yet.</p>}
           </div>
         )}
