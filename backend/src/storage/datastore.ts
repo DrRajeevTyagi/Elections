@@ -407,6 +407,33 @@ export class DataStore {
     this.data.archives.push(archive);
     this.queuePersist();
   }
+
+  // Lets the admin fix up or add a label after the fact -- e.g. an archive
+  // created before this feature existed, or a typo in the name given at
+  // Reset/Switch-type time.
+  renameArchive(id: string, name: string): ElectionArchive | undefined {
+    const entry = this.data.archives.find((item) => item.id === id);
+    if (!entry) {
+      return undefined;
+    }
+    entry.name = name.trim() || undefined;
+    this.queuePersist();
+    return { ...entry };
+  }
+
+  // Lets the admin clear out test/junk archives (e.g. from a teacher
+  // testing round) -- there was previously no way to remove an archive at
+  // all once created, only to rename it. Permanent, same as any other
+  // delete in this app.
+  deleteArchive(id: string): boolean {
+    const lengthBefore = this.data.archives.length;
+    this.data.archives = this.data.archives.filter((entry) => entry.id !== id);
+    const deleted = this.data.archives.length < lengthBefore;
+    if (deleted) {
+      this.queuePersist();
+    }
+    return deleted;
+  }
 }
 
 export const dataStore = new DataStore();

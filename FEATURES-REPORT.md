@@ -151,17 +151,27 @@ Manages elections for **3 house-level posts**:
   3 seconds while the poll is open
 - Because each code is tied to one officer/station, votes can be traced back to a
   station for auditing without ever recording which voter cast which ballot
+- **🖨️ Print Officer Turnout**: a separate, always-available printable report of
+  just the officer/station turnout table (code, officer name, votes cast) — for
+  whoever wants that on its own, without candidate results attached
 
 ### Election History & Reports
-- **Download Report**: a printable results report for the currently active
-  election, any time — school post-wise, or house-then-post for house elections
-  — plus per-officer turnout. Opens in a new tab; "Print / Save as PDF" uses the
-  browser's own print dialog, so no extra software is needed.
-- **Auto-archived on Reset**: right before "Reset Poll" clears votes, the same
-  report is saved permanently as a timestamped snapshot, so a completed
-  election's record survives switching election types or running another poll.
-- **Election History** panel lists every past snapshot (date, election type,
-  total votes) with a "View / Print" link back to that snapshot's report.
+- **Download Report (current results)**: a printable, **results-only** report for
+  the currently active election, any time — school post-wise, or house-then-post
+  for house elections. Opens in a new tab; "Print / Save as PDF" uses the
+  browser's own print dialog, so no extra software is needed. Officer turnout is
+  deliberately not on this page — see "Print Officer Turnout" above for that.
+- **Auto-archived on Reset or Switch Election Type**: right before votes are
+  cleared, a full snapshot (results **and** officer turnout together) is saved
+  permanently, so a completed election's record survives. The admin is prompted
+  to give it a meaningful name (e.g. "School Council — Term 1 2026") at that
+  moment; leaving it blank is fine, and a name can be added or fixed later.
+- **Election History** panel lists every past snapshot (name, date, election
+  type, total votes), with the name editable inline at any time, and
+  "View / Print" (full report: results + turnout together, since this is the
+  permanent historical record) and **Delete** (with a confirmation prompt) for
+  each entry — e.g. to clear out test/junk snapshots left behind by a
+  teacher testing round before real polling day.
 
 ---
 
@@ -211,10 +221,14 @@ Manages elections for **3 house-level posts**:
 #### Admin
 - `POST /api/admin/verify` — check the admin secret is correct (used to gate the
   dashboard) before revealing any content
+- `GET /api/admin/storage-health` — whether the last save to Firestore/disk
+  succeeded, and when; backs the Dashboard tab's Storage status indicator
 
 #### Poll Management
 - `GET /api/poll` — get poll status
-- `POST /api/poll/open` / `close` / `reset` / `set-type` — admin secret required
+- `POST /api/poll/open` / `close` — admin secret required
+- `POST /api/poll/reset` / `set-type` — admin secret required; accepts an
+  optional `name` used to label the archive snapshot this may create
 
 #### Kiosk Operations
 - `POST /api/kiosk/activate` — activate a ballot with an officer code (+ house, for
@@ -243,8 +257,11 @@ Manages elections for **3 house-level posts**:
 #### Reports
 - `GET /api/report/current` — live, unpersisted snapshot of the active
   election (admin secret required)
-- `GET /api/report/archives` — list past snapshots
+- `GET /api/report/archives` — list past snapshots (includes each one's name,
+  if set)
 - `GET /api/report/archives/:id` — one full past snapshot
+- `PUT /api/report/archives/:id` — set/change an archive's name
+- `DELETE /api/report/archives/:id` — permanently remove one archive
 
 #### Health
 - `GET /api/health` — liveness check (used by Cloud Run)
@@ -277,4 +294,4 @@ since neither had an admin UI.)
 
 ---
 
-*Last updated: 2026-09-21, reflecting `main`.*
+*Last updated: 2026-09-22, reflecting `main`.*

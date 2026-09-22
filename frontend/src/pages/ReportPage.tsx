@@ -3,11 +3,40 @@ import { Link, useParams } from 'react-router-dom';
 import { getArchive, getCurrentReport } from '../services/api';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
 import { POST_NAMES, SCHOOL_POST_IDS } from '../constants/posts';
-import type { ArchivedCandidateResult, ElectionReport } from '../types/api';
+import type { ArchivedCandidateResult, ArchivedOfficerCode, ElectionReport } from '../types/api';
 import type { HouseId, PostId } from '../types/election';
 import './ReportPage.css';
 
-const formatTimestamp = (timestamp: number): string => new Date(timestamp).toLocaleString();
+export const formatTimestamp = (timestamp: number): string => new Date(timestamp).toLocaleString();
+
+// Shared with TurnoutReportPage -- the separate, officer-turnout-only report
+// reachable from the Polling Officer Codes tab.
+export const OfficerTurnoutTable = ({ officerCodes }: { officerCodes: ArchivedOfficerCode[] }): JSX.Element => (
+  <table className="report-table">
+    <thead>
+      <tr>
+        <th>Code</th>
+        <th>Officer Name</th>
+        <th>Votes Cast</th>
+      </tr>
+    </thead>
+    <tbody>
+      {officerCodes.length === 0 ? (
+        <tr>
+          <td colSpan={3} className="report-empty">No polling officer codes were generated</td>
+        </tr>
+      ) : (
+        officerCodes.map((entry) => (
+          <tr key={entry.code}>
+            <td>{entry.code}</td>
+            <td>{entry.officerName || <em>(unnamed)</em>}</td>
+            <td className="report-votes">{entry.voteCount}</td>
+          </tr>
+        ))
+      )}
+    </tbody>
+  </table>
+);
 
 interface GroupedPost {
   post: PostId;
@@ -141,6 +170,7 @@ export const ReportPage = (): JSX.Element => {
 
       <p className="report-school-name">Mount Carmel School</p>
       <h1>{report.electionType === 'school' ? 'School Elections' : 'House Elections'} — Results Report</h1>
+      {report.name && <p className="report-meta" style={{ fontWeight: 700 }}>{report.name}</p>}
       <p className="report-meta">
         {archiveId ? 'Archived' : 'Generated'} {formatTimestamp(report.archivedAt)}
         {' · '}
@@ -160,31 +190,18 @@ export const ReportPage = (): JSX.Element => {
           </section>
         ))}
 
-      <h2>Polling Officer Turnout</h2>
-      <table className="report-table">
-        <thead>
-          <tr>
-            <th>Code</th>
-            <th>Officer Name</th>
-            <th>Votes Cast</th>
-          </tr>
-        </thead>
-        <tbody>
-          {report.officerCodes.length === 0 ? (
-            <tr>
-              <td colSpan={3} className="report-empty">No polling officer codes were generated</td>
-            </tr>
-          ) : (
-            report.officerCodes.map((entry) => (
-              <tr key={entry.code}>
-                <td>{entry.code}</td>
-                <td>{entry.officerName || <em>(unnamed)</em>}</td>
-                <td className="report-votes">{entry.voteCount}</td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+      {/* Officer turnout is only part of the permanent, ARCHIVED record --
+          the live "current results" report (no archiveId) is results-only,
+          since that's what people actually want when they hit "Download
+          Report." Turnout has its own separate, always-available report at
+          /admin/report/turnout, reachable from the Polling Officer Codes
+          tab, for whoever specifically wants that. */}
+      {archiveId && (
+        <>
+          <h2>Polling Officer Turnout</h2>
+          <OfficerTurnoutTable officerCodes={report.officerCodes} />
+        </>
+      )}
     </div>
   );
 };

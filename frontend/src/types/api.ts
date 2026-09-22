@@ -98,6 +98,7 @@ export interface ElectionReport {
   totalVotes: number;
   results: ArchivedCandidateResult[];
   officerCodes: ArchivedOfficerCode[];
+  name?: string;
 }
 
 export interface ArchiveSummary {
@@ -105,6 +106,7 @@ export interface ArchiveSummary {
   archivedAt: number;
   electionType: ElectionType;
   totalVotes: number;
+  name?: string;
 }
 
 export interface CurrentReportResponse {

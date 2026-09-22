@@ -76,4 +76,5 @@ export interface ElectionArchive {
   totalVotes: number;
   results: ArchivedCandidateResult[];
   officerCodes: ArchivedOfficerCode[];
+  name?: string; // Admin-given label, e.g. "School Council -- Term 1 2026"
 }

@@ -24,8 +24,8 @@ pollRouter.post(
   '/set-type',
   requireAdminSecret,
   asyncHandler((req, res) => {
-    const { electionType } = req.body as { electionType?: string };
-    
+    const { electionType, name } = req.body as { electionType?: string; name?: string };
+
     if (electionType !== 'school' && electionType !== 'house') {
       throw new BadRequestError('Invalid election type. Must be "school" or "house"');
     }
@@ -40,7 +40,7 @@ pollRouter.post(
     if (outgoingType && outgoingType !== electionType) {
       const outgoingVotes = dataStore.getVotes().filter((vote) => vote.electionType === outgoingType);
       if (outgoingVotes.length > 0) {
-        const snapshot = buildElectionSnapshot();
+        const snapshot = buildElectionSnapshot(name);
         if (snapshot) {
           dataStore.addArchive(snapshot);
         }
@@ -114,10 +114,11 @@ pollRouter.post(
 pollRouter.post(
   '/reset',
   requireAdminSecret,
-  asyncHandler((_req, res) => {
+  asyncHandler((req, res) => {
+    const { name } = req.body as { name?: string };
     // Snapshot the current election's results before wiping votes, so a
     // record survives the reset -- see GET /api/report/archives.
-    const snapshot = buildElectionSnapshot();
+    const snapshot = buildElectionSnapshot(name);
     if (snapshot) {
       dataStore.addArchive(snapshot);
     }

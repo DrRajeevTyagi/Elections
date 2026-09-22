@@ -110,8 +110,8 @@ export const openPoll = (adminSecret: string): Promise<PollResponse> => updatePo
 
 export const closePoll = (adminSecret: string): Promise<PollResponse> => updatePoll('close', adminSecret);
 
-export const resetPoll = async (adminSecret: string): Promise<PollResponse> => {
-  const response = await api.post<PollResponse>('/poll/reset', undefined, {
+export const resetPoll = async (adminSecret: string, name?: string): Promise<PollResponse> => {
+  const response = await api.post<PollResponse>('/poll/reset', name ? { name } : undefined, {
     headers: {
       'x-admin-secret': adminSecret
     }
@@ -121,13 +121,18 @@ export const resetPoll = async (adminSecret: string): Promise<PollResponse> => {
 
 export const setElectionType = async (
   electionType: 'school' | 'house',
-  adminSecret: string
+  adminSecret: string,
+  name?: string
 ): Promise<PollResponse> => {
-  const response = await api.post<PollResponse>('/poll/set-type', { electionType } as SetElectionTypeRequest, {
-    headers: {
-      'x-admin-secret': adminSecret
+  const response = await api.post<PollResponse>(
+    '/poll/set-type',
+    { electionType, name } as SetElectionTypeRequest & { name?: string },
+    {
+      headers: {
+        'x-admin-secret': adminSecret
+      }
     }
-  });
+  );
   return response.data;
 };
 
@@ -232,4 +237,16 @@ export const getArchive = async (id: string, adminSecret: string): Promise<Archi
     headers: { 'x-admin-secret': adminSecret }
   });
   return response.data;
+};
+
+export const renameArchive = async (id: string, name: string, adminSecret: string): Promise<void> => {
+  await api.put(`/report/archives/${id}`, { name }, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+};
+
+export const deleteArchive = async (id: string, adminSecret: string): Promise<void> => {
+  await api.delete(`/report/archives/${id}`, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
 };

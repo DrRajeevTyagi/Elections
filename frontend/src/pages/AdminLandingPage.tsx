@@ -16,7 +16,9 @@ import {
   deleteOfficerCode,
   reopenOfficerCode,
   getArchivesList,
-  getStorageHealth
+  getStorageHealth,
+  renameArchive,
+  deleteArchive
 } from '../services/api';
 import type { PollStatus, PostResult, CandidateResult, OfficerCode, ArchiveSummary, StorageHealth } from '../types/api';
 import type { PostId, ElectionType, HouseId, SchoolPostId } from '../types/election';
@@ -101,9 +103,30 @@ export const AdminLandingPage = (): JSX.Element => {
   const [officerCodesLoading, setOfficerCodesLoading] = useState(false);
   const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
   const [archives, setArchives] = useState<ArchiveSummary[]>([]);
+  const [archiveNameDrafts, setArchiveNameDrafts] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'dashboard' | 'results' | 'codes' | 'history'>('dashboard');
   const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
   const liveResultsRef = useRef<HTMLDivElement | null>(null);
+
+  // A message/error left over from an action on a different tab (e.g.
+  // "Candidate added successfully" from Manage Candidates on the Dashboard
+  // tab) has no business following the admin to Live Results or anywhere
+  // else -- clear both whenever the tab changes.
+  const handleTabChange = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    setMessage(null);
+    setError(null);
+  };
+
+  // Belt-and-braces for the same issue: even on the SAME tab, a success
+  // message shouldn't linger forever -- auto-dismiss it after a few seconds.
+  useEffect(() => {
+    if (!message) {
+      return;
+    }
+    const timeoutId = setTimeout(() => setMessage(null), 5000);
+    return () => clearTimeout(timeoutId);
+  }, [message]);
 
   const handlePresentFullScreen = () => {
     liveResultsRef.current?.requestFullscreen?.().catch(() => {
@@ -288,10 +311,40 @@ export const AdminLandingPage = (): JSX.Element => {
     try {
       const response = await getArchivesList(secret);
       setArchives(response.archives);
+      setArchiveNameDrafts(Object.fromEntries(response.archives.map((entry) => [entry.id, entry.name ?? ''])));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load election history');
     }
   }, []);
+
+  const handleSaveArchiveName = async (id: string) => {
+    const name = archiveNameDrafts[id] ?? '';
+    try {
+      setError(null);
+      await renameArchive(id, name, adminSecret);
+      setMessage('Election name saved.');
+      await loadArchives();
+    } catch (renameError) {
+      setError(renameError instanceof Error ? renameError.message : 'Failed to save the name');
+    }
+  };
+
+  const handleDeleteArchive = async (archive: ArchiveSummary) => {
+    const confirmed = window.confirm(
+      `Permanently delete this Election History entry?\n\n${archive.name || '(unnamed)'} — ${formatTimestamp(archive.archivedAt)} — ${archive.totalVotes} vote${archive.totalVotes === 1 ? '' : 's'}\n\nThis cannot be undone. Use this to clear out test/junk entries -- do not delete a real election's record unless you're certain you no longer need it.`
+    );
+    if (!confirmed) {
+      return;
+    }
+    try {
+      setError(null);
+      await deleteArchive(archive.id, adminSecret);
+      setMessage('Election History entry deleted.');
+      await loadArchives();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete the entry');
+    }
+  };
 
   const handleDeleteOfficerCode = async (code: string) => {
     const confirmed = window.confirm(`Delete code ${code}? It will no longer be able to activate a kiosk.`);
@@ -446,11 +499,23 @@ export const AdminLandingPage = (): JSX.Element => {
       return;
     }
 
+    // Reset always archives a snapshot when an election type is set, even
+    // with zero votes -- ask for a name so Election History reads as
+    // something more useful than just a timestamp. Cancelling this prompt
+    // only skips the name (it can be added later from Election History), it
+    // does not cancel the reset the admin already confirmed above.
+    const archiveName = pollStatus?.activeElectionType
+      ? window.prompt(
+          'Name this election for the history record (e.g. "School Council -- Term 1 2026"). Leave blank to skip -- you can add a name later from Election History.',
+          `${pollStatus.activeElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString()}`
+        )?.trim() || undefined
+      : undefined;
+
     try {
       setLoading(true);
       setError(null);
       setMessage(null);
-      await resetPoll(adminSecret);
+      await resetPoll(adminSecret, archiveName);
       setMessage('Poll reset successfully. A snapshot was saved to Election History and all votes have been cleared.');
       await loadDashboard();
       await loadArchives();
@@ -596,13 +661,30 @@ export const AdminLandingPage = (): JSX.Element => {
       return;
     }
 
+    // Switching type only archives the OUTGOING type's votes (and only if
+    // there are any) -- see poll.ts. Only bother asking for a name when
+    // that's actually going to happen.
+    const outgoingVotesCast = results.reduce(
+      (sum, post) => sum + post.candidates.reduce((s, c) => s + c.total, 0),
+      0
+    );
+    const willArchive =
+      Boolean(pollStatus?.activeElectionType) && pollStatus?.activeElectionType !== electionType && outgoingVotesCast > 0;
+    const archiveName = willArchive
+      ? window.prompt(
+          'Name this election for the history record (e.g. "School Council -- Term 1 2026"). Leave blank to skip -- you can add a name later from Election History.',
+          `${pollStatus!.activeElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString()}`
+        )?.trim() || undefined
+      : undefined;
+
     try {
       setLoading(true);
       setError(null);
       setMessage(null);
-      await setElectionType(electionType, adminSecret);
+      await setElectionType(electionType, adminSecret, archiveName);
       setMessage(`Switched to ${electionType === 'school' ? 'School' : 'House'} Elections successfully.`);
       await loadDashboard();
+      await loadArchives();
     } catch (typeError) {
       setError(typeError instanceof Error ? typeError.message : 'Failed to change election type');
     } finally {
@@ -697,7 +779,7 @@ export const AdminLandingPage = (): JSX.Element => {
           <button
             key={tab.key}
             className="button"
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => handleTabChange(tab.key)}
             style={{
               backgroundColor: activeTab === tab.key ? '#1c64f2' : 'transparent',
               color: activeTab === tab.key ? '#ffffff' : '#374151',
@@ -1098,8 +1180,19 @@ export const AdminLandingPage = (): JSX.Element => {
 
       {activeTab === 'codes' && (
       <div className="admin-panel">
-        <h2>Polling Officer Codes</h2>
-        <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <h2 style={{ margin: 0 }}>Polling Officer Codes</h2>
+          <button
+            className="button"
+            onClick={() => window.open('/admin/report/turnout', '_blank')}
+            disabled={!pollStatus?.activeElectionType}
+            style={{ backgroundColor: '#4338ca' }}
+            title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable turnout report in a new tab'}
+          >
+            🖨️ Print Officer Turnout
+          </button>
+        </div>
+        <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '0.5rem', marginBottom: '1rem' }}>
           Generate codes here, hand them out, then come back and type each officer's name against their code so
           you know who has which one. Generating adds new codes to the list below &mdash; it never replaces or
           removes existing ones.
@@ -1303,6 +1396,7 @@ export const AdminLandingPage = (): JSX.Element => {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: '2px solid #e5e7eb' }}>
+                  <th style={{ padding: '0.5rem' }}>Name</th>
                   <th style={{ padding: '0.5rem' }}>Archived</th>
                   <th style={{ padding: '0.5rem' }}>Election Type</th>
                   <th style={{ padding: '0.5rem' }}>Total Votes</th>
@@ -1314,17 +1408,47 @@ export const AdminLandingPage = (): JSX.Element => {
                   .sort((a, b) => b.archivedAt - a.archivedAt)
                   .map((archive) => (
                     <tr key={archive.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '0.5rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', minWidth: '220px' }}>
+                          <input
+                            className="form-input"
+                            style={{ margin: 0 }}
+                            value={archiveNameDrafts[archive.id] ?? ''}
+                            placeholder="Unnamed -- add a label"
+                            onChange={(event) =>
+                              setArchiveNameDrafts((prev) => ({ ...prev, [archive.id]: event.target.value }))
+                            }
+                          />
+                          <button
+                            className="button"
+                            style={{ backgroundColor: '#6b7280', flexShrink: 0 }}
+                            onClick={() => handleSaveArchiveName(archive.id)}
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </td>
                       <td style={{ padding: '0.5rem' }}>{formatTimestamp(archive.archivedAt)}</td>
                       <td style={{ padding: '0.5rem' }}>{archive.electionType === 'school' ? 'School' : 'House'}</td>
                       <td style={{ padding: '0.5rem' }}>{archive.totalVotes}</td>
                       <td style={{ padding: '0.5rem' }}>
-                        <button
-                          className="button"
-                          style={{ backgroundColor: '#4338ca' }}
-                          onClick={() => window.open(`/admin/report/${archive.id}`, '_blank')}
-                        >
-                          View / Print
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            className="button"
+                            style={{ backgroundColor: '#4338ca' }}
+                            onClick={() => window.open(`/admin/report/${archive.id}`, '_blank')}
+                          >
+                            View / Print
+                          </button>
+                          <button
+                            className="button"
+                            style={{ backgroundColor: '#dc2626' }}
+                            onClick={() => handleDeleteArchive(archive)}
+                            title="Permanently remove this entry -- for clearing test/junk history"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

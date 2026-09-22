@@ -68,9 +68,12 @@ export const getResults = (house?: HouseId): PostResult[] => {
 // A full, unfiltered snapshot of the currently active election -- every
 // house's candidates together, plus officer/station turnout -- used both for
 // the "Download Report" button (live, not persisted) and to archive results
-// automatically right before "Reset Poll" clears the votes. Returns null
-// when there's no active election type to snapshot.
-export const buildElectionSnapshot = (): ElectionArchive | null => {
+// automatically right before "Reset Poll" (or a Switch Election Type that
+// clears an outgoing type's votes) clears the votes. `name` is the admin's
+// own label for the archive, e.g. "School Council -- Term 1 2026" -- purely
+// cosmetic, shown in Election History. Returns null when there's no active
+// election type to snapshot.
+export const buildElectionSnapshot = (name?: string): ElectionArchive | null => {
   const pollState = getPollState();
   const electionType = pollState.activeElectionType;
   if (!electionType) {
@@ -103,6 +106,7 @@ export const buildElectionSnapshot = (): ElectionArchive | null => {
     electionType,
     totalVotes,
     results,
-    officerCodes
+    officerCodes,
+    name: name?.trim() || undefined
   };
 };
