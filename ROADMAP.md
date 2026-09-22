@@ -107,6 +107,25 @@ actually has data:**
 yet (needed once turnout reports should be per-branch) — lower urgency than
 the two items above since it carries no regression risk either way.
 
+**Bug found and fixed in real use (2026-09-22):** the first branch-wiring pass
+above missed the actual ballot itself. `GET /posts` (which builds the list of
+candidates a voter sees) and `routes/votes.ts`'s vote validation were never
+updated to filter by branch, even though officer codes/kiosk sessions/vote
+records already carried it correctly. Reported directly by the Election
+Commissioner: an AN Satya House code showed all 6 Satya HC candidates (3
+Dwarka + 3 AN) instead of just AN's 3. Worse than display-only — a voter
+could have submitted a Dwarka candidate's id on a ballot whose vote record
+gets tagged 'AN' from the session, corrupting both branches' results with an
+internally inconsistent vote. Fixed at the real trust boundary
+(`validateVote` now filters by the session's server-derived branch, not
+client input) with `GET /posts` filtering the same way so the ballot matches
+what will actually be accepted; covered by
+[votes.test.ts](backend/src/routes/votes.test.ts). **Lesson for whatever
+comes next in this rollout:** "branch-wiring the backend" needs to explicitly
+include the read path the voter's own ballot is built from, not just
+generation/activation/recording — those three all "worked" individually
+while the actual candidate list voters saw was still unfiltered.
+
 ## Phase 1 — small, independent trust fixes (can run in parallel with Phase 0)
 
 Minimal file overlap with Phase 0, so these don't need to wait:
