@@ -155,18 +155,23 @@ officer code and use it to cast extra votes. Every unused code should be deleted
 with zero record, and every issued code must carry the name of the person it was
 issued to.
 
-**Current behavior in the code:**
+**Current behavior in the code (updated 2026-09-22 — see Status below):**
 - Codes are generated blank: `generateOfficerCodes` creates each entry with
-  `officerName: ''` ([datastore.ts:353-360](backend/src/storage/datastore.ts#L353-L360)),
+  `officerName: ''` and `everNamed: false` ([datastore.ts](backend/src/storage/datastore.ts)),
   and the name is only attached later via a separate `PUT /:code` call
-  ([officerCodes.ts:46-59](backend/src/routes/officerCodes.ts#L46-L59)).
-  **Nothing currently stops a blank-named code from being used to vote** — kiosk
-  activation ([kiosk.ts:15-68](backend/src/routes/kiosk.ts#L15-L68)) only checks
-  that the code exists, isn't closed, and matches the active election type. A name
-  is never required.
-- `DELETE /:code` ([officerCodes.ts:73-80](backend/src/routes/officerCodes.ts#L73-L80))
-  removes a code unconditionally — used or unused, named or not — with no
-  distinction and no record of the deletion (see #5).
+  ([officerCodes.ts](backend/src/routes/officerCodes.ts)), which also
+  permanently flips `everNamed` to `true` the first time a non-blank name is
+  saved.
+  **Kiosk activation now rejects a blank-named code outright** — `POST
+  /kiosk/activate` ([kiosk.ts](backend/src/routes/kiosk.ts)) checks
+  `officerCode.officerName.trim()` and refuses activation before checking
+  anything else, in addition to its existing checks (exists, not closed,
+  matches active election type).
+- `DELETE /:code` ([officerCodes.ts](backend/src/routes/officerCodes.ts))
+  now refuses to delete a code if `everNamed` is `true` **or** it has any
+  votes — matching the stricter rule below exactly. No record of the
+  deletion itself is kept yet (that's item 5's audit log, tracked as
+  ROADMAP.md Phase 3).
 - Votes do carry the `officerCode` they were cast under
   ([voteService/datastore StoredVote](backend/src/types/election.ts)), so votes
   *are* traceable to a station/code even after the code itself is deleted from the
@@ -198,32 +203,42 @@ also unused. This is deliberately stricter than "just check the vote count" —
 it closes the gap where an admin names a code, decides not to use it, then quietly
 deletes it before anyone reviews the officer list.
 
-**Proposed handling:**
-- **Require a name before a code can activate a ballot.** Reject kiosk activation
-  for any code with a blank `officerName`, not just closed ones. This is the single
-  highest-leverage fix here — it closes the "anonymous code" path entirely.
-  Enforcing it before House and General elections start requires the admin to name
-  every code first, which is a normal workflow step anyway (see
-  [ROLLOUT-CHECKLIST.md](ROLLOUT-CHECKLIST.md) — "record which teacher holds which
-  code").
-- **Deletion rule (revised):** `DELETE /:code` should refuse unless the code has
-  *never* had a name attached (an `officerName` that has always been empty, not
-  just currently empty — see below) **and** `countVotesByOfficerCode(code) === 0`.
-  This needs a small model change: today `officerName: ''` can't distinguish
-  "never named" from "named, then cleared back to blank" — a `neverNamed` flag (or
-  equivalent) set at creation and cleared permanently the first time a name is
-  saved would be needed to enforce this correctly.
-- Codes scoped to a specific, explicitly started election — see item 11 — rather
-  than generatable "anytime, for any election," which is today's behavior.
-- **Log every code generation, naming, and deletion** (who, when, count, election)
-  — see #5.
+**Handling — implemented 2026-09-22, remaining items still open:**
+- ✅ **Require a name before a code can activate a ballot.** Kiosk activation
+  now rejects any code with a blank `officerName`, not just closed ones. This
+  was the single highest-leverage fix here — it closes the "anonymous code"
+  path entirely. Enforcing it before House and General elections start
+  requires the admin to name every code first, which is a normal workflow
+  step anyway (see [ROLLOUT-CHECKLIST.md](ROLLOUT-CHECKLIST.md) — "record
+  which teacher holds which code").
+- ✅ **Deletion rule (revised).** `DELETE /:code` now refuses unless the code
+  has *never* had a name attached (tracked via the new `everNamed` field,
+  which distinguishes "never named" from "named, then cleared back to
+  blank" — `officerName` alone couldn't) **and**
+  `countVotesByOfficerCode(code) === 0`.
+- ⬜ Codes scoped to a specific, explicitly started election — see item 11 —
+  rather than generatable "anytime, for any election," which is still
+  today's behavior.
+- ⬜ **Log every code generation, naming, and deletion** (who, when, count,
+  election) — see #5, tracked as ROADMAP.md Phase 3.
 - Surface, in the dashboard, a simple discrepancy check: total votes cast under
   officer codes vs. total votes recorded overall should always be equal — flag if
   they ever diverge (would indicate a vote with no valid code, which shouldn't be
   reachable but is worth alarming on if it ever happens).
 
-**Status:** Designed (deletion rule and name requirement agreed; election-run
-scoping tracked separately in item 11).
+**Status:** **Name requirement and stricter deletion rule implemented and live
+in production** (2026-09-22). `POST /kiosk/activate` now rejects any code
+whose `officerName` is blank, before checking anything else about the
+election. `DELETE /officer-codes/:code` now refuses to delete a code if
+either `everNamed` is `true` (a new field, set permanently the first time a
+name is ever attached and never cleared back to `false` even if the name is
+later edited back to blank) or its vote count is nonzero — matching the
+stricter rule agreed above exactly, including the "named then cleared"
+closing case. Both changes are covered by regression tests
+(`routes/kiosk.test.ts`, `routes/officerCodes.test.ts`). Still open: the
+discrepancy check (last bullet above) and logging every generation/naming/
+deletion, which folds into item 5's audit log — tracked as ROADMAP.md
+Phase 3. Election-run scoping is still tracked separately in item 11.
 
 ---
 

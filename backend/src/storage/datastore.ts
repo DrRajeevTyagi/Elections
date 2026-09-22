@@ -112,7 +112,11 @@ const normalizeOfficerCode = (entry: OfficerCode): OfficerCode => ({
     : entry.house
     ? 'house'
     : 'school',
-  branch: entry.branch ?? DEFAULT_BRANCH
+  branch: entry.branch ?? DEFAULT_BRANCH,
+  // A record that predates the everNamed field: if it already carries a
+  // name, treat it as having been named (the safe assumption -- we have no
+  // history to say otherwise); if blank, treat it as never named.
+  everNamed: entry.everNamed ?? Boolean(entry.officerName)
 });
 
 const normalizeCandidateBranch = (entry: Candidate): Candidate => ({
@@ -514,7 +518,7 @@ export class DataStore {
   generateOfficerCodes(count: number, electionType: ElectionType, house?: HouseId, branch: Branch = DEFAULT_BRANCH): OfficerCode[] {
     const newCodes = generateUniqueCodes(count, this.data.officerCodes.map((entry) => entry.code));
     const createdAt = Date.now();
-    const entries: OfficerCode[] = newCodes.map((code) => ({ code, officerName: '', electionType, house, createdAt, branch }));
+    const entries: OfficerCode[] = newCodes.map((code) => ({ code, officerName: '', everNamed: false, electionType, house, createdAt, branch }));
     this.data.officerCodes.push(...entries);
     this.queuePersist();
     return entries;
@@ -547,6 +551,9 @@ export class DataStore {
     }
     if (updates.officerName !== undefined) {
       entry.officerName = updates.officerName;
+      if (updates.officerName.trim()) {
+        entry.everNamed = true;
+      }
     }
     this.queuePersist();
     return { ...entry };

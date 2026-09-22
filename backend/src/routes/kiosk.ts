@@ -29,6 +29,16 @@ kioskRouter.post(
       );
     }
 
+    // A code must be allotted to a named polling officer before it can
+    // activate a ballot -- a freshly generated, still-unnamed code (see
+    // datastore.ts generateOfficerCodes: officerName starts as '') has not
+    // yet been handed to anyone and must not be usable to vote.
+    if (!officerCode.officerName.trim()) {
+      throw new ForbiddenError(
+        'This code has not yet been allotted to a polling officer. Ask the election administrator to assign a name to this code before using it.'
+      );
+    }
+
     const pollState = getPollState();
     if (!pollState.settings.isOpen) {
       throw new ForbiddenError('Voting is currently closed. Ask the election administrator to open the poll before activating a ballot.');

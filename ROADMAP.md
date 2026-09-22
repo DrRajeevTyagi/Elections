@@ -34,6 +34,16 @@ to Cloud Run):
   House Elections header total is relabeled "Total Ballots (all 8 houses
   combined)" instead of looking like a per-house figure. Requested directly,
   2026-09-22.
+- **Two officer-code integrity rules from item 3 were closed out just before
+  Phase 3 started (2026-09-22), at the Election Commissioner's explicit
+  request:** (1) a code with a blank `officerName` can no longer activate a
+  kiosk — `POST /kiosk/activate` now rejects it outright; (2) `DELETE
+  /officer-codes/:code` now enforces the full stricter rule already agreed in
+  item 3 — a code can only be deleted if it was *never* named (tracked via a
+  new permanent `everNamed` flag, since `officerName` alone can't tell "never
+  named" apart from "named, then cleared") **and** has zero votes. Both are
+  covered by regression tests. See ELECTION-INTEGRITY-AND-TRUST.md item 3 for
+  the full account.
 - **Next, per explicit direction (2026-09-22): Phase 3 — "Start Recording" +
   the audit log.** Not started yet. See Phase 3 below for what it involves;
   it's the largest remaining piece and needs its own data-model design pass

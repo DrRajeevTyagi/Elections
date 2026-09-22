@@ -60,6 +60,15 @@ export interface OfficerCode {
   createdAt: number;
   closedAt?: number; // Set when the polling officer closes this booth; blocks further activations
   branch?: Branch;
+  // Set permanently to true the first time officerName is ever assigned a
+  // non-blank value, and never cleared back to false even if the name is
+  // later edited back to blank -- distinguishes "never named" from
+  // "named, then cleared," which officerName alone cannot. Deletion (see
+  // routes/officerCodes.ts DELETE) is refused once this is true, per the
+  // stricter rule in ELECTION-INTEGRITY-AND-TRUST.md item 3: once a code
+  // has been allotted to a real officer, it becomes permanent regardless
+  // of whether it was ever used to vote.
+  everNamed?: boolean;
 }
 
 export interface PollState {

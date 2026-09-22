@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireAdminSession } from '../middleware/adminAuth.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { BadRequestError } from '../utils/httpError.js';
+import { BadRequestError, ConflictError } from '../utils/httpError.js';
 import { isValidHouseId, isValidBranch } from '../config/posts.js';
 
 export const officerCodesRouter = Router();
@@ -81,7 +81,31 @@ officerCodesRouter.delete(
   '/:code',
   asyncHandler((req, res) => {
     const { code } = req.params;
-    dataStore.deleteOfficerCode(code.toUpperCase());
+    const normalizedCode = code.toUpperCase();
+    const entry = dataStore.findOfficerCode(normalizedCode);
+    if (!entry) {
+      throw new BadRequestError('Code not found');
+    }
+    // Deletion is only allowed for a code that has never been allotted to a
+    // named officer AND has never cast a vote (ELECTION-INTEGRITY-AND-TRUST.md
+    // item 3). Once a code has been named it's permanent regardless of
+    // whether it was used -- this is deliberately stricter than checking the
+    // vote count alone, closing the gap where an admin names a code, decides
+    // not to use it, then quietly deletes it before anyone reviews the
+    // officer list. Closing the code (see /reopen) is the correct way to
+    // retire a code that's no longer needed.
+    if (entry.everNamed) {
+      throw new ConflictError(
+        `Code ${normalizedCode} has been allotted to a polling officer and cannot be deleted, even though it has zero votes. Close the booth instead to stop it from being used further.`
+      );
+    }
+    const voteCount = dataStore.countVotesByOfficerCode(normalizedCode);
+    if (voteCount > 0) {
+      throw new ConflictError(
+        `Code ${normalizedCode} has already cast ${voteCount} vote${voteCount === 1 ? '' : 's'} and cannot be deleted. Close the booth instead to stop it from being used further.`
+      );
+    }
+    dataStore.deleteOfficerCode(normalizedCode);
     res.status(204).send();
   })
 );

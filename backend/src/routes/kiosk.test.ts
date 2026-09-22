@@ -118,4 +118,28 @@ describe('POST /api/kiosk/activate', () => {
     expect(response.status).toBe(201);
     expect(response.body.branch).toBe('AN');
   });
+
+  it('rejects a code that has not yet been allotted to a named polling officer', async () => {
+    // A freshly generated code starts with officerName: '' (see
+    // datastore.ts generateOfficerCodes) until an admin assigns it to a
+    // real person via PUT /officer-codes/:code. Until then it must not be
+    // usable to activate a ballot.
+    const unallotedCode: OfficerCode = {
+      code: 'JKL012',
+      officerName: '',
+      electionType: 'school',
+      createdAt: Date.now()
+    };
+    mockedDataStore.findOfficerCode.mockReturnValue(unallotedCode);
+    mockedDataStore.getPollState.mockReturnValue({
+      activeElectionType: 'school',
+      settings: { isOpen: true, allowRevote: false }
+    });
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/kiosk/activate').send({ secret: 'jkl012' });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toContain('not yet been allotted');
+  });
 });
