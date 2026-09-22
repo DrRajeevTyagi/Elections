@@ -14,7 +14,7 @@ import type {
   VoteResponse,
   SetElectionTypeRequest
 } from '../types/api';
-import type { HouseId } from '../types/election';
+import type { Branch, HouseId } from '../types/election';
 
 const api = axios.create({
   baseURL: '/api'
@@ -180,8 +180,8 @@ export const setElectionType = async (
   return response.data;
 };
 
-export const getResults = async (house?: HouseId): Promise<ResultsResponse> => {
-  const params = house ? { house } : {};
+export const getResults = async (house?: HouseId, branch?: Branch): Promise<ResultsResponse> => {
+  const params = { ...(house ? { house } : {}), ...(branch ? { branch } : {}) };
   const response = await api.get<ResultsResponse>('/results', { params });
   return response.data;
 };
@@ -241,7 +241,7 @@ export const updateCandidate = async (
 };
 
 export const addCandidate = async (
-  candidate: { id: string; name: string; post: string; electionType?: 'school' | 'house'; house?: HouseId },
+  candidate: { id: string; name: string; post: string; electionType?: 'school' | 'house'; house?: HouseId; branch?: Branch },
   adminSecret: string
 ): Promise<void> => {
   await api.post('/candidates', candidate, {

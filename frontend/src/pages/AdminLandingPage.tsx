@@ -24,7 +24,7 @@ import {
   saveElectionToHistory
 } from '../services/api';
 import type { PollStatus, PostResult, CandidateResult, OfficerCode, ArchiveSummary, StorageHealth } from '../types/api';
-import type { PostId, ElectionType, HouseId, SchoolPostId } from '../types/election';
+import type { PostId, ElectionType, HouseId, SchoolPostId, Branch } from '../types/election';
 import { AddCandidateForm } from '../components/AddCandidateForm';
 import { CandidateEditor } from '../components/CandidateEditor';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
@@ -119,6 +119,12 @@ export const AdminLandingPage = (): JSX.Element => {
   const [archiveNameDrafts, setArchiveNameDrafts] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'dashboard' | 'candidates' | 'results' | 'codes' | 'history'>('dashboard');
   const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
+  // Which branch Manage Candidates (and, as a result, Live Results too,
+  // since they share the same `results` fetch) is currently scoped to.
+  // Year 1 is manual entry only for both branches -- see
+  // CANDIDATE-COLLECTION-PLAN.md and ROADMAP.md Phase 2 -- so this is
+  // deliberately a simple shared toggle, not per-tab independent state.
+  const [selectedBranch, setSelectedBranch] = useState<Branch>('dwarka');
   const liveResultsRef = useRef<HTMLDivElement | null>(null);
 
   // A message/error left over from an action on a different tab (e.g.
@@ -173,7 +179,7 @@ export const AdminLandingPage = (): JSX.Element => {
     try {
       setLoading(true);
       setError(null);
-      const [pollResponse, resultsResponse] = await Promise.all([getPollStatus(), getResults()]);
+      const [pollResponse, resultsResponse] = await Promise.all([getPollStatus(), getResults(undefined, selectedBranch)]);
       setPollStatus(pollResponse.poll);
       setResults(resultsResponse.results);
       setTotalVotes(resultsResponse.totalVotes);
@@ -183,7 +189,7 @@ export const AdminLandingPage = (): JSX.Element => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedBranch]);
 
   // syncDrafts is false for the background 3-second poll, so it can refresh
   // vote counts without clobbering officer names the admin is mid-typing.
@@ -213,7 +219,7 @@ export const AdminLandingPage = (): JSX.Element => {
   // generate/save/delete) reloads its own state explicitly after acting.
   const refreshVoteCounts = useCallback(async () => {
     try {
-      const resultsResponse = await getResults();
+      const resultsResponse = await getResults(undefined, selectedBranch);
       setResults(resultsResponse.results);
       setTotalVotes(resultsResponse.totalVotes);
       setLastUpdated(Date.now());
@@ -222,7 +228,7 @@ export const AdminLandingPage = (): JSX.Element => {
       // error banner for; the next tick retries automatically.
     }
     await loadOfficerCodes(false);
-  }, [loadOfficerCodes]);
+  }, [loadOfficerCodes, selectedBranch]);
 
   // Backs the Storage status indicator -- checked on a slower, steady
   // cadence regardless of whether the poll is open, so an admin can confirm
@@ -683,15 +689,16 @@ export const AdminLandingPage = (): JSX.Element => {
       // Determine election type from post
       const electionType: ElectionType = ['HB', 'HG', 'SSC', 'SRC', 'SCC'].includes(post) ? 'school' : 'house';
       
-      await addCandidate({ 
-        id, 
-        name: name.trim(), 
+      await addCandidate({
+        id,
+        name: name.trim(),
         post,
         electionType,
-        house: house || undefined
+        house: house || undefined,
+        branch: selectedBranch
       }, adminSecret);
       await loadDashboard();
-      setMessage(`Candidate added successfully.`);
+      setMessage(`Candidate added successfully to ${selectedBranch === 'AN' ? 'AN' : 'Dwarka'}.`);
     } catch (addError) {
       setError(addError instanceof Error ? addError.message : 'Failed to add candidate');
     } finally {
@@ -1111,6 +1118,33 @@ export const AdminLandingPage = (): JSX.Element => {
             {pollStatus?.activeElectionType === 'house'
               ? 'Edit, delete, or add candidates for each house and post'
               : 'Edit, delete, or add candidates for each post'}
+          </p>
+
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }} role="tablist" aria-label="Branch">
+            {(['dwarka', 'AN'] as const).map((branch) => (
+              <button
+                key={branch}
+                role="tab"
+                aria-selected={selectedBranch === branch}
+                onClick={() => setSelectedBranch(branch)}
+                disabled={loading}
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  borderRadius: '8px',
+                  border: selectedBranch === branch ? '2px solid #3b82f6' : '1px solid #d1d5db',
+                  backgroundColor: selectedBranch === branch ? '#eff6ff' : '#ffffff',
+                  color: selectedBranch === branch ? '#1d4ed8' : '#374151',
+                  fontWeight: selectedBranch === branch ? 700 : 500,
+                  cursor: loading ? 'default' : 'pointer'
+                }}
+              >
+                {branch === 'AN' ? 'AN' : 'Dwarka'}
+              </button>
+            ))}
+          </div>
+          <p style={{ fontSize: '0.8rem', color: '#9ca3af', marginTop: '-1rem', marginBottom: '1rem' }}>
+            Showing and adding candidates for {selectedBranch === 'AN' ? 'AN' : 'Dwarka'} only. Switching branch also
+            filters Live Results to match.
           </p>
 
           {pollStatus?.activeElectionType === 'house' && houseGroupedResults ? (
