@@ -947,43 +947,6 @@ export const AdminLandingPage = (): JSX.Element => {
             )}
           </div>
 
-          {/* Combines the two timestamps that used to be shown separately
-              (a global "Storage: OK" line above the tabs, and "Last
-              updated" buried at the bottom of this panel) into one place,
-              each labelled with what it actually tells the admin -- they
-              answer two different questions ("is my data safe?" vs. "how
-              fresh is what I'm looking at?") that are easy to conflate. */}
-          <div className="status-strip">
-            <div className={`status-card${storageHealth?.ok === false ? ' status-card-danger' : ''}`}>
-              <span className="status-card-icon" aria-hidden="true">💾</span>
-              <div>
-                <p className="status-card-title">
-                  Storage {storageHealth ? (storageHealth.ok ? 'OK' : 'Not Saving') : ''}
-                </p>
-                <p className="status-card-value">
-                  {storageHealth?.ok === false
-                    ? 'See the red alert above -- get IT/developer help immediately.'
-                    : storageHealth?.lastSuccessAt
-                    ? `Last saved ${formatTimestamp(storageHealth.lastSuccessAt)}`
-                    : 'No save confirmed yet'}
-                </p>
-                <p className="status-card-hint">
-                  Confirms votes and other changes made so far are safely and durably saved on the server &mdash; not just held in memory.
-                </p>
-              </div>
-            </div>
-            <div className="status-card">
-              <span className="status-card-icon" aria-hidden="true">🔄</span>
-              <div>
-                <p className="status-card-title">Screen Data</p>
-                <p className="status-card-value">{lastUpdated ? formatTimestamp(lastUpdated) : 'Not loaded yet'}</p>
-                <p className="status-card-hint">
-                  How recently the poll status and vote counts on this screen were fetched from the server &mdash; click Refresh below to update now.
-                </p>
-              </div>
-            </div>
-          </div>
-
           <section className="dashboard-section">
             <h3 className="dashboard-section-title">Election Type</h3>
             <div style={{ padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
@@ -1105,6 +1068,43 @@ export const AdminLandingPage = (): JSX.Element => {
               </button>
             </div>
           </section>
+
+          {/* Combines the two timestamps that used to be shown separately
+              (a global "Storage: OK" line above the tabs, and "Last
+              updated" buried at the bottom of this panel) into one place,
+              each labelled with what it actually tells the admin -- they
+              answer two different questions ("is my data safe?" vs. "how
+              fresh is what I'm looking at?") that are easy to conflate. */}
+          <div className="status-strip">
+            <div className={`status-card${storageHealth?.ok === false ? ' status-card-danger' : ''}`}>
+              <span className="status-card-icon" aria-hidden="true">💾</span>
+              <div>
+                <p className="status-card-title">
+                  Storage {storageHealth ? (storageHealth.ok ? 'OK' : 'Not Saving') : ''}
+                </p>
+                <p className="status-card-value">
+                  {storageHealth?.ok === false
+                    ? 'See the red alert above -- get IT/developer help immediately.'
+                    : storageHealth?.lastSuccessAt
+                    ? `Last saved ${formatTimestamp(storageHealth.lastSuccessAt)}`
+                    : 'No save confirmed yet'}
+                </p>
+                <p className="status-card-hint">
+                  Confirms votes and other changes made so far are safely and durably saved on the server &mdash; not just held in memory.
+                </p>
+              </div>
+            </div>
+            <div className="status-card">
+              <span className="status-card-icon" aria-hidden="true">🔄</span>
+              <div>
+                <p className="status-card-title">Screen Data</p>
+                <p className="status-card-value">{lastUpdated ? formatTimestamp(lastUpdated) : 'Not loaded yet'}</p>
+                <p className="status-card-hint">
+                  How recently the poll status and vote counts on this screen were fetched from the server &mdash; click Refresh below to update now.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
