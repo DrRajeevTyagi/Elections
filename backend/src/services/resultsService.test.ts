@@ -53,4 +53,33 @@ describe('resultsService', () => {
     const hb1 = headBoyResults?.candidates.find((item) => item.candidate.id === 'hb-1');
     expect(hb1?.total).toBe(0);
   });
+
+  describe('getTotalVotes', () => {
+    it('counts every ballot for the active election type, regardless of candidates', async () => {
+      const { getTotalVotes } = await import('./resultsService.js');
+      expect(getTotalVotes()).toBe(3);
+    });
+
+    it('stays correct even after a candidate who received votes is deleted', async () => {
+      // Regression: the admin dashboard used to derive "Total Votes" by
+      // summing every candidate's total and dividing by the post count --
+      // once a candidate who'd received votes was deleted, their
+      // selections dropped out of that sum and the total silently shrank.
+      // getTotalVotes counts vote records directly, so it must be immune.
+      mockedDataStore.getCandidates.mockReturnValue(
+        candidates.filter((c) => c.id !== 'hb-1') // hb-1 (2 votes) removed
+      );
+      const { getTotalVotes } = await import('./resultsService.js');
+      expect(getTotalVotes()).toBe(3);
+    });
+
+    it('returns 0 when no election type is active', async () => {
+      mockedDataStore.getPollState.mockReturnValue({
+        activeElectionType: null,
+        settings: { isOpen: false, allowRevote: false }
+      });
+      const { getTotalVotes } = await import('./resultsService.js');
+      expect(getTotalVotes()).toBe(0);
+    });
+  });
 });

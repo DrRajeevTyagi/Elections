@@ -61,6 +61,7 @@ export interface PostResult {
 
 export interface ResultsResponse {
   results: PostResult[];
+  totalVotes: number;
 }
 
 export interface OfficerCode {

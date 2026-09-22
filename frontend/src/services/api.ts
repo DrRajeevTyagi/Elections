@@ -269,6 +269,15 @@ export const getCurrentReport = async (adminSecret: string): Promise<CurrentRepo
   return response.data;
 };
 
+// Saves the current results to Election History without touching any
+// votes -- unlike Reset Poll / Switch Election Type, which only archive as
+// a side effect of clearing votes.
+export const saveElectionToHistory = async (adminSecret: string, name?: string): Promise<void> => {
+  await api.post('/report/archives', name ? { name } : undefined, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+};
+
 export const getArchivesList = async (adminSecret: string): Promise<ArchivesListResponse> => {
   const response = await api.get<ArchivesListResponse>('/report/archives', {
     headers: { 'x-admin-secret': adminSecret }

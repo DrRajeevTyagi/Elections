@@ -20,7 +20,8 @@ import {
   renameArchive,
   deleteArchive,
   logoutAdmin,
-  setAdminSessionLostHandler
+  setAdminSessionLostHandler,
+  saveElectionToHistory
 } from '../services/api';
 import type { PollStatus, PostResult, CandidateResult, OfficerCode, ArchiveSummary, StorageHealth } from '../types/api';
 import type { PostId, ElectionType, HouseId, SchoolPostId } from '../types/election';
@@ -95,6 +96,11 @@ export const AdminLandingPage = (): JSX.Element => {
   const [unlocking, setUnlocking] = useState(false);
   const [pollStatus, setPollStatus] = useState<PollStatus | null>(null);
   const [results, setResults] = useState<PostResult[]>([]);
+  // The server's authoritative ballot count for the active election -- see
+  // getTotalVotes on the backend. Deliberately NOT derived from `results`
+  // (summing candidate totals) here, since that silently undercounts once
+  // any candidate who received votes is deleted.
+  const [totalVotes, setTotalVotes] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -165,6 +171,7 @@ export const AdminLandingPage = (): JSX.Element => {
       const [pollResponse, resultsResponse] = await Promise.all([getPollStatus(), getResults()]);
       setPollStatus(pollResponse.poll);
       setResults(resultsResponse.results);
+      setTotalVotes(resultsResponse.totalVotes);
       setLastUpdated(Date.now());
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load dashboard');
@@ -203,6 +210,7 @@ export const AdminLandingPage = (): JSX.Element => {
     try {
       const resultsResponse = await getResults();
       setResults(resultsResponse.results);
+      setTotalVotes(resultsResponse.totalVotes);
       setLastUpdated(Date.now());
     } catch {
       // Silent: a background tick failing once isn't worth surfacing an
@@ -514,16 +522,75 @@ export const AdminLandingPage = (): JSX.Element => {
       }
     }
 
+    let closedElectionType: ElectionType | null = null;
     try {
       setLoading(true);
       setError(null);
       setMessage(null);
-      const response = action === 'open' ? await openPoll(adminSecret) : await closePoll(adminSecret);
+      await (action === 'open' ? openPoll(adminSecret) : closePoll(adminSecret));
       setMessage(`Poll ${action === 'open' ? 'opened' : 'closed'} successfully.`);
+      if (action === 'close') {
+        closedElectionType = pollStatus?.activeElectionType ?? null;
+      }
       // Reload everything to ensure consistency
       await loadDashboard();
     } catch (mutationError) {
       setError(mutationError instanceof Error ? mutationError.message : 'Action failed');
+      return;
+    } finally {
+      setLoading(false);
+    }
+
+    // Closing doesn't touch votes or create a history record on its own --
+    // only Reset Poll / Switch Election Type do, as a side effect of
+    // clearing votes. Offer to save one now, while it's top of mind, so a
+    // closed election isn't silently missing from Election History until
+    // someone remembers to Reset. Cancel skips entirely; OK with a blank
+    // name still saves, just unnamed.
+    if (closedElectionType) {
+      const name = window.prompt(
+        'Save this election to Election History?\n\nEnter a name (e.g. "House Elections -- Term 1 2026"), or leave blank and click OK to save without one. Votes are not affected, and you can do this anytime later with "Save to Election History". Click Cancel to skip for now.',
+        `${closedElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString()}`
+      );
+      if (name !== null) {
+        try {
+          await saveElectionToHistory(adminSecret, name.trim() || undefined);
+          setMessage('Poll closed. Saved to Election History.');
+          await loadArchives();
+        } catch (saveError) {
+          setError(saveError instanceof Error ? saveError.message : 'Failed to save to Election History');
+        }
+      }
+    }
+  };
+
+  const handleSaveToHistory = async () => {
+    if (!adminSecret.trim()) {
+      setError('Enter the admin secret to save to Election History.');
+      return;
+    }
+    if (!pollStatus?.activeElectionType) {
+      setError('Select an election type first.');
+      return;
+    }
+
+    const name = window.prompt(
+      'Save the current results to Election History.\n\nEnter a name (e.g. "House Elections -- Term 1 2026"), or leave blank and click OK to save without one. Votes are not affected.',
+      `${pollStatus.activeElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString()}`
+    );
+    if (name === null) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      setMessage(null);
+      await saveElectionToHistory(adminSecret, name.trim() || undefined);
+      setMessage('Saved to Election History.');
+      await loadArchives();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Failed to save to Election History');
     } finally {
       setLoading(false);
     }
@@ -951,9 +1018,28 @@ export const AdminLandingPage = (): JSX.Element => {
             </button>
           </div>
           <div className="admin-actions" style={{ marginTop: '0.5rem' }}>
-            <button 
-              className="button" 
-              onClick={handleReset} 
+            <button
+              className="button"
+              onClick={handleSaveToHistory}
+              disabled={loading || !pollStatus?.activeElectionType}
+              style={{
+                backgroundColor: '#0f766e',
+                width: '100%',
+                opacity: !pollStatus?.activeElectionType ? 0.5 : 1
+              }}
+              title={
+                !pollStatus?.activeElectionType
+                  ? 'Select an election type first'
+                  : 'Save the current results to Election History -- does not affect any votes'
+              }
+            >
+              📋 Save to Election History
+            </button>
+          </div>
+          <div className="admin-actions" style={{ marginTop: '0.5rem' }}>
+            <button
+              className="button"
+              onClick={handleReset}
               disabled={loading || pollStatus?.settings.isOpen === true}
               style={{ 
                 backgroundColor: pollStatus?.settings.isOpen ? '#9ca3af' : '#ea580c', 
@@ -1091,9 +1177,7 @@ export const AdminLandingPage = (): JSX.Element => {
               )}
             </p>
             <p style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1f2937', margin: 0 }}>
-              Total Votes: {results.length > 0 
-                ? Math.round(results.reduce((sum, post) => sum + post.candidates.reduce((s, c) => s + c.total, 0), 0) / results.length)
-                : 0}
+              Total Votes: {totalVotes}
             </p>
           </div>
           

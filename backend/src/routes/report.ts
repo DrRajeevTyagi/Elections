@@ -19,6 +19,24 @@ reportRouter.get(
   })
 );
 
+// Saves a checkpoint of the CURRENT results to Election History without
+// touching any votes -- unlike Reset Poll / Switch Election Type (which
+// only archive as a side effect of clearing votes), this lets the admin
+// file a permanent record the moment they consider an election done, e.g.
+// right after Close Poll, without needing to also wipe the live data.
+reportRouter.post(
+  '/archives',
+  asyncHandler((req, res) => {
+    const { name } = req.body as { name?: string };
+    const snapshot = buildElectionSnapshot(name);
+    if (!snapshot) {
+      throw new BadRequestError('No election is currently set up, so there is nothing to save yet.');
+    }
+    dataStore.addArchive(snapshot);
+    res.status(201).json({ report: snapshot });
+  })
+);
+
 // Lightweight list for the "Election History" panel.
 reportRouter.get(
   '/archives',

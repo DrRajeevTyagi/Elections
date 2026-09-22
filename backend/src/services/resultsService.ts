@@ -33,6 +33,23 @@ const countVotes = (votes: StoredVote[], electionType: ElectionType, house?: Hou
   return tally;
 };
 
+// The one authoritative count of ballots cast for the active election --
+// a straight count of vote records, not derived from summing candidate
+// tallies. The admin dashboard used to compute "Total Votes" by summing
+// every candidate's total across all posts and dividing by the number of
+// posts (valid only because every ballot fills exactly one selection per
+// post) -- that silently undercounts the moment any candidate who received
+// votes is deleted, since a deleted candidate's selections drop out of the
+// sum entirely. This is what both the live dashboard and the archived/
+// report totals should use instead.
+export const getTotalVotes = (): number => {
+  const pollState = getPollState();
+  if (!pollState.activeElectionType) {
+    return 0;
+  }
+  return dataStore.getVotes().filter((vote) => vote.electionType === pollState.activeElectionType).length;
+};
+
 export const getResults = (house?: HouseId): PostResult[] => {
   const pollState = getPollState();
   if (!pollState.activeElectionType) {
@@ -92,13 +109,20 @@ export const buildElectionSnapshot = (name?: string): ElectionArchive | null => 
     total: tally.get(candidate.post + ':' + candidate.id) ?? 0
   }));
 
-  const officerCodes = dataStore.getOfficerCodes().map((entry) => ({
-    code: entry.code,
-    officerName: entry.officerName,
-    voteCount: dataStore.countVotesByOfficerCode(entry.code)
-  }));
+  // Only this election's own codes -- previously every code (including the
+  // other election type's, e.g. all 8 house codes showing up in a School
+  // archive) was included, cluttering the archived turnout table with
+  // entries that could never have cast a vote here.
+  const officerCodes = dataStore
+    .getOfficerCodes()
+    .filter((entry) => entry.electionType === electionType)
+    .map((entry) => ({
+      code: entry.code,
+      officerName: entry.officerName,
+      voteCount: dataStore.countVotesByOfficerCode(entry.code)
+    }));
 
-  const totalVotes = votes.filter((vote) => vote.electionType === electionType).length;
+  const totalVotes = getTotalVotes();
 
   return {
     id: randomUUID(),

@@ -56,7 +56,8 @@ describe('AdminLandingPage tabs', () => {
             }
           ]
         }
-      ]
+      ],
+      totalVotes: 3
     });
     mockApi.getOfficerCodes.mockResolvedValue({
       codes: [
@@ -121,7 +122,8 @@ describe('AdminLandingPage tabs', () => {
         { post: 'SSC', candidates: [{ candidate: { id: 'ssc-1', name: 'Kim', post: 'SSC', electionType: 'school' }, total: 2 }] },
         { post: 'SRC', candidates: [{ candidate: { id: 'src-1', name: 'Dan', post: 'SRC', electionType: 'school' }, total: 1 }] },
         { post: 'SCC', candidates: [{ candidate: { id: 'scc-1', name: 'Mia', post: 'SCC', electionType: 'school' }, total: 3 }] }
-      ]
+      ],
+      totalVotes: 5
     });
     mockApi.getOfficerCodes.mockResolvedValue({ codes: [] });
     mockApi.getArchivesList.mockResolvedValue({ archives: [] });
