@@ -354,6 +354,26 @@
   color: #16a34a;
 }
 
+/* Every ballot fills exactly one selection per post, so this is the count
+   of ballots cast for that specific post -- within one house, all three
+   posts' totals should always match, which doubles as a quick consistency
+   check. Set apart from the candidate rows above it (top border, muted
+   color, smaller caps label) since it's a derived summary, not another
+   candidate. */
+.live-post-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+  padding-top: 0.3rem;
+  border-top: 1px dashed #d1d5db;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #6b7280;
+}
+
 /* School Elections live results: all 5 posts share one grid with a capped
    card width, instead of the old fixed 2-then-3 row split -- that split
    forced Head Boy/Head Girl into two half-screen-wide cards, which is why

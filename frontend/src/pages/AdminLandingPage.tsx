@@ -743,6 +743,24 @@ export const AdminLandingPage = (): JSX.Element => {
     </>
   );
 
+  // Every ballot fills exactly one selection per post (enforced server-side
+  // -- see votes.ts validateVote), so summing a post's own candidate totals
+  // is the count of ballots cast for it specifically -- not the combined
+  // "Total Votes" figure in the panel header, which for House Elections
+  // sums across all 8 houses together and so isn't a number any one house's
+  // voters/candidates can be judged against. Showing it per post also means
+  // the same three totals within one house should always agree; if they
+  // ever don't, that's worth a second look.
+  const postVoteTotal = (candidates: CandidateResult[]): number =>
+    candidates.reduce((sum, c) => sum + c.total, 0);
+
+  const renderPostTotalRow = (candidates: CandidateResult[]) => (
+    <div className="live-post-total">
+      <span>Total votes for this post</span>
+      <span>{postVoteTotal(candidates)}</span>
+    </div>
+  );
+
   // Renders one school post's card for the Live Results tab -- pulled out
   // so all 5 posts can share the same card markup and colored header.
   const renderSchoolPostCard = (postId: SchoolPostId) => {
@@ -753,15 +771,18 @@ export const AdminLandingPage = (): JSX.Element => {
       <div key={postId} className="live-post-card">
         <h3 style={{ backgroundColor: color.background, color: color.text }}>{POST_NAMES[postId]}</h3>
         {sortedCandidates.length > 0 ? (
-          sortedCandidates.map((candidateResult, index) => (
-            <div
-              key={candidateResult.candidate.id}
-              className={`live-candidate-row${index === 0 && candidateResult.total > 0 ? ' leader' : ''}`}
-            >
-              <span>{candidateResult.candidate.name}</span>
-              <span>{candidateResult.total}</span>
-            </div>
-          ))
+          <>
+            {sortedCandidates.map((candidateResult, index) => (
+              <div
+                key={candidateResult.candidate.id}
+                className={`live-candidate-row${index === 0 && candidateResult.total > 0 ? ' leader' : ''}`}
+              >
+                <span>{candidateResult.candidate.name}</span>
+                <span>{candidateResult.total}</span>
+              </div>
+            ))}
+            {renderPostTotalRow(sortedCandidates)}
+          </>
         ) : (
           <p style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: '0.85rem', margin: 0 }}>No candidates</p>
         )}
@@ -1263,7 +1284,9 @@ export const AdminLandingPage = (): JSX.Element => {
             </p>
           </div>
           <p style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1f2937', margin: 0 }}>
-            Total Votes: {totalVotes}
+            {pollStatus?.activeElectionType === 'house'
+              ? `Total Ballots (all 8 houses combined): ${totalVotes}`
+              : `Total Votes: ${totalVotes}`}
           </p>
           <div style={{ display: 'flex', gap: '0.4rem' }}>
             <button
@@ -1306,15 +1329,18 @@ export const AdminLandingPage = (): JSX.Element => {
                         {POST_NAMES[postId]}
                       </p>
                       {sortedCandidates.length > 0 ? (
-                        sortedCandidates.map((candidateResult, index) => (
-                          <div
-                            key={candidateResult.candidate.id}
-                            className={`live-candidate-row${index === 0 && candidateResult.total > 0 ? ' leader' : ''}`}
-                          >
-                            <span>{candidateResult.candidate.name}</span>
-                            <span>{candidateResult.total}</span>
-                          </div>
-                        ))
+                        <>
+                          {sortedCandidates.map((candidateResult, index) => (
+                            <div
+                              key={candidateResult.candidate.id}
+                              className={`live-candidate-row${index === 0 && candidateResult.total > 0 ? ' leader' : ''}`}
+                            >
+                              <span>{candidateResult.candidate.name}</span>
+                              <span>{candidateResult.total}</span>
+                            </div>
+                          ))}
+                          {renderPostTotalRow(sortedCandidates)}
+                        </>
                       ) : (
                         <p style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: '0.85rem', margin: 0 }}>No candidates</p>
                       )}

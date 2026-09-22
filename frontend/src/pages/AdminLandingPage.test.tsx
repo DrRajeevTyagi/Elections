@@ -95,7 +95,11 @@ describe('AdminLandingPage tabs', () => {
     // house and hide the rest of the admin UI.
     fireEvent.click(screen.getByRole('button', { name: 'Live Results' }));
     await screen.findByText('Riya');
-    expect(screen.getByText('3')).toBeInTheDocument();
+    // "3" appears twice here: Riya's own vote count, and the per-post
+    // "Total votes for this post" summary row below the candidate list --
+    // with a single candidate, those two numbers are always equal.
+    expect(screen.getAllByText('3')).toHaveLength(2);
+    expect(screen.getByText('Total votes for this post')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Present Full Screen/ })).toBeInTheDocument();
     expect(screen.queryByText('Poll Controls')).not.toBeInTheDocument();
     // Locks in the compact, deterministic house grid (see admin.css
