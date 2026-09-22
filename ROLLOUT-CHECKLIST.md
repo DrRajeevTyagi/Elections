@@ -16,13 +16,13 @@ This is the checklist for everyone on duty for the voting app — the Chief Elec
 - [ ] Add a handful of clearly-labelled test candidates (e.g. "TEST — Candidate 1") for every post/house so the poll is allowed to open.
 - [ ] Generate one officer code per tester (Polling Officer Codes tab → Generate) and hand out one code per person/station.
 - [ ] Brief every tester to check it, test it, use it, and misuse it — and specifically to look for (a) features that should be there but aren't, and (b) features that are there but aren't needed. Collect this feedback in one shared place (a sheet or form).
-- [ ] Between rounds of testing, use Reset Poll to clear test votes. Note: every Reset also saves a permanent snapshot to Election History, so test rounds will leave clutter there — before real polling day, go to the Election History tab and click **Delete** on each test entry to clear it out (no developer needed).
+- [ ] Between rounds of testing, use Reset Poll to clear test votes. Note: every Reset also saves a permanent snapshot to Election History, so test rounds will leave clutter there. The Election History tab's Delete button is now intentionally hidden once real users are on the app (a visible "Delete" next to an election's permanent record undermines trust in it, even unused) — so clearing test entries out now needs a developer, not just the superadmin. Plan test rounds accordingly, and ask for that cleanup before real polling day rather than assuming you can do it yourself in the app.
 
 ## Superadmin — Before REAL Polling Day
 
 - [ ] Delete every test/demo candidate. Add only the real, confirmed candidates for every post (and every house, for house elections).
 - [ ] Delete all test officer codes. Generate fresh codes only for the real polling officers on duty, and record which teacher holds which code.
-- [ ] Go to Election History and Delete every test/junk snapshot from the testing round, so the real election's record isn't buried among them.
+- [ ] Have every test/junk snapshot from the testing round cleared out of Election History (ask a developer, since the in-app Delete button is now hidden -- see above) so the real election's record isn't buried among them.
 - [ ] Do a final read-through of Manage Candidates: correct names, correct spelling, correct photos.
 - [ ] Freeze all code changes: do not push anything to the `main` branch on election day (see "One Hard Rule" below).
 - [ ] Confirm the physical setup at every booth: one device per station, browser already open to the kiosk welcome screen — not the admin dashboard.

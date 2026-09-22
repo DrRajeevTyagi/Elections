@@ -1531,23 +1531,22 @@ export const AdminLandingPage = (): JSX.Element => {
                       <td style={{ padding: '0.5rem' }}>{archive.electionType === 'school' ? 'School' : 'House'}</td>
                       <td style={{ padding: '0.5rem' }}>{archive.totalVotes}</td>
                       <td style={{ padding: '0.5rem' }}>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          <button
-                            className="button"
-                            style={{ backgroundColor: '#4338ca' }}
-                            onClick={() => window.open(`/admin/report/${archive.id}`, '_blank')}
-                          >
-                            View / Print
-                          </button>
-                          <button
-                            className="button"
-                            style={{ backgroundColor: '#dc2626' }}
-                            onClick={() => handleDeleteArchive(archive)}
-                            title="Permanently remove this entry -- for clearing test/junk history"
-                          >
-                            Delete
-                          </button>
-                        </div>
+                        {/* Delete is intentionally hidden here, not removed --
+                            once real users are on the app, a visible "Delete"
+                            next to an election's permanent record undermines
+                            trust in the record even if never clicked. See
+                            handleDeleteArchive above and DELETE
+                            /admin/report/archives/:id on the backend if it's
+                            ever needed again (e.g. clearing test data) --
+                            re-add the button rather than reintroducing a new
+                            deletion path. */}
+                        <button
+                          className="button"
+                          style={{ backgroundColor: '#4338ca' }}
+                          onClick={() => window.open(`/admin/report/${archive.id}`, '_blank')}
+                        >
+                          View / Print
+                        </button>
                       </td>
                     </tr>
                   ))}
