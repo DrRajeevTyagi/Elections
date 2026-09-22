@@ -610,7 +610,7 @@ export const AdminLandingPage = (): JSX.Element => {
     }
 
     const confirmed = window.confirm(
-      'Are you sure you want to RESET the poll?\n\nThis will:\n- Save a snapshot of the current results to Election History\n- Delete ALL votes for both election types\n- Reset all results to zero\n\nVotes cannot be recovered after this, but the snapshot will remain available in Election History.'
+      'Are you sure you want to RESET the poll?\n\nThis will:\n- Save a snapshot of the current results to Election History (skipped if you already saved this exact election with "Save to Election History")\n- Delete ALL votes for both election types\n- Reset all results to zero\n\nVotes cannot be recovered after this, but the snapshot will remain available in Election History.'
     );
 
     if (!confirmed) {

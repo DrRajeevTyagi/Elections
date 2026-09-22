@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Candidate, PollState, StoredVote } from '../types/election.js';
+import type { Candidate, ElectionArchive, OfficerCode, PollState, StoredVote } from '../types/election.js';
 
 const mockedDataStore = {
   getVotes: vi.fn<[], StoredVote[]>(),
   getCandidates: vi.fn<[], Candidate[]>(),
-  getPollState: vi.fn<[], PollState>()
+  getPollState: vi.fn<[], PollState>(),
+  getArchives: vi.fn<[], ElectionArchive[]>(),
+  getOfficerCodes: vi.fn<[], OfficerCode[]>(),
+  countVotesByOfficerCode: vi.fn<[string], number>(),
+  addArchive: vi.fn(),
+  renameArchive: vi.fn()
 };
 
 vi.mock('../storage/datastore.js', () => ({
@@ -19,6 +24,7 @@ describe('resultsService', () => {
   ];
 
   beforeEach(() => {
+    vi.clearAllMocks();
     mockedDataStore.getCandidates.mockReturnValue(candidates);
     mockedDataStore.getPollState.mockReturnValue({
       activeElectionType: 'school',
@@ -29,6 +35,9 @@ describe('resultsService', () => {
       { id: 'vote-2', timestamp: 2, electionType: 'school', selections: { HB: 'hb-1', HG: 'hg-1', SSC: 'ssc-1', SRC: 'src-1', SCC: 'scc-1' } },
       { id: 'vote-3', timestamp: 3, electionType: 'school', selections: { HB: 'hb-2', HG: 'hg-1', SSC: 'ssc-1', SRC: 'src-1', SCC: 'scc-1' } }
     ] as StoredVote[]);
+    mockedDataStore.getArchives.mockReturnValue([]);
+    mockedDataStore.getOfficerCodes.mockReturnValue([]);
+    mockedDataStore.countVotesByOfficerCode.mockReturnValue(0);
   });
 
   it('aggregates totals per candidate', async () => {
@@ -80,6 +89,64 @@ describe('resultsService', () => {
       });
       const { getTotalVotes } = await import('./resultsService.js');
       expect(getTotalVotes()).toBe(0);
+    });
+  });
+
+  describe('archiveCurrentElection', () => {
+    // Regression: Reset Poll and Switch Election Type both used to archive
+    // unconditionally, so an admin who used the new "Save to Election
+    // History" checkpoint (e.g. right after Close Poll) and then Reset
+    // without any new votes in between ended up with two archive entries
+    // for the exact same election.
+
+    it('creates a new archive when nothing has been saved yet', async () => {
+      const { archiveCurrentElection } = await import('./resultsService.js');
+      archiveCurrentElection('My Election');
+      expect(mockedDataStore.addArchive).toHaveBeenCalledTimes(1);
+      expect(mockedDataStore.addArchive).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'My Election', totalVotes: 3, electionType: 'school' })
+      );
+      expect(mockedDataStore.renameArchive).not.toHaveBeenCalled();
+    });
+
+    it('skips creating a duplicate when the live votes already match the most recent archive', async () => {
+      mockedDataStore.getArchives.mockReturnValue([
+        { id: 'archive-1', archivedAt: 100, electionType: 'school', totalVotes: 3, results: [], officerCodes: [] }
+      ] as ElectionArchive[]);
+
+      const { archiveCurrentElection } = await import('./resultsService.js');
+      archiveCurrentElection();
+      expect(mockedDataStore.addArchive).not.toHaveBeenCalled();
+      expect(mockedDataStore.renameArchive).not.toHaveBeenCalled();
+    });
+
+    it('relabels the existing archive with a new name instead of duplicating it', async () => {
+      mockedDataStore.getArchives.mockReturnValue([
+        { id: 'archive-1', archivedAt: 100, electionType: 'school', totalVotes: 3, results: [], officerCodes: [] }
+      ] as ElectionArchive[]);
+
+      const { archiveCurrentElection } = await import('./resultsService.js');
+      archiveCurrentElection('Renamed Election');
+      expect(mockedDataStore.addArchive).not.toHaveBeenCalled();
+      expect(mockedDataStore.renameArchive).toHaveBeenCalledWith('archive-1', 'Renamed Election');
+    });
+
+    it('archives again if a new vote came in after the last checkpoint (e.g. poll reopened)', async () => {
+      // The most recent archive only covers 2 votes as of t=50, but a 3rd
+      // vote (t=3, i.e. before t=50) is already included in that count --
+      // to simulate "reopened and got one more vote after the checkpoint",
+      // give the archive a totalVotes that matches pre-reopen state and an
+      // archivedAt older than the newest live vote.
+      mockedDataStore.getArchives.mockReturnValue([
+        { id: 'archive-1', archivedAt: 2, electionType: 'school', totalVotes: 3, results: [], officerCodes: [] }
+      ] as ElectionArchive[]);
+
+      const { archiveCurrentElection } = await import('./resultsService.js');
+      archiveCurrentElection('Second Save');
+      // vote-3 (timestamp 3) is newer than the archive's archivedAt (2), so
+      // this must archive again rather than skip or just relabel.
+      expect(mockedDataStore.addArchive).toHaveBeenCalledTimes(1);
+      expect(mockedDataStore.renameArchive).not.toHaveBeenCalled();
     });
   });
 });

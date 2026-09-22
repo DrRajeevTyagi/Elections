@@ -134,3 +134,59 @@ export const buildElectionSnapshot = (name?: string): ElectionArchive | null => 
     name: name?.trim() || undefined
   };
 };
+
+// True when the currently active election's live votes are already fully
+// captured by its most recent archive -- e.g. it was saved via "Save to
+// Election History" (or an earlier Reset/Switch) and nothing has changed
+// since. Used to stop Reset Poll and Switch Election Type from silently
+// creating a second, near-identical archive for data that's already safely
+// recorded.
+export const isCurrentElectionAlreadyArchived = (): boolean => {
+  const pollState = getPollState();
+  const electionType = pollState.activeElectionType;
+  if (!electionType) {
+    return false;
+  }
+
+  const votes = dataStore.getVotes().filter((vote) => vote.electionType === electionType);
+  const mostRecent = dataStore
+    .getArchives()
+    .filter((archive) => archive.electionType === electionType)
+    .sort((a, b) => b.archivedAt - a.archivedAt)[0];
+
+  if (!mostRecent || mostRecent.totalVotes !== votes.length) {
+    return false;
+  }
+  // Covered as long as nothing was cast after that archive was taken --
+  // if a vote came in since (e.g. the poll was reopened after a checkpoint
+  // save), this election needs archiving again to capture it.
+  return votes.every((vote) => vote.timestamp <= mostRecent.archivedAt);
+};
+
+// Archives the currently active election as a side effect of Reset Poll or
+// Switch Election Type clearing its votes -- unless it's already been
+// saved and nothing has changed (see isCurrentElectionAlreadyArchived),
+// in which case this just relabels that existing archive with `name` (if
+// one was given) instead of creating a duplicate.
+export const archiveCurrentElection = (name?: string): void => {
+  if (isCurrentElectionAlreadyArchived()) {
+    const trimmedName = name?.trim();
+    if (!trimmedName) {
+      return;
+    }
+    const electionType = getPollState().activeElectionType;
+    const mostRecent = dataStore
+      .getArchives()
+      .filter((archive) => archive.electionType === electionType)
+      .sort((a, b) => b.archivedAt - a.archivedAt)[0];
+    if (mostRecent) {
+      dataStore.renameArchive(mostRecent.id, trimmedName);
+    }
+    return;
+  }
+
+  const snapshot = buildElectionSnapshot(name);
+  if (snapshot) {
+    dataStore.addArchive(snapshot);
+  }
+};

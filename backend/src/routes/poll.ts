@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireAdminSession } from '../middleware/adminAuth.js';
 import { kioskService } from '../services/kioskService.js';
 import { getPollState } from '../services/voteService.js';
-import { buildElectionSnapshot } from '../services/resultsService.js';
+import { archiveCurrentElection } from '../services/resultsService.js';
 import { findMissingCandidateCoverage } from '../services/candidateService.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -36,14 +36,12 @@ pollRouter.post(
     // Switching away from a type that still has uncounted votes would
     // otherwise leave them sitting in the store, invisible until the admin
     // switches back -- at which point they'd silently reappear in results.
-    // Archive and clear them now, same as Reset Poll does.
+    // Archive (or relabel an already-saved checkpoint -- see
+    // archiveCurrentElection) and clear them now, same as Reset Poll does.
     if (outgoingType && outgoingType !== electionType) {
       const outgoingVotes = dataStore.getVotes().filter((vote) => vote.electionType === outgoingType);
       if (outgoingVotes.length > 0) {
-        const snapshot = buildElectionSnapshot(name);
-        if (snapshot) {
-          dataStore.addArchive(snapshot);
-        }
+        archiveCurrentElection(name);
         dataStore.resetVotesByType(outgoingType);
       }
     }
@@ -117,11 +115,11 @@ pollRouter.post(
   asyncHandler((req, res) => {
     const { name } = req.body as { name?: string };
     // Snapshot the current election's results before wiping votes, so a
-    // record survives the reset -- see GET /api/report/archives.
-    const snapshot = buildElectionSnapshot(name);
-    if (snapshot) {
-      dataStore.addArchive(snapshot);
-    }
+    // record survives the reset -- see GET /api/report/archives. Skips
+    // creating a duplicate if this exact data was already saved (e.g. via
+    // "Save to Election History" right after Close) -- see
+    // archiveCurrentElection.
+    archiveCurrentElection(name);
 
     kioskService.clearSessions();
     dataStore.resetVotes();
