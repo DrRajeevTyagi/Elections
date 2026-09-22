@@ -1018,7 +1018,7 @@ export const AdminLandingPage = (): JSX.Element => {
                 Close Poll
               </button>
               <button className="button" onClick={() => void loadDashboard()} disabled={loading} style={{ backgroundColor: '#6b7280', opacity: loading ? 0.5 : 1 }}>
-                Refresh
+                Refresh this Page
               </button>
             </div>
           </section>
@@ -1100,7 +1100,7 @@ export const AdminLandingPage = (): JSX.Element => {
                 <p className="status-card-title">Screen Data</p>
                 <p className="status-card-value">{lastUpdated ? formatTimestamp(lastUpdated) : 'Not loaded yet'}</p>
                 <p className="status-card-hint">
-                  How recently the poll status and vote counts on this screen were fetched from the server &mdash; click Refresh below to update now.
+                  How recently the poll status and vote counts on this screen were fetched from the server &mdash; click "Refresh this Page" above to update now.
                 </p>
               </div>
             </div>
