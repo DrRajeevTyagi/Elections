@@ -62,14 +62,14 @@ export const ClosePollingPage = (): JSX.Element => {
           value={secret}
           className="form-input"
           autoComplete="off"
-          autoCapitalize="characters"
+          autoCapitalize="none"
           maxLength={6}
-          style={{ textTransform: 'uppercase', letterSpacing: '0.15em', fontFamily: 'monospace' }}
+          style={{ textTransform: 'lowercase', letterSpacing: '0.15em', fontFamily: 'monospace' }}
           onChange={(event) => {
-            setSecret(event.target.value.toUpperCase());
+            setSecret(event.target.value.toLowerCase());
             setConfirming(false);
           }}
-          placeholder="e.g. AB2K7M"
+          placeholder="e.g. ab2k7m"
         />
         {error && <p style={{ color: '#dc2626', margin: 0 }}>{error}</p>}
         {confirming && !error && (

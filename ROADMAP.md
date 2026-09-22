@@ -44,6 +44,34 @@ to Cloud Run):
   named" apart from "named, then cleared") **and** has zero votes. Both are
   covered by regression tests. See ELECTION-INTEGRITY-AND-TRUST.md item 3 for
   the full account.
+- **Two more pieces, requested the same session, needed for the actual
+  real-world handout-codes-to-teachers workflow (2026-09-22):**
+  1. **Printable per-branch code-allotment roster.** A new page
+     (`OfficerCodesPrintPage.tsx`, route `/admin/report/officer-codes/:branch`)
+     lists every code and its allotted teacher name, grouped by house/school
+     post, for exactly one branch at a time — reachable via a "Print Dwarka/AN
+     Code List" button on the Polling Officer Codes tab (follows the
+     selected-branch toggle). This is the document meant to be handed to each
+     branch's Election Head/Principal for distributing codes to teachers; it
+     deliberately omits vote counts (that's the separate Turnout report) and
+     flags any not-yet-allotted code in red so gaps are caught before
+     printing. Resolves the open item in MULTI-BRANCH-EXPANSION-PLAN.md about
+     a branch-aware letterhead — for *this* page only; ReportPage/
+     TurnoutReportPage still hardcode "Mount Carmel School" regardless of
+     branch (still open, tracked under Phase 2's "report pages branch
+     selector").
+  2. **Officer code alphabet switched to lowercase.** Codes are easier to
+     type on a phone keyboard (which defaults to lowercase) than one that
+     visually reads as needing capitals. Still excludes the same
+     easily-confused characters (now `i`, `l`, `o`, `0`, `1`). Matching is
+     case-insensitive everywhere a code is looked up (`datastore.ts`'s
+     `codesMatch`), specifically so codes generated before this change
+     (stored uppercase) keep working exactly as before, and so an officer
+     typing a code in either case is never rejected on a technicality.
+     `generateUniqueCodes` also compares case-insensitively now, so a new
+     lowercase code can never collide with an old uppercase one merely by
+     case. Covered by new tests in `officerCode.test.ts` and
+     `datastore.test.ts`.
 - **Next, per explicit direction (2026-09-22): Phase 3 — "Start Recording" +
   the audit log.** Not started yet. See Phase 3 below for what it involves;
   it's the largest remaining piece and needs its own data-model design pass

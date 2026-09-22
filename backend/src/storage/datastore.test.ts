@@ -196,3 +196,50 @@ describe('DataStore (Firestore mode) -- votes subcollection', () => {
     expect(second.getVotes()).toHaveLength(1);
   });
 });
+
+describe('DataStore -- officer code case-insensitive matching (2026-09-22)', () => {
+  beforeEach(() => {
+    sharedFakeFirestore = new FakeFirestore();
+  });
+
+  it('generates codes from the lowercase, ambiguous-character-free alphabet', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    const codes = store.generateOfficerCodes(20, 'school');
+    for (const { code } of codes) {
+      expect(code).toMatch(/^[a-z2-9]{6}$/);
+      expect(code).not.toMatch(/[ilo01]/); // excluded as easily confused
+    }
+  });
+
+  it('finds a freshly generated code when looked up in a different case', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    const [{ code }] = store.generateOfficerCodes(1, 'school');
+    expect(store.findOfficerCode(code.toUpperCase())).toBeDefined();
+  });
+
+  it('finds a legacy uppercase-stored code (predating the lowercase alphabet) when looked up in lowercase', async () => {
+    sharedFakeFirestore.store.set('school-election/state', {
+      candidates: [],
+      votes: [],
+      pollState: { activeElectionType: null, settings: { isOpen: false, allowRevote: false } },
+      officerCodes: [
+        { code: 'ABC234', officerName: 'Jane', everNamed: true, electionType: 'school', createdAt: Date.now() }
+      ],
+      archives: []
+    });
+
+    const store = await importFreshDataStore();
+    await store.init();
+    expect(store.findOfficerCode('abc234')).toBeDefined();
+  });
+
+  it('deletes a never-named code regardless of the case used to look it up', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    const [{ code }] = store.generateOfficerCodes(1, 'school');
+    store.deleteOfficerCode(code.toUpperCase());
+    expect(store.findOfficerCode(code)).toBeUndefined();
+  });
+});

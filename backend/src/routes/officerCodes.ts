@@ -55,7 +55,9 @@ officerCodesRouter.put(
   asyncHandler((req, res) => {
     const { code } = req.params;
     const { officerName } = req.body as { officerName?: string };
-    const updated = dataStore.updateOfficerCode(code.toUpperCase(), {
+    // Matching is case-insensitive (see datastore.ts's codesMatch), so no
+    // case normalization is needed here.
+    const updated = dataStore.updateOfficerCode(code, {
       officerName: typeof officerName === 'string' ? officerName.trim() : undefined
     });
     if (!updated) {
@@ -69,7 +71,7 @@ officerCodesRouter.post(
   '/:code/reopen',
   asyncHandler((req, res) => {
     const { code } = req.params;
-    const updated = dataStore.reopenOfficerCode(code.toUpperCase());
+    const updated = dataStore.reopenOfficerCode(code);
     if (!updated) {
       throw new BadRequestError('Code not found');
     }
@@ -81,8 +83,7 @@ officerCodesRouter.delete(
   '/:code',
   asyncHandler((req, res) => {
     const { code } = req.params;
-    const normalizedCode = code.toUpperCase();
-    const entry = dataStore.findOfficerCode(normalizedCode);
+    const entry = dataStore.findOfficerCode(code);
     if (!entry) {
       throw new BadRequestError('Code not found');
     }
@@ -96,16 +97,20 @@ officerCodesRouter.delete(
     // retire a code that's no longer needed.
     if (entry.everNamed) {
       throw new ConflictError(
-        `Code ${normalizedCode} has been allotted to a polling officer and cannot be deleted, even though it has zero votes. Close the booth instead to stop it from being used further.`
+        `Code ${entry.code} has been allotted to a polling officer and cannot be deleted, even though it has zero votes. Close the booth instead to stop it from being used further.`
       );
     }
-    const voteCount = dataStore.countVotesByOfficerCode(normalizedCode);
+    // Use the resolved entry's own code (not the raw, possibly
+    // differently-cased path param) so this always matches the exact string
+    // stored on votes -- see kiosk.ts activate, which records votes under
+    // officerCode.code, not whatever case the voter/officer typed.
+    const voteCount = dataStore.countVotesByOfficerCode(entry.code);
     if (voteCount > 0) {
       throw new ConflictError(
-        `Code ${normalizedCode} has already cast ${voteCount} vote${voteCount === 1 ? '' : 's'} and cannot be deleted. Close the booth instead to stop it from being used further.`
+        `Code ${entry.code} has already cast ${voteCount} vote${voteCount === 1 ? '' : 's'} and cannot be deleted. Close the booth instead to stop it from being used further.`
       );
     }
-    dataStore.deleteOfficerCode(normalizedCode);
+    dataStore.deleteOfficerCode(entry.code);
     res.status(204).send();
   })
 );

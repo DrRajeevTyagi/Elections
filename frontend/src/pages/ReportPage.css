@@ -92,6 +92,17 @@
   font-style: italic;
 }
 
+.report-code-cell {
+  font-family: 'Courier New', Courier, monospace;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.report-unallotted {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
 @media print {
   .no-print {
     display: none !important;

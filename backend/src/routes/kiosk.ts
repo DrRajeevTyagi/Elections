@@ -17,7 +17,9 @@ kioskRouter.post(
   kioskGuessLimiter,
   asyncHandler((req, res) => {
     const { secret } = req.body as ActivationRequest;
-    const enteredCode = typeof secret === 'string' ? secret.trim().toUpperCase() : '';
+    // Matching is case-insensitive (see datastore.ts's codesMatch), so no
+    // case normalization is needed here beyond trimming whitespace.
+    const enteredCode = typeof secret === 'string' ? secret.trim() : '';
     const officerCode = enteredCode ? dataStore.findOfficerCode(enteredCode) : undefined;
     if (!officerCode) {
       throw new UnauthorizedError('Incorrect officer code. Please check the code with the election administrator and try again.');
@@ -94,7 +96,7 @@ kioskRouter.post(
   kioskGuessLimiter,
   asyncHandler((req, res) => {
     const { secret } = req.body as { secret?: string };
-    const enteredCode = typeof secret === 'string' ? secret.trim().toUpperCase() : '';
+    const enteredCode = typeof secret === 'string' ? secret.trim() : '';
     const officerCode = enteredCode ? dataStore.findOfficerCode(enteredCode) : undefined;
     if (!officerCode) {
       throw new UnauthorizedError('Incorrect officer code. Please check the code and try again.');

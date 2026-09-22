@@ -113,4 +113,10 @@ As always, each phase gets typechecked/tested/built on both frontend and backend
 ## Open items to nail down before coding starts
 
 - Whether the Manage Candidates and Live Results sub-tabs should default to remembering the last branch viewed, or always default to Dwarka.
-- Confirm there's nothing branch-specific about the printable report letterhead/footer (school name, address) that also needs a branch-aware template.
+- ~~Confirm there's nothing branch-specific about the printable report letterhead/footer (school name, address) that also needs a branch-aware template.~~
+  **Resolved for the officer-code roster (2026-09-22):** AN's branch is
+  "Mount Carmel School, Anand Niketan" (Dwarka stays "Mount Carmel School") —
+  see `OfficerCodesPrintPage.tsx`'s `BRANCH_LETTERHEAD` map. **Still open for
+  ReportPage.tsx/TurnoutReportPage.tsx**, which hardcode "Mount Carmel
+  School" regardless of branch — needs the same treatment once those pages
+  take a branch selector (see ROADMAP.md Phase 2).

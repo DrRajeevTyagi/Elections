@@ -5,6 +5,7 @@ import { ActivationPage } from './pages/ActivationPage';
 import { AdminLandingPage } from './pages/AdminLandingPage';
 import { ClosePollingPage } from './pages/ClosePollingPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { OfficerCodesPrintPage } from './pages/OfficerCodesPrintPage';
 import { ReportPage } from './pages/ReportPage';
 import { TurnoutReportPage } from './pages/TurnoutReportPage';
 import { VotePage } from './pages/VotePage';
@@ -23,6 +24,7 @@ const App = (): JSX.Element => {
           <Route path="/admin" element={<AdminLandingPage />} />
           <Route path="/admin/report" element={<ReportPage />} />
           <Route path="/admin/report/turnout" element={<TurnoutReportPage />} />
+          <Route path="/admin/report/officer-codes/:branch" element={<OfficerCodesPrintPage />} />
           <Route path="/admin/report/:archiveId" element={<ReportPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

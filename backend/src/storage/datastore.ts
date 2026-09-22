@@ -105,6 +105,14 @@ const isOfficerCode = (value: unknown): value is OfficerCode => {
 // branch is defaulted the same way: every record that predates the
 // multi-branch field belongs to 'dwarka', the only branch that has ever
 // existed (see MULTI-BRANCH-EXPANSION-PLAN.md).
+// Officer codes are compared case-insensitively everywhere they're looked
+// up. This matters because the code alphabet switched to lowercase
+// (2026-09-22, easier to type on a phone keyboard) while codes generated
+// before that change remain stored uppercase in existing data -- neither a
+// polling officer typing an old code in caps out of habit, nor one typing a
+// new code in lowercase, should ever fail to match on case alone.
+const codesMatch = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
+
 const normalizeOfficerCode = (entry: OfficerCode): OfficerCode => ({
   ...entry,
   electionType: entry.electionType === 'house' || entry.electionType === 'school'
@@ -511,7 +519,7 @@ export class DataStore {
   }
 
   findOfficerCode(code: string): OfficerCode | undefined {
-    const entry = this.data.officerCodes.find((item) => item.code === code);
+    const entry = this.data.officerCodes.find((item) => codesMatch(item.code, code));
     return entry ? { ...entry } : undefined;
   }
 
@@ -525,7 +533,7 @@ export class DataStore {
   }
 
   closeOfficerCode(code: string): OfficerCode | undefined {
-    const entry = this.data.officerCodes.find((item) => item.code === code);
+    const entry = this.data.officerCodes.find((item) => codesMatch(item.code, code));
     if (!entry) {
       return undefined;
     }
@@ -535,7 +543,7 @@ export class DataStore {
   }
 
   reopenOfficerCode(code: string): OfficerCode | undefined {
-    const entry = this.data.officerCodes.find((item) => item.code === code);
+    const entry = this.data.officerCodes.find((item) => codesMatch(item.code, code));
     if (!entry) {
       return undefined;
     }
@@ -545,7 +553,7 @@ export class DataStore {
   }
 
   updateOfficerCode(code: string, updates: { officerName?: string }): OfficerCode | undefined {
-    const entry = this.data.officerCodes.find((item) => item.code === code);
+    const entry = this.data.officerCodes.find((item) => codesMatch(item.code, code));
     if (!entry) {
       return undefined;
     }
@@ -560,7 +568,7 @@ export class DataStore {
   }
 
   deleteOfficerCode(code: string): void {
-    this.data.officerCodes = this.data.officerCodes.filter((entry) => entry.code !== code);
+    this.data.officerCodes = this.data.officerCodes.filter((entry) => !codesMatch(entry.code, code));
     this.queuePersist();
   }
 

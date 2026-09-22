@@ -31,6 +31,7 @@ import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
 import { POST_NAMES } from '../constants/posts';
 import { POST_COLORS } from '../constants/postColors';
 import { HOUSE_COLORS } from '../constants/houseColors';
+import { groupOfficerCodesByHouse } from '../utils/officerCodeGroups';
 import './Page.css';
 import './admin.css';
 
@@ -803,33 +804,11 @@ export const AdminLandingPage = (): JSX.Element => {
   // "n codes for Anand House, then n for Dhiraj House, etc." rather than
   // whatever order they happened to be generated in.
   const groupedOfficerCodes = useMemo(() => {
-    const byHouse = new Map<HouseId, OfficerCode[]>();
-    const unbound: OfficerCode[] = [];
     // Codes generated before the branch field existed have no `branch` set
     // client-side either -- treat that the same way the backend defaults it,
     // so old Dwarka codes still show up under "Dwarka" instead of vanishing.
     const branchFiltered = officerCodes.filter((entry) => (entry.branch ?? 'dwarka') === selectedBranch);
-    for (const entry of branchFiltered) {
-      if (entry.house) {
-        const list = byHouse.get(entry.house) ?? [];
-        list.push(entry);
-        byHouse.set(entry.house, list);
-      } else {
-        unbound.push(entry);
-      }
-    }
-
-    const groups: { label: string; codes: OfficerCode[] }[] = [];
-    for (const houseId of HOUSE_IDS) {
-      const codes = byHouse.get(houseId);
-      if (codes && codes.length > 0) {
-        groups.push({ label: `${houseId} House`, codes: [...codes].sort((a, b) => a.createdAt - b.createdAt) });
-      }
-    }
-    if (unbound.length > 0) {
-      groups.push({ label: 'School Posts', codes: [...unbound].sort((a, b) => a.createdAt - b.createdAt) });
-    }
-    return groups;
+    return groupOfficerCodesByHouse(branchFiltered);
   }, [officerCodes, selectedBranch]);
 
   const handleSetElectionType = async (electionType: ElectionType) => {
@@ -1365,15 +1344,25 @@ export const AdminLandingPage = (): JSX.Element => {
         {renderBranchToggle('codes')}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
           <h2 style={{ margin: 0 }}>Polling Officer Codes</h2>
-          <button
-            className="button"
-            onClick={() => window.open('/admin/report/turnout', '_blank')}
-            disabled={!pollStatus?.activeElectionType}
-            style={{ backgroundColor: '#4338ca', opacity: !pollStatus?.activeElectionType ? 0.5 : 1 }}
-            title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable turnout report in a new tab'}
-          >
-            🖨️ Print Officer Turnout
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button
+              className="button"
+              onClick={() => window.open(`/admin/report/officer-codes/${selectedBranch}`, '_blank')}
+              style={{ backgroundColor: '#0f766e' }}
+              title={`Open a printable ${selectedBranch === 'AN' ? 'AN' : 'Dwarka'} code-allotment list -- hand this to that branch's Election Head/Principal`}
+            >
+              🖨️ Print {selectedBranch === 'AN' ? 'AN' : 'Dwarka'} Code List
+            </button>
+            <button
+              className="button"
+              onClick={() => window.open('/admin/report/turnout', '_blank')}
+              disabled={!pollStatus?.activeElectionType}
+              style={{ backgroundColor: '#4338ca', opacity: !pollStatus?.activeElectionType ? 0.5 : 1 }}
+              title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable turnout report in a new tab'}
+            >
+              🖨️ Print Officer Turnout
+            </button>
+          </div>
         </div>
         <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '0.5rem', marginBottom: '1rem' }}>
           Generate codes here, hand them out, then come back and type each officer's name against their code so
