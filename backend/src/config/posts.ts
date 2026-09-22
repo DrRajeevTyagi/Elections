@@ -1,4 +1,4 @@
-import { PostId, HousePostId, SchoolPostId, HouseId, Candidate, ElectionType } from '../types/election.js';
+import { PostId, HousePostId, SchoolPostId, HouseId, Candidate } from '../types/election.js';
 
 // School election posts
 export const SCHOOL_POST_IDS: SchoolPostId[] = ['HB', 'HG', 'SSC', 'SRC', 'SCC'];
@@ -20,50 +20,14 @@ export const isValidHouseId = (value: string): value is HouseId => {
   return HOUSE_IDS.includes(value as HouseId);
 };
 
-// Default school election candidates
-export const DEFAULT_SCHOOL_CANDIDATES: Candidate[] = [
-  // Head Boy (HB) - 4 candidates
-  { id: 'hb-1', name: 'Alex Johnson', post: 'HB', electionType: 'school' },
-  { id: 'hb-2', name: 'Michael Chen', post: 'HB', electionType: 'school' },
-  { id: 'hb-3', name: 'David Williams', post: 'HB', electionType: 'school' },
-  { id: 'hb-4', name: 'Ryan Patel', post: 'HB', electionType: 'school' },
-  
-  // Head Girl (HG) - 4 candidates
-  { id: 'hg-1', name: 'Sarah Martinez', post: 'HG', electionType: 'school' },
-  { id: 'hg-2', name: 'Emily Davis', post: 'HG', electionType: 'school' },
-  { id: 'hg-3', name: 'Priya Sharma', post: 'HG', electionType: 'school' },
-  { id: 'hg-4', name: 'Jessica Brown', post: 'HG', electionType: 'school' },
-  
-  // School Sports Captain (SSC) - 5 candidates
-  { id: 'ssc-1', name: 'James Wilson', post: 'SSC', electionType: 'school' },
-  { id: 'ssc-2', name: 'Chris Anderson', post: 'SSC', electionType: 'school' },
-  { id: 'ssc-3', name: 'Marcus Taylor', post: 'SSC', electionType: 'school' },
-  { id: 'ssc-4', name: 'Kevin Lee', post: 'SSC', electionType: 'school' },
-  { id: 'ssc-5', name: 'Daniel Kim', post: 'SSC', electionType: 'school' },
-  
-  // School Resources Captain (SRC) - 3 candidates
-  { id: 'src-1', name: 'Sophia Garcia', post: 'SRC', electionType: 'school' },
-  { id: 'src-2', name: 'Olivia Rodriguez', post: 'SRC', electionType: 'school' },
-  { id: 'src-3', name: 'Isabella Thompson', post: 'SRC', electionType: 'school' },
-  
-  // School Cultural Captain (SCC) - 4 candidates
-  { id: 'scc-1', name: 'Emma White', post: 'SCC', electionType: 'school' },
-  { id: 'scc-2', name: 'Mia Jackson', post: 'SCC', electionType: 'school' },
-  { id: 'scc-3', name: 'Ava Harris', post: 'SCC', electionType: 'school' },
-  { id: 'scc-4', name: 'Lily Martin', post: 'SCC', electionType: 'school' }
-];
-
-// Default house election candidates (placeholder candidates for each house)
-// In practice, these would be added by admin, but we provide placeholders
-export const DEFAULT_HOUSE_CANDIDATES: Candidate[] = HOUSE_IDS.flatMap((house) =>
-  HOUSE_POST_IDS.map((post, index) => ({
-    id: `${house.toLowerCase()}-${post.toLowerCase()}-${index + 1}`,
-    name: `${house} ${post === 'HC' ? 'House Captain' : post === 'HCC' ? 'Cultural Captain' : 'Sports Captain'} ${index + 1}`,
-    post,
-    electionType: 'house' as ElectionType,
-    house
-  }))
-);
-
-// Combined default candidates (for backward compatibility)
-export const DEFAULT_CANDIDATES: Candidate[] = [...DEFAULT_SCHOOL_CANDIDATES, ...DEFAULT_HOUSE_CANDIDATES];
+// No demo/placeholder candidates are seeded for a fresh election -- a
+// previous version pre-populated fake names (e.g. "Alex Johnson", "Anand
+// House Captain 1") here, which risked real students voting for a candidate
+// nobody actually entered if an admin didn't notice and delete them first.
+// A brand-new election now starts with zero candidates everywhere, and
+// candidateService.findMissingCandidateCoverage blocks Open Poll until the
+// admin has added a real candidate for every post (and every house/post
+// combination, for house elections).
+export const DEFAULT_SCHOOL_CANDIDATES: Candidate[] = [];
+export const DEFAULT_HOUSE_CANDIDATES: Candidate[] = [];
+export const DEFAULT_CANDIDATES: Candidate[] = [];

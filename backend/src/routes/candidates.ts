@@ -44,7 +44,7 @@ candidatesRouter.put(
   asyncHandler((req, res) => {
     ensurePollIsClosed();
     const { candidateId } = req.params;
-    const { name, manifesto, imageUrl } = req.body as Partial<Candidate>;
+    const { name, imageUrl } = req.body as Partial<Candidate>;
 
     if (!candidateId) {
       throw new BadRequestError('Candidate ID is required');
@@ -67,10 +67,6 @@ candidatesRouter.put(
       candidate.name = name.trim();
     }
 
-    if (manifesto !== undefined) {
-      candidate.manifesto = typeof manifesto === 'string' ? manifesto.trim() : undefined;
-    }
-
     if (imageUrl !== undefined) {
       const trimmedImageUrl = typeof imageUrl === 'string' ? imageUrl.trim() : '';
       validateImageUrl(trimmedImageUrl);
@@ -88,7 +84,7 @@ candidatesRouter.post(
   requireAdminSecret,
   asyncHandler((req, res) => {
     ensurePollIsClosed();
-    const { id, name, post, electionType, house, manifesto, imageUrl } = req.body as Partial<Candidate>;
+    const { id, name, post, electionType, house, imageUrl } = req.body as Partial<Candidate>;
 
     if (!id || !name || !post) {
       throw new BadRequestError('ID, name, and post are required');
@@ -139,7 +135,6 @@ candidatesRouter.post(
       post,
       electionType: determinedElectionType,
       house: determinedElectionType === 'house' ? (house as HouseId) : undefined,
-      manifesto: manifesto?.trim(),
       imageUrl: trimmedImageUrl
     };
 

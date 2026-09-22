@@ -15,6 +15,7 @@ interface KioskContextValue {
   token: string | null;
   house: HouseId | null;
   officerName?: string;
+  expiresAt?: number;
   status: KioskStatus;
   error?: string;
   posts: PostCandidateGroup[];
@@ -46,6 +47,7 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
   const [selections, setSelections] = useState<Record<PostId, string | null>>({} as Record<PostId, string | null>);
   const [confirmation, setConfirmation] = useState<VoteConfirmation | undefined>(undefined);
   const [officerName, setOfficerName] = useState<string | undefined>(undefined);
+  const [expiresAt, setExpiresAt] = useState<number | undefined>(undefined);
   // Deliberately kept separate from `confirmation` (and not cleared by reset())
   // so the station's running tally stays visible on-device across every
   // "Finish" -> next voter cycle, not just on the post-vote confirmation screen.
@@ -69,7 +71,8 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
         // is house-bound, which may differ from (or be absent from) what we
         // requested -- always trust the response over our own guess.
         house: resolvedHouse,
-        stationVoteCount: activatedStationVoteCount
+        stationVoteCount: activatedStationVoteCount,
+        expiresAt: sessionExpiresAt
       } = await activateKiosk(secret.trim(), requestedHouse);
       const effectiveHouse = resolvedHouse ?? requestedHouse;
       const { posts: fetchedPosts } = await fetchPosts(effectiveHouse);
@@ -78,12 +81,14 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
       }
       setToken(sessionToken);
       setOfficerName(activatedOfficerName);
+      setExpiresAt(sessionExpiresAt);
       setStationVoteCount(activatedStationVoteCount);
       setPosts(fetchedPosts);
       setSelections(createEmptySelections(fetchedPosts));
       setStatus('ready');
     } catch (activationError) {
       setToken(null);
+      setExpiresAt(undefined);
       setPosts([]);
       setSelections({} as Record<PostId, string | null>);
       setStatus('error');
@@ -137,6 +142,7 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
       await deactivateKiosk(token).catch(() => undefined);
     }
     setToken(null);
+    setExpiresAt(undefined);
     // Deliberately not clearing house here - it persists for the polling booth
     // across every voter, not just the first.
     setOfficerName(undefined);
@@ -152,6 +158,7 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
       token,
       house,
       officerName,
+      expiresAt,
       status,
       error,
       posts,
@@ -168,6 +175,7 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
       activate,
       confirmation,
       error,
+      expiresAt,
       house,
       officerName,
       posts,

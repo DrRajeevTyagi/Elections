@@ -17,7 +17,6 @@ export interface Candidate {
   post: PostId;
   electionType: ElectionType;
   house?: HouseId; // Required for house elections
-  manifesto?: string;
   imageUrl?: string;
 }
 

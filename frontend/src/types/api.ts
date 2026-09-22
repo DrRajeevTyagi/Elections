@@ -14,6 +14,7 @@ export interface ActivateResponse {
   officerName?: string;
   house?: HouseId;
   stationVoteCount?: number;
+  expiresAt?: number;
 }
 
 export interface VoteRequest {
@@ -38,6 +39,13 @@ export interface PollResponse {
   poll: PollStatus;
 }
 
+export interface StorageHealth {
+  ok: boolean;
+  lastSuccessAt: number | null;
+  lastErrorAt: number | null;
+  lastError?: string;
+}
+
 export interface SetElectionTypeRequest {
   electionType: ElectionType;
 }
@@ -59,7 +67,6 @@ export interface ResultsResponse {
 export interface OfficerCode {
   code: string;
   officerName: string;
-  label?: string;
   house?: HouseId;
   createdAt: number;
   closedAt?: number;

@@ -17,7 +17,6 @@ export interface Candidate {
   post: PostId;
   electionType: ElectionType;
   house?: HouseId; // Required for house elections
-  manifesto?: string;
   imageUrl?: string;
 }
 
@@ -43,7 +42,6 @@ export interface StoredVote {
 export interface OfficerCode {
   code: string;
   officerName: string;
-  label?: string;
   house?: HouseId; // Bound house for a house-election code; undefined works for any house (legacy/manual flow)
   createdAt: number;
   closedAt?: number; // Set when the polling officer closes this booth; blocks further activations
@@ -56,7 +54,7 @@ export interface PollState {
 
 // A permanent snapshot of one election's results, taken automatically right
 // before "Reset Poll" clears the live votes. Deliberately excludes candidate
-// photos/manifesto -- only ids/names/counts -- so archives stay small.
+// photos -- only ids/names/counts -- so archives stay small.
 export interface ArchivedCandidateResult {
   candidateId: string;
   name: string;

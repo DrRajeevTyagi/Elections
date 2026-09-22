@@ -41,10 +41,9 @@ officerCodesRouter.put(
   '/:code',
   asyncHandler((req, res) => {
     const { code } = req.params;
-    const { officerName, label } = req.body as { officerName?: string; label?: string };
+    const { officerName } = req.body as { officerName?: string };
     const updated = dataStore.updateOfficerCode(code.toUpperCase(), {
-      officerName: typeof officerName === 'string' ? officerName.trim() : undefined,
-      label: typeof label === 'string' ? label.trim() : undefined
+      officerName: typeof officerName === 'string' ? officerName.trim() : undefined
     });
     if (!updated) {
       throw new BadRequestError('Code not found');

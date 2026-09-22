@@ -15,9 +15,10 @@ import {
   updateOfficerCode,
   deleteOfficerCode,
   reopenOfficerCode,
-  getArchivesList
+  getArchivesList,
+  getStorageHealth
 } from '../services/api';
-import type { PollStatus, PostResult, CandidateResult, OfficerCode, ArchiveSummary } from '../types/api';
+import type { PollStatus, PostResult, CandidateResult, OfficerCode, ArchiveSummary, StorageHealth } from '../types/api';
 import type { PostId, ElectionType, HouseId, SchoolPostId } from '../types/election';
 import { AddCandidateForm } from '../components/AddCandidateForm';
 import { CandidateEditor } from '../components/CandidateEditor';
@@ -101,6 +102,7 @@ export const AdminLandingPage = (): JSX.Element => {
   const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
   const [archives, setArchives] = useState<ArchiveSummary[]>([]);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'results' | 'codes' | 'history'>('dashboard');
+  const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
   const liveResultsRef = useRef<HTMLDivElement | null>(null);
 
   const handlePresentFullScreen = () => {
@@ -162,6 +164,25 @@ export const AdminLandingPage = (): JSX.Element => {
     }
     await loadOfficerCodes(false);
   }, [loadOfficerCodes]);
+
+  // Backs the Storage status indicator -- checked on a slower, steady
+  // cadence regardless of whether the poll is open, so an admin can confirm
+  // recovery after a failure even once voting has stopped. This is the
+  // signal an admin actually needs when an officer reports the "vote may
+  // not have saved" error: a station's vote count alone can't distinguish
+  // "saved fine" from "captured in memory but not yet durable."
+  const loadStorageHealth = useCallback(async () => {
+    const secret = sessionStorage.getItem('adminSecret');
+    if (!secret) {
+      return;
+    }
+    try {
+      const health = await getStorageHealth(secret);
+      setStorageHealth(health);
+    } catch {
+      // Silent, same reasoning as refreshVoteCounts -- the next tick retries.
+    }
+  }, []);
 
   // Generates the same number of house-bound codes for every one of the 8
   // houses in one go, instead of the admin having to repeat "Generate" 8 times.
@@ -342,8 +363,21 @@ export const AdminLandingPage = (): JSX.Element => {
       void loadDashboard();
       void loadOfficerCodes();
       void loadArchives();
+      void loadStorageHealth();
     }
-  }, [authenticated, loadDashboard, loadOfficerCodes, loadArchives]);
+  }, [authenticated, loadDashboard, loadOfficerCodes, loadArchives, loadStorageHealth]);
+
+  // Checked on its own steady cadence -- independent of whether the poll is
+  // open -- so the indicator stays current even after voting has stopped.
+  useEffect(() => {
+    if (!authenticated) {
+      return;
+    }
+    const intervalId = setInterval(() => {
+      void loadStorageHealth();
+    }, 10000); // 10 seconds
+    return () => clearInterval(intervalId);
+  }, [authenticated, loadStorageHealth]);
 
   // Auto-refresh results when poll is open
   useEffect(() => {
@@ -367,6 +401,15 @@ export const AdminLandingPage = (): JSX.Element => {
     if (!adminSecret.trim()) {
       setError('Enter the admin secret to manage the poll.');
       return;
+    }
+
+    if (action === 'close') {
+      const confirmed = window.confirm(
+        'Close the poll?\n\nNo booth will be able to activate or submit a ballot until you Open the poll again. This is safe and reversible -- it will not affect any votes already cast.'
+      );
+      if (!confirmed) {
+        return;
+      }
     }
 
     try {
@@ -612,6 +655,35 @@ export const AdminLandingPage = (): JSX.Element => {
           Log out
         </button>
       </div>
+
+      {storageHealth && !storageHealth.ok && (
+        <div
+          style={{
+            marginTop: '0.75rem',
+            padding: '0.75rem 1rem',
+            backgroundColor: '#fef2f2',
+            border: '2px solid #dc2626',
+            borderRadius: '8px',
+            color: '#991b1b'
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 700 }}>
+            ⚠ Storage is not saving right now
+            {storageHealth.lastErrorAt && ` (since ${formatTimestamp(storageHealth.lastErrorAt)})`}
+          </p>
+          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem' }}>
+            Votes and other changes are still being held in the server's memory, but are NOT yet durably saved --
+            they would be lost if the server restarted right now. Do not restart or redeploy anything. Get IT/developer
+            help immediately.
+            {storageHealth.lastSuccessAt && ` Last confirmed save: ${formatTimestamp(storageHealth.lastSuccessAt)}.`}
+          </p>
+        </div>
+      )}
+      {storageHealth?.ok && (
+        <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: '#6b7280' }}>
+          💾 Storage: OK{storageHealth.lastSuccessAt && ` -- last saved ${formatTimestamp(storageHealth.lastSuccessAt)}`}
+        </p>
+      )}
 
       <div className="admin-tabs" style={{ display: 'flex', gap: '0.5rem', margin: '1rem 0', borderBottom: '2px solid #e5e7eb' }}>
         {(

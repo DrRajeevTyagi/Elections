@@ -9,6 +9,7 @@ import type {
   PollResponse,
   PostsResponse,
   ResultsResponse,
+  StorageHealth,
   VoteRequest,
   VoteResponse,
   SetElectionTypeRequest
@@ -87,6 +88,13 @@ export const verifyAdminSecret = async (adminSecret: string): Promise<void> => {
       'x-admin-secret': adminSecret
     }
   });
+};
+
+export const getStorageHealth = async (adminSecret: string): Promise<StorageHealth> => {
+  const response = await api.get<StorageHealth>('/admin/storage-health', {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data;
 };
 
 const updatePoll = async (action: 'open' | 'close', adminSecret: string): Promise<PollResponse> => {
@@ -173,7 +181,7 @@ export const deleteOfficerCode = async (code: string, adminSecret: string): Prom
 
 export const updateCandidate = async (
   candidateId: string,
-  updates: { name?: string; manifesto?: string; imageUrl?: string },
+  updates: { name?: string; imageUrl?: string },
   adminSecret: string
 ): Promise<void> => {
   await api.put(`/candidates/${candidateId}`, updates, {

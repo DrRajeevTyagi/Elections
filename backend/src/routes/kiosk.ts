@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getPollState } from '../services/voteService.js';
-import { kioskService } from '../services/kioskService.js';
+import { kioskService, SESSION_TTL_MS } from '../services/kioskService.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ForbiddenError, UnauthorizedError, BadRequestError } from '../utils/httpError.js';
@@ -60,7 +60,13 @@ kioskRouter.post(
 
     const session = kioskService.createSession(officerCode.code, house && isValidHouseId(house) ? house : undefined);
     const stationVoteCount = dataStore.countVotesByOfficerCode(officerCode.code);
-    res.status(201).json({ token: session.token, officerName: officerCode.officerName, house, stationVoteCount });
+    res.status(201).json({
+      token: session.token,
+      officerName: officerCode.officerName,
+      house,
+      stationVoteCount,
+      expiresAt: session.activatedAt + SESSION_TTL_MS
+    });
   })
 );
 

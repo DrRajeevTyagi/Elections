@@ -7,7 +7,7 @@ import type { HouseId, VoteSubmission } from '../types/election.js';
 import { requireKioskSession } from '../middleware/kioskSession.js';
 import { kioskService } from '../services/kioskService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { BadRequestError } from '../utils/httpError.js';
+import { BadRequestError, HttpError } from '../utils/httpError.js';
 
 const validateVote = (body: unknown, electionType: 'school' | 'house', house?: HouseId): VoteSubmission => {
   if (!body || typeof body !== 'object') {
@@ -68,7 +68,25 @@ votesRouter.post(
     const submission = validateVote(req.body, pollState.activeElectionType, house);
     kioskService.markConsumed(res.locals.kioskToken!);
 
-    const vote = await recordVote(submission.selections, pollState.activeElectionType, house, officerCode);
+    // recordVote captures the vote in memory synchronously and only the
+    // *durability* write (to Firestore/disk) can still fail here -- e.g. a
+    // brief network blip. The vote itself is not lost (it stays queued and
+    // will be written on the next successful save), but this specific
+    // request can't confirm that in time, so give the officer a message
+    // that tells them what's actually safe to do instead of a raw/generic
+    // error: don't vote again on a hunch, check the station's vote count
+    // with the administrator first.
+    let vote;
+    try {
+      vote = await recordVote(submission.selections, pollState.activeElectionType, house, officerCode);
+    } catch (persistError) {
+      console.error('Vote captured but could not be confirmed as saved', persistError);
+      throw new HttpError(
+        502,
+        'Your vote was received, but the server could not confirm it was saved due to a connection issue. Do NOT vote again on this device -- ask the election administrator to check the Storage status on the admin dashboard and this station\'s vote count before doing anything else.',
+        'VOTE_SAVE_UNCONFIRMED'
+      );
+    }
     const stationVoteCount = officerCode ? dataStore.countVotesByOfficerCode(officerCode) : undefined;
 
     res.status(201).json({

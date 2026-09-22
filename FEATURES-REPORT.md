@@ -82,8 +82,13 @@ Manages elections for **3 house-level posts**:
 
 ### Voting Security Features
 - **Per-officer single-use tokens**: each activation creates a unique session token
-- **Token expiration**: tokens expire after 10 minutes if unused
+- **Token expiration**: tokens expire after 10 minutes if unused, with an
+  on-screen warning banner once the last 90 seconds are reached
 - **Consumed tokens**: invalidated immediately after a vote is submitted
+- **No demo candidates**: a brand-new election starts with zero candidates
+  everywhere (no placeholder names to accidentally leave in front of real
+  voters); Open Poll is blocked until every post (and, for house elections,
+  every house/post pair) has at least one real candidate
 - **Poll state validation**: cannot activate a ballot if the poll is closed by Chief Election Commisioner. 
 - **Election type validation**: cannot activate if no election type is active
 
@@ -105,8 +110,9 @@ Manages elections for **3 house-level posts**:
 - Color-coded buttons show which type is active; disabled while the poll is open
 
 ### Poll Controls
-- **Open Poll** / **Close Poll** / **Reset Poll** (only when closed, with a
-  confirmation dialog) / **Refresh** (manual refresh of the whole dashboard)
+- **Open Poll** / **Close Poll** (with a confirmation dialog) / **Reset Poll**
+  (only when closed, with a confirmation dialog) / **Refresh** (manual
+  refresh of the whole dashboard)
 - **Reset Poll** now archives the current results to Election History
   automatically before clearing votes, so nothing is lost — see below
 - All poll-changing actions require the admin secret and confirm destructive ones
@@ -265,9 +271,10 @@ Manages elections for **3 house-level posts**:
 
 ## ⚠️ Known Issues
 
-1. Two `Candidate` fields — `manifesto` and an officer-code `label` — are accepted by
-   the API and stored, but neither is exposed in any admin UI yet.
+None currently tracked. (The previously-noted unused `manifesto` and
+officer-code `label` fields were removed on 2026-09-21 rather than finished,
+since neither had an admin UI.)
 
 ---
 
-*Last updated: 2026-09-03, reflecting `main`.*
+*Last updated: 2026-09-21, reflecting `main`.*

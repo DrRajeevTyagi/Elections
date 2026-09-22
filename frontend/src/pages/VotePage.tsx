@@ -8,8 +8,14 @@ import type { PostCandidateGroup, PostId } from '../types/election';
 import './Page.css';
 import './Evm.css';
 
+// Below this many seconds left on the 10-minute ballot session, show a
+// warning banner so a slow voter isn't blindsided by a sudden "session
+// expired" error with no notice.
+const EXPIRY_WARNING_MS = 90 * 1000;
+
 export const VotePage = (): JSX.Element => {
-  const { posts, selections, updateSelection, submit, status, error, confirmation, officerName, house, reset } = useKiosk();
+  const { posts, selections, updateSelection, submit, status, error, confirmation, officerName, house, expiresAt, reset } =
+    useKiosk();
   const navigate = useNavigate();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -20,6 +26,7 @@ export const VotePage = (): JSX.Element => {
   // Buffers a re-pick made while editingFromReview so "Cancel" can truly
   // discard it instead of the click having already overwritten `selections`.
   const [pendingSelection, setPendingSelection] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (status === 'idle') {
@@ -28,6 +35,20 @@ export const VotePage = (): JSX.Element => {
       setLocalError(error);
     }
   }, [error, navigate, status]);
+
+  // Ticks once a second only while there's an active session to count down,
+  // so the warning banner below stays live without polling the server.
+  useEffect(() => {
+    if (!expiresAt || status !== 'ready') {
+      return;
+    }
+    const intervalId = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(intervalId);
+  }, [expiresAt, status]);
+
+  const secondsUntilExpiry = expiresAt ? Math.round((expiresAt - now) / 1000) : null;
+  const showExpiryWarning =
+    status === 'ready' && secondsUntilExpiry !== null && secondsUntilExpiry > 0 && secondsUntilExpiry * 1000 <= EXPIRY_WARNING_MS;
 
   const currentPost: PostCandidateGroup | undefined = posts[currentIndex];
   const allSelected = useMemo(() => posts.every((group) => Boolean(selections[group.post])), [posts, selections]);
@@ -134,6 +155,11 @@ export const VotePage = (): JSX.Element => {
           <p style={{ margin: 0, fontSize: '0.9rem', color: '#6b7280' }}>&#10003; Review Your Choices</p>
         </div>
         <h1 style={{ color: '#16a34a' }}>Review Your Selections</h1>
+        {showExpiryWarning && (
+          <p style={{ fontSize: '0.9rem', color: '#b45309', fontWeight: 700, backgroundColor: '#fffbeb', border: '2px solid #f59e0b', borderRadius: '8px', padding: '0.5rem 0.75rem' }}>
+            ⏱ This ballot session expires in {secondsUntilExpiry}s &mdash; please submit now.
+          </p>
+        )}
         {house && (
           <p style={{ fontSize: '0.9rem', color: '#16a34a', fontWeight: 700, marginTop: '-0.5rem' }}>
             {house} House
@@ -215,6 +241,11 @@ export const VotePage = (): JSX.Element => {
       </div>
 
       <h1>Select Your Candidate</h1>
+      {showExpiryWarning && (
+        <p style={{ fontSize: '0.9rem', color: '#b45309', fontWeight: 700, backgroundColor: '#fffbeb', border: '2px solid #f59e0b', borderRadius: '8px', padding: '0.5rem 0.75rem' }}>
+          ⏱ This ballot session expires in {secondsUntilExpiry}s &mdash; please finish soon.
+        </p>
+      )}
       {house && (
         <p style={{ fontSize: '0.9rem', color: '#16a34a', fontWeight: 700, marginTop: '-0.5rem' }}>
           {house} House

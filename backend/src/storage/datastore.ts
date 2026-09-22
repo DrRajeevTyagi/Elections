@@ -3,7 +3,7 @@ import { dirname } from 'path';
 import { randomUUID } from 'crypto';
 import { Firestore } from '@google-cloud/firestore';
 import { env } from '../config/env.js';
-import { DEFAULT_CANDIDATES, POST_IDS, SCHOOL_POST_IDS, HOUSE_POST_IDS } from '../config/posts.js';
+import { DEFAULT_CANDIDATES } from '../config/posts.js';
 import { generateUniqueCodes } from '../utils/officerCode.js';
 import { Candidate, PollState, StoredVote, ElectionType, OfficerCode, ElectionArchive, HouseId } from '../types/election.js';
 
@@ -92,16 +92,38 @@ const isElectionArchive = (value: unknown): value is ElectionArchive => {
   );
 };
 
+// What the admin dashboard's Storage status indicator reports (see
+// routes/admin.ts GET /storage-health). Distinguishes "every write so far
+// has landed" from "writes are currently failing" -- the thing a vote count
+// alone can't tell you, since a vote is pushed into memory (and so counted)
+// before its write to Firestore/disk is even attempted. See queuePersist.
+export interface StorageHealth {
+  ok: boolean;
+  lastSuccessAt: number | null;
+  lastErrorAt: number | null;
+  lastError?: string;
+}
+
 export class DataStore {
   private data: ElectionData = createDefaultData();
   private writeQueue: Promise<void> = Promise.resolve();
   private readonly filePath = env.dataFile;
   private readonly firestore = env.useFirestore ? new Firestore() : null;
+  private storageHealth: StorageHealth = { ok: true, lastSuccessAt: null, lastErrorAt: null };
 
   async init(): Promise<void> {
     await this.load();
-    this.ensureCandidateCoverage();
     await this.flush();
+    this.storageHealth = { ok: true, lastSuccessAt: Date.now(), lastErrorAt: null };
+  }
+
+  // Read by the admin dashboard so a human can tell "one write blipped and
+  // already recovered" apart from "writes are failing right now" -- the
+  // second case means anything in memory but not yet durable (recent votes
+  // included) would be lost if this instance restarted before it got
+  // through. Polling should stop and get IT help if this stays unhealthy.
+  getStorageHealth(): StorageHealth {
+    return { ...this.storageHealth };
   }
 
   private async load(): Promise<void> {
@@ -205,8 +227,23 @@ export class DataStore {
   // one failed persist never wedges every write after it.
   private queuePersist(): Promise<void> {
     const attempt = this.writeQueue.then(() => this.persist());
-    this.writeQueue = attempt.catch((error) => {
-      console.error('Failed to persist election data', error);
+    attempt.then(
+      () => {
+        this.storageHealth = { ok: true, lastSuccessAt: Date.now(), lastErrorAt: this.storageHealth.lastErrorAt };
+      },
+      (error) => {
+        console.error('Failed to persist election data', error);
+        this.storageHealth = {
+          ok: false,
+          lastSuccessAt: this.storageHealth.lastSuccessAt,
+          lastErrorAt: Date.now(),
+          lastError: error instanceof Error ? error.message : String(error)
+        };
+      }
+    );
+    this.writeQueue = attempt.catch(() => {
+      // Already recorded above -- swallowed here only so one failed write
+      // never wedges every write queued after it.
     });
     return attempt;
   }
@@ -215,34 +252,17 @@ export class DataStore {
     await this.writeQueue;
   }
 
-  private ensureCandidateCoverage(): void {
-    // Ensure school posts have at least one candidate
-    const schoolCandidates = this.data.candidates.filter((c) => c.electionType === 'school');
-    const schoolPostsWithCandidates = new Set(schoolCandidates.map((c) => c.post));
-    for (const post of SCHOOL_POST_IDS) {
-      if (!schoolPostsWithCandidates.has(post)) {
-        this.data.candidates.push({
-          id: post.toLowerCase() + '-placeholder',
-          name: post + ' Candidate',
-          post,
-          electionType: 'school'
-        });
-      }
-    }
-
-    // Ensure house posts have at least one candidate per house
-    const houseCandidates = this.data.candidates.filter((c) => c.electionType === 'house');
-    // We'll rely on admin to add house candidates, so we don't auto-create placeholders
-    // as that would create 8 houses × 3 posts = 24 candidates automatically
-  }
-
   getCandidates(): Candidate[] {
     return this.data.candidates.map((candidate) => ({ ...candidate }));
   }
 
+  // Deliberately does NOT backfill a placeholder candidate for a post left
+  // at zero -- that used to happen here and defeated
+  // candidateService.findMissingCandidateCoverage's job of blocking Open
+  // Poll until every post/house genuinely has a real candidate. A post with
+  // zero candidates should stay visibly empty until the admin adds one.
   setCandidates(candidates: Candidate[]): void {
     this.data.candidates = cloneCandidates(candidates);
-    this.ensureCandidateCoverage();
     this.queuePersist();
   }
 
@@ -346,16 +366,13 @@ export class DataStore {
     return { ...entry };
   }
 
-  updateOfficerCode(code: string, updates: { officerName?: string; label?: string }): OfficerCode | undefined {
+  updateOfficerCode(code: string, updates: { officerName?: string }): OfficerCode | undefined {
     const entry = this.data.officerCodes.find((item) => item.code === code);
     if (!entry) {
       return undefined;
     }
     if (updates.officerName !== undefined) {
       entry.officerName = updates.officerName;
-    }
-    if (updates.label !== undefined) {
-      entry.label = updates.label;
     }
     this.queuePersist();
     return { ...entry };

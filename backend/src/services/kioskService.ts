@@ -10,7 +10,7 @@ export interface KioskSession {
   officerCode?: string; // Which polling officer's code activated this session
 }
 
-const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
+export const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 export class KioskService {
   private sessions = new Map<string, KioskSession>();
