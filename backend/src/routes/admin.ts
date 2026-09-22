@@ -3,6 +3,7 @@ import { requireAdminSecret, requireAdminSession } from '../middleware/adminAuth
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { adminSessionService } from '../services/adminSessionService.js';
+import { logAction } from '../services/auditLogService.js';
 import { BadRequestError, ConflictError } from '../utils/httpError.js';
 
 export const adminRouter = Router();
@@ -16,19 +17,29 @@ export const adminRouter = Router();
 adminRouter.post(
   '/verify',
   requireAdminSecret,
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const clientId = req.header('x-admin-client-id');
     if (!clientId) {
       throw new BadRequestError('Missing client id');
     }
     const force = req.header('x-admin-force') === 'true';
-    const claim = adminSessionService.claim(clientId, force);
+    // A short human-entered label ("Rajeev -- laptop"), optional -- see
+    // adminSessionService.ts for why this exists: it's what lets the action
+    // log (once a recording is active) say a real name instead of just this
+    // client's random per-tab id.
+    const { label } = req.body as { label?: string };
+    const claim = adminSessionService.claim(clientId, force, label);
     if (!claim.ok) {
       throw new ConflictError(
         `The admin console is already open on another device (since ${new Date(claim.activeSince!).toLocaleTimeString()}). ` +
           'Ask them to log out, or take over to disconnect that device.',
         'ADMIN_SESSION_CONFLICT'
       );
+    }
+    if (claim.tookOverFrom) {
+      await logAction(clientId, 'admin.session.takeover', { evicted: claim.tookOverFrom });
+    } else {
+      await logAction(clientId, 'admin.session.claim', {});
     }
     res.json({ ok: true });
   })

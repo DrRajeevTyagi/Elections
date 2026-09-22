@@ -23,11 +23,23 @@ interface ActiveSession {
   clientId: string;
   issuedAt: number;
   lastSeenAt: number;
+  // A short human-entered label ("Rajeev -- laptop"), captured at
+  // login/takeover time -- a minimal, pulled-forward slice of
+  // ELECTION-INTEGRITY-AND-TRUST.md item 1, added specifically so the
+  // Phase 3 action log (item 5) can say a real name instead of just an
+  // opaque per-tab client id. Not independently verifiable (anyone can type
+  // any label) -- combined with the immutable log, a false label is
+  // evidence, not a lock by itself, same reasoning as item 3's officer name.
+  label?: string;
 }
 
 export interface ClaimResult {
   ok: boolean;
   activeSince?: number;
+  // True when this claim evicted a *different* client that already held the
+  // slot -- lets callers (see routes/admin.ts) log a takeover distinctly
+  // from an ordinary first login.
+  tookOverFrom?: string;
 }
 
 export class AdminSessionService {
@@ -38,14 +50,21 @@ export class AdminSessionService {
   // client currently holds it and `force` was not set -- holding the lock
   // never expires on its own, so this is the only path by which a client
   // can lose it against its will.
-  claim(clientId: string, force: boolean): ClaimResult {
+  claim(clientId: string, force: boolean, label?: string): ClaimResult {
     const current = this.session;
     if (current && current.clientId !== clientId && !force) {
       return { ok: false, activeSince: current.issuedAt };
     }
     const keepIssuedAt = current && current.clientId === clientId ? current.issuedAt : Date.now();
-    this.session = { clientId, issuedAt: keepIssuedAt, lastSeenAt: Date.now() };
-    return { ok: true };
+    const tookOverFrom = current && current.clientId !== clientId ? current.label ?? current.clientId : undefined;
+    this.session = { clientId, issuedAt: keepIssuedAt, lastSeenAt: Date.now(), label: label?.trim() || undefined };
+    return { ok: true, tookOverFrom };
+  }
+
+  // Read by the audit log service to attribute a logged action to a human
+  // label instead of just the raw client id, when one was given at login.
+  getLabel(clientId: string): string | undefined {
+    return this.session && this.session.clientId === clientId ? this.session.label : undefined;
   }
 
   // Called on every other admin-authenticated request. Confirms `clientId`

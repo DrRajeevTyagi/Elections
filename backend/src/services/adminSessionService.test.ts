@@ -30,9 +30,20 @@ describe('AdminSessionService', () => {
 
   it('lets a second client force a takeover, evicting the first', () => {
     service.claim('terminal-a', false);
-    expect(service.claim('terminal-b', true)).toEqual({ ok: true });
+    expect(service.claim('terminal-b', true)).toEqual({ ok: true, tookOverFrom: 'terminal-a' });
     expect(service.touch('terminal-a')).toBe(false);
     expect(service.touch('terminal-b')).toBe(true);
+  });
+
+  it('reports the evicted client\'s human label, if one was given, instead of its raw id', () => {
+    service.claim('terminal-a', false, 'Rajeev -- laptop');
+    expect(service.claim('terminal-b', true)).toEqual({ ok: true, tookOverFrom: 'Rajeev -- laptop' });
+  });
+
+  it('getLabel returns the current holder\'s label, and undefined for anyone else', () => {
+    service.claim('terminal-a', false, 'Rajeev -- laptop');
+    expect(service.getLabel('terminal-a')).toBe('Rajeev -- laptop');
+    expect(service.getLabel('terminal-b')).toBeUndefined();
   });
 
   it('lets the same client re-claim (e.g. a page refresh) without conflict', () => {

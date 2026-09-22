@@ -5,15 +5,20 @@ import type {
   ArchiveReportResponse,
   ArchivesListResponse,
   CurrentReportResponse,
+  CurrentRunResponse,
   OfficerCodesResponse,
   PollResponse,
   PostsResponse,
   ResultsResponse,
+  RunLogResponse,
+  RunsListResponse,
   StorageHealth,
   VoteRequest,
   VoteResponse,
-  SetElectionTypeRequest
+  SetElectionTypeRequest,
+  ElectionRun
 } from '../types/api';
+import type { ElectionType } from '../types/election';
 import type { Branch, HouseId } from '../types/election';
 
 const api = axios.create({
@@ -113,9 +118,11 @@ export const getPollStatus = async (): Promise<PollResponse> => {
 // `force` deliberately evicts another terminal that currently holds the
 // single admin-console slot -- see ADMIN_SESSION_CONFLICT handling in
 // AdminLandingPage. Only pass it after the user has explicitly confirmed
-// a takeover.
-export const verifyAdminSecret = async (adminSecret: string, force = false): Promise<void> => {
-  await api.post('/admin/verify', undefined, {
+// a takeover. `label` is the optional human-entered "who/what device" text
+// (e.g. "Rajeev -- laptop") that lets the action log say a real name once a
+// recording is active -- see adminSessionService.ts.
+export const verifyAdminSecret = async (adminSecret: string, force = false, label?: string): Promise<void> => {
+  await api.post('/admin/verify', { label }, {
     headers: {
       'x-admin-secret': adminSecret,
       ...(force ? { 'x-admin-force': 'true' } : {})
@@ -303,4 +310,47 @@ export const deleteArchive = async (id: string, adminSecret: string): Promise<vo
   await api.delete(`/report/archives/${id}`, {
     headers: { 'x-admin-secret': adminSecret }
   });
+};
+
+// "Start Recording" / "Close Recording" (ROADMAP.md Phase 3). See
+// backend/src/services/runService.ts for exactly what each does.
+export const getCurrentRun = async (adminSecret: string): Promise<CurrentRunResponse> => {
+  const response = await api.get<CurrentRunResponse>('/election-runs/current', {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data;
+};
+
+export const getRuns = async (adminSecret: string): Promise<RunsListResponse> => {
+  const response = await api.get<RunsListResponse>('/election-runs', {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data;
+};
+
+export const getRunLog = async (runId: string, adminSecret: string): Promise<RunLogResponse> => {
+  const response = await api.get<RunLogResponse>(`/election-runs/${runId}/log`, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data;
+};
+
+export const startRecording = async (
+  electionType: ElectionType,
+  name: string,
+  adminSecret: string
+): Promise<ElectionRun> => {
+  const response = await api.post<{ run: ElectionRun }>(
+    '/election-runs/start',
+    { electionType, name },
+    { headers: { 'x-admin-secret': adminSecret } }
+  );
+  return response.data.run;
+};
+
+export const closeRecording = async (adminSecret: string): Promise<ElectionRun> => {
+  const response = await api.post<{ run: ElectionRun }>('/election-runs/close', undefined, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data.run;
 };

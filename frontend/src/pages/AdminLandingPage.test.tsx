@@ -21,7 +21,12 @@ const mockApi = vi.hoisted(() => ({
   getArchivesList: vi.fn(),
   getStorageHealth: vi.fn().mockResolvedValue({ ok: true, lastSuccessAt: null, lastErrorAt: null }),
   logoutAdmin: vi.fn(),
-  setAdminSessionLostHandler: vi.fn()
+  setAdminSessionLostHandler: vi.fn(),
+  getCurrentRun: vi.fn().mockResolvedValue({ run: null }),
+  getRuns: vi.fn().mockResolvedValue({ runs: [] }),
+  getRunLog: vi.fn(),
+  startRecording: vi.fn(),
+  closeRecording: vi.fn()
 }));
 
 vi.mock('../services/api', () => mockApi);
@@ -163,5 +168,38 @@ describe('AdminLandingPage tabs', () => {
     expect(headings).toHaveLength(5);
     const backgroundColors = new Set(headings.map((h) => (h as HTMLElement).style.backgroundColor));
     expect(backgroundColors.size).toBe(5);
+  });
+
+  it('gates officer-code generation on an active recording matching that election type', async () => {
+    mockApi.verifyAdminSecret.mockResolvedValue(undefined);
+    mockApi.getPollStatus.mockResolvedValue({
+      poll: { activeElectionType: 'house', settings: { isOpen: false, allowRevote: false } }
+    });
+    mockApi.getResults.mockResolvedValue({ results: [], totalVotes: 0 });
+    mockApi.getOfficerCodes.mockResolvedValue({ codes: [] });
+    mockApi.getArchivesList.mockResolvedValue({ archives: [] });
+    mockApi.getCurrentRun.mockResolvedValue({
+      run: {
+        id: 'run-1',
+        electionType: 'school',
+        name: 'Test Run',
+        status: 'running',
+        startedAt: Date.now(),
+        startedBy: 'Rajeev -- laptop'
+      }
+    });
+
+    await unlockAsAdmin();
+
+    // Dashboard shows the active-recording banner.
+    await screen.findByText(/RECORDING: Test Run/);
+
+    // Officer Codes tab: House generation is disabled because the active
+    // recording is for School Elections, not House -- generation is gated
+    // per-type on a matching active run (ROADMAP.md Phase 3).
+    fireEvent.click(screen.getByRole('button', { name: /Polling Officer Codes/ }));
+    await screen.findByText('Generate codes for House Elections');
+    expect(screen.getByRole('button', { name: 'Generate for All 8 Houses' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Generate School Codes' })).not.toBeDisabled();
   });
 });

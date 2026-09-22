@@ -73,6 +73,44 @@ export interface OfficerCode {
   closedAt?: number;
   voteCount: number;
   branch?: Branch;
+  everNamed?: boolean;
+  runId?: string;
+}
+
+export type RunStatus = 'running' | 'closed';
+
+export interface ElectionRun {
+  id: string;
+  electionType: ElectionType;
+  name: string;
+  status: RunStatus;
+  startedAt: number;
+  startedBy: string;
+  closedAt?: number;
+  closedBy?: string;
+  archiveIds?: string[];
+}
+
+export interface CurrentRunResponse {
+  run: ElectionRun | null;
+}
+
+export interface RunsListResponse {
+  runs: ElectionRun[];
+}
+
+export interface LogEntry {
+  id: string;
+  timestamp: number;
+  runId: string;
+  actor: string;
+  action: string;
+  details?: Record<string, unknown>;
+}
+
+export interface RunLogResponse {
+  run: ElectionRun;
+  entries: LogEntry[];
 }
 
 export interface OfficerCodesResponse {

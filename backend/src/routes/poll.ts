@@ -4,9 +4,10 @@ import { kioskService } from '../services/kioskService.js';
 import { getPollState } from '../services/voteService.js';
 import { archiveCurrentElection } from '../services/resultsService.js';
 import { findMissingCandidateCoverage } from '../services/candidateService.js';
+import { logAction } from '../services/auditLogService.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { BadRequestError } from '../utils/httpError.js';
+import { BadRequestError, ConflictError } from '../utils/httpError.js';
 import type { PollState, ElectionType } from '../types/election.js';
 
 const sanitizePoll = ({ activeElectionType, settings }: PollState) => ({ activeElectionType, settings });
@@ -23,11 +24,24 @@ pollRouter.get(
 pollRouter.post(
   '/set-type',
   requireAdminSession,
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const { electionType, name } = req.body as { electionType?: string; name?: string };
 
     if (electionType !== 'school' && electionType !== 'house') {
       throw new BadRequestError('Invalid election type. Must be "school" or "house"');
+    }
+
+    // A run ties itself to one election type at start time (see
+    // runService.startRecording) -- switching the type out from under an
+    // active recording would leave the run's own electionType field and the
+    // live poll state disagreeing about what's actually being recorded.
+    // Close the recording first (or just don't switch while one is active).
+    const activeRun = dataStore.getCurrentRun();
+    if (activeRun) {
+      throw new ConflictError(
+        `A recording is currently active ("${activeRun.name}"). Close it before switching election type.`,
+        'RUN_ACTIVE'
+      );
     }
 
     const currentState = getPollState();
@@ -58,6 +72,10 @@ pollRouter.post(
       }
     }));
 
+    // Not logged: this route only ever succeeds while no run is active (see
+    // the RUN_ACTIVE guard above), so it always falls in the free, unlogged
+    // setup period by definition -- consistent with "nothing is logged
+    // before Start Recording."
     res.json({ poll: sanitizePoll(poll) });
   })
 );
@@ -65,7 +83,7 @@ pollRouter.post(
 pollRouter.post(
   '/open',
   requireAdminSession,
-  asyncHandler((_req, res) => {
+  asyncHandler(async (req, res) => {
     const currentState = getPollState();
     if (!currentState.activeElectionType) {
       throw new BadRequestError('Please set an election type before opening the poll');
@@ -87,6 +105,12 @@ pollRouter.post(
       }
     }));
 
+    // Deliberately NOT gated on a run being active (decided 2026-09-23) --
+    // Open Poll keeps working exactly as before regardless of run state.
+    // logAction itself still no-ops if no run happens to be active, so this
+    // only actually writes an entry when Open Poll is used during a
+    // recording.
+    await logAction(req.header('x-admin-client-id'), 'poll.open', { electionType: currentState.activeElectionType });
     res.json({ poll: sanitizePoll(poll) });
   })
 );
@@ -94,7 +118,7 @@ pollRouter.post(
 pollRouter.post(
   '/close',
   requireAdminSession,
-  asyncHandler((_req, res) => {
+  asyncHandler(async (req, res) => {
     kioskService.clearSessions();
     const poll = dataStore.updatePollState((state) => ({
       ...state,
@@ -105,6 +129,7 @@ pollRouter.post(
       }
     }));
 
+    await logAction(req.header('x-admin-client-id'), 'poll.close', {});
     res.json({ poll: sanitizePoll(poll) });
   })
 );
@@ -112,7 +137,7 @@ pollRouter.post(
 pollRouter.post(
   '/reset',
   requireAdminSession,
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const { name } = req.body as { name?: string };
     // Snapshot the current election's results before wiping votes, so a
     // record survives the reset -- see GET /api/report/archives. Skips
@@ -123,6 +148,12 @@ pollRouter.post(
 
     kioskService.clearSessions();
     dataStore.resetVotes();
+    // Deliberately kept as-is (decided 2026-09-23: Close Recording is a new,
+    // separate action, not a replacement for Reset Poll -- zero behavior
+    // change here). Still logged if a run happens to be active when this is
+    // used, since that's exactly the "old button used during a recording,
+    // bypassing Close Recording" scenario worth having a record of.
+    await logAction(req.header('x-admin-client-id'), 'poll.reset', {});
     const poll = dataStore.updatePollState((state) => ({
       ...state,
       activeElectionType: state.activeElectionType, // Preserve

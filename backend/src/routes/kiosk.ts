@@ -3,6 +3,7 @@ import { getPollState } from '../services/voteService.js';
 import { kioskService, SESSION_TTL_MS } from '../services/kioskService.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { logAction } from '../services/auditLogService.js';
 import { ForbiddenError, UnauthorizedError } from '../utils/httpError.js';
 import { kioskGuessLimiter } from '../middleware/rateLimit.js';
 
@@ -94,7 +95,7 @@ kioskRouter.post(
 kioskRouter.post(
   '/close-booth',
   kioskGuessLimiter,
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const { secret } = req.body as { secret?: string };
     const enteredCode = typeof secret === 'string' ? secret.trim() : '';
     const officerCode = enteredCode ? dataStore.findOfficerCode(enteredCode) : undefined;
@@ -103,6 +104,11 @@ kioskRouter.post(
     }
 
     dataStore.closeOfficerCode(officerCode.code);
+    // This is the polling officer's own self-service action, not an admin
+    // one -- there's no admin session/client id here to resolve a human
+    // label from (see auditLogService.resolveActor), so the officer's own
+    // name on the code stands in as the actor instead.
+    await logAction(`officer:${officerCode.officerName || officerCode.code}`, 'officerCode.close', { code: officerCode.code });
     res.status(200).json({ message: 'Polling closed for this booth. This code can no longer be used to activate a ballot.' });
   })
 );

@@ -101,7 +101,13 @@ has no concept of "device" at all today, so it can't say "Shikha's phone" vs.
 - A full second-person **approval** requirement for taking over the session was
   considered and **not** adopted for now — see the "Decision" section after item 7.
 
-**Status:** Designed (the fixes above are agreed; not yet built).
+**Status:** Designed; one small piece pulled forward and built (2026-09-23) as
+part of Phase 3's audit log (item 5): login now optionally captures a short
+human-entered label ("Rajeev -- laptop"), stored on the session and used to
+attribute action-log entries to a real name instead of an anonymous client
+id. The rest of this item -- an active eviction banner, "last active from a
+different session at HH:MM" on the login screen, and distinguishing a
+harmless second tab from a genuinely different device -- is still not built.
 
 ---
 
@@ -348,20 +354,36 @@ Commissioner confirmed this should be built, but scoped to an **election run**
   existence. Flag lapses in large, prominent styling rather than burying them in
   a normal log row.
 - The log itself must not be editable or deletable from within the app by anyone,
-  admin included — otherwise it's not actually a control. Two extra hardening
-  steps, since the log lives in the same Firestore database as everything else
-  and so is theoretically reachable by anyone with direct Google Cloud console
-  access (a separate privilege from the app's admin password — see item 8):
-  1. Set a Firestore security rule making the log collection **append-only at the
-     database level** (`create` allowed, `update`/`delete` denied) — enforced by
-     Google's infrastructure, not the app's own code, so even direct console
-     access can't quietly edit an entry (a delete would still be possible, but
-     would leave a detectable gap in the sequence).
-  2. Include the log in the independent backup from item 8, so a live edit and a
-     backup copy would disagree if the append-only rule were ever somehow
-     bypassed.
+  admin included — otherwise it's not actually a control.
 
-**Status:** Designed.
+**Correction (2026-09-23, during implementation):** the original plan above
+proposed a Firestore *security rule* to make the log append-only "even against
+direct Google Cloud console access." That doesn't actually work: Firestore
+Security Rules only govern requests made through a client-side SDK or the REST
+API under Firebase Auth — they have no effect on the server-side Admin SDK
+(`@google-cloud/firestore`, which is what this backend uses exclusively) or on
+Cloud Console/`gcloud` access, both of which are governed by IAM instead and
+bypass Security Rules entirely by design. Since this app has no client-side
+Firestore access at all, a rules file here would be inert — not deployed by
+anything, and not actually restricting the one access path (the Admin SDK)
+that matters. **The real protection implemented instead:** no code path to
+update or delete a log entry exists anywhere in the application
+(`datastore.ts` only ever provides `appendLogEntry`, never an update/delete
+counterpart) — verified by a test that asserts those methods don't exist.
+That's a guarantee against *this app* editing its own log; it does not (and,
+per the correction above, could not via Security Rules) stop someone with
+direct GCP project access. Detecting that kind of out-of-band tampering is
+still item 8's job (an independent backup a live edit would disagree with) —
+item 8 remains unbuilt, so this gap is real and open, not closed by the log
+alone.
+
+**Status:** **Implemented and live in production** (2026-09-23). The
+`electionRuns`/`actionLog` Firestore subcollections, the append-only-by-code
+guarantee, the "Activity Log" dashboard tab, and logging for every action
+listed above except candidate add/edit/delete (deferred as an explicit
+fast-follow, see ROADMAP.md Phase 3) are all built and covered by tests. Item
+8 (independent backup) is still open and is what would actually catch
+out-of-band tampering — see the correction above.
 
 ---
 
@@ -701,10 +723,39 @@ building; updated to reflect the two decisions above):**
   snapshot(s) (one per branch), and only then is a genuinely fresh state
   available for the next run of that election type.
 
-**Status:** Open — this is the largest single item in this document. The two
-scoping decisions above are now settled; what's left is a focused design pass on
-the data model itself and the migration from today's global officer-code list,
-before implementation starts.
+**Status:** **Implemented and live in production** (2026-09-23), with one
+deliberate scope decision that differs from the proposal above (decided with
+the Election Commissioner before building, since only test data existed in
+production at the time — see ROADMAP.md Phase 3):
+- Officer-code generation is gated on an active run matching that code's
+  election type, exactly as proposed. **Open Poll itself was deliberately
+  left ungated** (not blocking real voting on a run being active), unlike
+  what a strict reading of "only after this point allows officer-code
+  generation" might suggest for the rest of the flow — lower regression risk
+  for this year's live election; can be hardened into a hard gate later once
+  Start Recording has been used successfully across a few real runs.
+- "Close Recording" was built as a **new, separate action from the existing
+  Reset Poll button**, not a replacement — Reset Poll keeps its exact
+  pre-existing behavior (zero regression risk), while Close Recording is the
+  proper run-aware equivalent (archives under the run's name, resets
+  votes/codes for that run's type, closes the poll, seals the run and its
+  log). Reset Poll is still logged if used while a run happens to be active,
+  specifically to catch that bypass scenario.
+- Candidate-change logging (add/edit/delete per post, during a run) is an
+  explicit **fast-follow**, not included in this pass — everything else
+  listed in "Proposed handling" above is built: the `ElectionRun` model,
+  atomic start (name + reset both branches' votes/codes for that type +
+  begin logging), per-branch-and-type code generation tagged with the
+  active run's id, and closing (archive + reset + seal).
+- One addition beyond the original proposal: login now optionally captures a
+  short human-entered label ("Rajeev -- laptop"), pulled forward from item
+  1, specifically so log entries say a real name instead of an anonymous
+  session id — see item 1's status.
+Verified end-to-end with a real browser run: generation correctly blocked
+with no active run and correctly gated to the matching election type once
+one starts; the Activity Log tab shows `run.start`/`officerCode.generate`
+entries with the actor label attached; closing seals the run and produces a
+correctly-named Election History entry.
 
 ---
 

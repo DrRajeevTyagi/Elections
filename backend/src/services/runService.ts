@@ -1,0 +1,104 @@
+import { dataStore } from '../storage/datastore.js';
+import { getPollState } from './voteService.js';
+import { archiveCurrentElection } from './resultsService.js';
+import { kioskService } from './kioskService.js';
+import { logAction, resolveActor } from './auditLogService.js';
+import { BadRequestError, ConflictError } from '../utils/httpError.js';
+import type { ElectionRun, ElectionType } from '../types/election.js';
+
+// "Start Recording" (ELECTION-INTEGRITY-AND-TRUST.md item 11): one button,
+// atomically --
+//   1. brings Poll Controls' election type into step with the run (reusing
+//      the same outgoing-type archive/clear safety net routes/poll.ts's own
+//      /set-type already applies, for the edge case of stray unarchived
+//      votes sitting in the *other* type when this run starts),
+//   2. resets votes and officer codes to zero for this run's type, across
+//      both branches (a safety net -- guarantees a genuinely fresh start
+//      even if the previous run of this type was ended via the older Reset
+//      Poll button instead of Close Recording, which also resets),
+//   3. creates the run record and begins the action log window.
+// Deliberately NOT branch-scoped -- one run always covers both branches
+// together, matching the already-locked decision that Open Poll itself is
+// shared. Only one run may be 'running' at a time.
+export const startRecording = async (
+  electionType: ElectionType,
+  name: string,
+  clientId: string | undefined
+): Promise<ElectionRun> => {
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    throw new BadRequestError('Enter a name for this election run, e.g. "School Elections -- Term 1 2026"');
+  }
+
+  const current = dataStore.getCurrentRun();
+  if (current) {
+    throw new ConflictError(
+      `A recording is already active: "${current.name}" (started ${new Date(current.startedAt).toLocaleString()}). Close it before starting a new one.`,
+      'RUN_ALREADY_ACTIVE'
+    );
+  }
+
+  const pollState = getPollState();
+  if (pollState.activeElectionType && pollState.activeElectionType !== electionType) {
+    const outgoingVotes = dataStore.getVotes().filter((vote) => vote.electionType === pollState.activeElectionType);
+    if (outgoingVotes.length > 0) {
+      archiveCurrentElection();
+      dataStore.resetVotesByType(pollState.activeElectionType);
+    }
+  }
+  kioskService.clearSessions();
+  dataStore.updatePollState((state) => ({
+    ...state,
+    activeElectionType: electionType,
+    settings: { ...state.settings, isOpen: false }
+  }));
+
+  const votesCleared = dataStore.getVotes().filter((vote) => vote.electionType === electionType).length;
+  const codesCleared = dataStore.getOfficerCodes().filter((entry) => entry.electionType === electionType).length;
+  dataStore.resetVotesByType(electionType);
+  dataStore.resetOfficerCodesByType(electionType);
+
+  const actor = resolveActor(clientId);
+  const run = await dataStore.startRun(electionType, trimmedName, actor);
+  // Logged after startRun so this entry (and everything after it) is
+  // correctly tagged with the run that was just created -- logAction reads
+  // whatever dataStore.getCurrentRun() returns at the moment it's called.
+  await logAction(clientId, 'run.start', { electionType, name: trimmedName, votesCleared, codesCleared });
+  return run;
+};
+
+// "Close Recording" -- a new, separate action from the older Reset Poll
+// button (decided 2026-09-23: Reset Poll stays exactly as-is, zero behavior
+// change, for ad-hoc corrections with no run active). Archives the final
+// results under the run's own name, resets votes/codes for this run's type
+// back to zero, closes the poll, and seals the run + its action log.
+export const closeRecording = async (clientId: string | undefined): Promise<ElectionRun> => {
+  const run = dataStore.getCurrentRun();
+  if (!run) {
+    throw new BadRequestError('No recording is currently active.');
+  }
+
+  const totalVotes = dataStore.getVotes().filter((vote) => vote.electionType === run.electionType).length;
+
+  archiveCurrentElection(run.name);
+  const archive = dataStore
+    .getArchives()
+    .filter((entry) => entry.electionType === run.electionType)
+    .sort((a, b) => b.archivedAt - a.archivedAt)[0];
+
+  kioskService.clearSessions();
+  dataStore.resetVotesByType(run.electionType);
+  dataStore.resetOfficerCodesByType(run.electionType);
+  dataStore.updatePollState((state) => ({
+    ...state,
+    settings: { ...state.settings, isOpen: false }
+  }));
+
+  const actor = resolveActor(clientId);
+  // Logged before closeRun below -- logAction's "is a run active" check
+  // must still see this run as running, or the closing entry itself would
+  // never get written.
+  await logAction(clientId, 'run.close', { archiveId: archive?.id, totalVotes });
+  const closed = await dataStore.closeRun(run.id, actor, archive ? [archive.id] : []);
+  return closed!;
+};

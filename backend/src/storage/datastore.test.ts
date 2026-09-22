@@ -243,3 +243,91 @@ describe('DataStore -- officer code case-insensitive matching (2026-09-22)', () 
     expect(store.findOfficerCode(code)).toBeUndefined();
   });
 });
+
+describe('DataStore -- election runs and the append-only action log (ROADMAP.md Phase 3)', () => {
+  beforeEach(() => {
+    sharedFakeFirestore = new FakeFirestore();
+  });
+
+  it('starts with no active run', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    expect(store.getCurrentRun()).toBeUndefined();
+  });
+
+  it('startRun creates a running run, retrievable as the current run', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    const run = await store.startRun('school', '  School Elections -- Term 1  ', 'Rajeev -- laptop');
+
+    expect(run.status).toBe('running');
+    expect(run.name).toBe('School Elections -- Term 1'); // trimmed
+    expect(store.getCurrentRun()?.id).toBe(run.id);
+
+    const doc = sharedFakeFirestore.store.get(`school-election/state/electionRuns/${run.id}`) as { status?: string };
+    expect(doc.status).toBe('running'); // actually durable, not just in memory
+  });
+
+  it('closeRun marks the run closed and clears getCurrentRun', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    const run = await store.startRun('school', 'Test Run', 'actor-1');
+
+    const closed = await store.closeRun(run.id, 'actor-1', ['archive-1']);
+    expect(closed?.status).toBe('closed');
+    expect(closed?.archiveIds).toEqual(['archive-1']);
+    expect(store.getCurrentRun()).toBeUndefined();
+  });
+
+  it('appendLogEntry persists an entry that survives a restart, with no update/delete method available to alter it', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    const run = await store.startRun('school', 'Test Run', 'actor-1');
+    await store.appendLogEntry({ runId: run.id, actor: 'actor-1', action: 'poll.open' });
+
+    expect(store.getLogEntries(run.id)).toHaveLength(1);
+    // Nothing in this class's public API can edit or remove that entry --
+    // this is the actual enforcement of append-only, not a Firestore rule.
+    expect((store as unknown as Record<string, unknown>).updateLogEntry).toBeUndefined();
+    expect((store as unknown as Record<string, unknown>).deleteLogEntry).toBeUndefined();
+
+    const second = await importFreshDataStore();
+    await second.init();
+    expect(second.getLogEntries(run.id)).toHaveLength(1);
+  });
+
+  it('getLogEntries filters by run and returns entries in chronological order', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    const runA = await store.startRun('school', 'Run A', 'actor-1');
+    await store.appendLogEntry({ runId: runA.id, actor: 'actor-1', action: 'poll.open' });
+    await store.closeRun(runA.id, 'actor-1', []);
+
+    const runB = await store.startRun('school', 'Run B', 'actor-1');
+    await store.appendLogEntry({ runId: runB.id, actor: 'actor-1', action: 'officerCode.generate', details: { count: 3 } });
+
+    expect(store.getLogEntries(runA.id)).toHaveLength(1);
+    expect(store.getLogEntries(runB.id)).toHaveLength(1);
+    expect(store.getLogEntries()).toHaveLength(2); // no filter -- everything
+  });
+
+  it('resetOfficerCodesByType clears codes of one type without touching the other', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    store.generateOfficerCodes(2, 'school');
+    store.generateOfficerCodes(2, 'house', 'Anand');
+
+    store.resetOfficerCodesByType('school');
+
+    expect(store.getOfficerCodes().filter((c) => c.electionType === 'school')).toHaveLength(0);
+    expect(store.getOfficerCodes().filter((c) => c.electionType === 'house')).toHaveLength(2);
+  });
+
+  it('generateOfficerCodes tags codes with the given runId', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    const run = await store.startRun('school', 'Test Run', 'actor-1');
+    const [code] = store.generateOfficerCodes(1, 'school', undefined, 'dwarka', run.id);
+    expect(code.runId).toBe(run.id);
+  });
+});

@@ -69,6 +69,54 @@ export interface OfficerCode {
   // has been allotted to a real officer, it becomes permanent regardless
   // of whether it was ever used to vote.
   everNamed?: boolean;
+  // Which election run this code was generated under (see ElectionRun
+  // below). Undefined for codes generated before this feature existed, or
+  // (in principle) any code generated outside an active run -- generation
+  // is gated on an active run matching this code's electionType, so in
+  // practice every code generated after this feature ships always has one.
+  runId?: string;
+}
+
+export type RunStatus = 'running' | 'closed';
+
+// The "Start Recording" / "Close Recording" concept (ELECTION-INTEGRITY-AND-TRUST.md
+// items 5 and 11). Deliberately NOT branch-scoped -- a run always covers both
+// branches together, matching the already-locked decision that Open Poll
+// itself is shared, not per-branch. At most one run has status 'running' at
+// any given time; everything logged while it's running is permanent and
+// immutable (see LogEntry) until it's closed.
+export interface ElectionRun {
+  id: string;
+  electionType: ElectionType;
+  name: string; // human-entered label, e.g. "School Elections -- Term 1 2026"
+  status: RunStatus;
+  startedAt: number;
+  startedBy: string; // actor label -- see LogEntry
+  closedAt?: number;
+  closedBy?: string;
+  // Filled in when the run is closed -- the ElectionArchive id(s) this run
+  // produced (one per branch, once branch-split archiving lands -- see
+  // ROADMAP.md Phase 0's deliberately-deferred archive-splitting note).
+  archiveIds?: string[];
+}
+
+// One entry in the permanent, append-only action log. Only ever created,
+// never updated or deleted -- there is deliberately no update/delete method
+// for this anywhere in datastore.ts (see ELECTION-INTEGRITY-AND-TRUST.md
+// item 5). Writing an entry is itself gated on a run being currently active
+// (see services/auditLogService.ts) -- nothing is logged before "Start
+// Recording," by design.
+export interface LogEntry {
+  id: string;
+  timestamp: number;
+  runId: string;
+  // The human-entered label captured at login/takeover time (see
+  // adminSessionService.ts), falling back to the raw client id if no label
+  // was given -- see ELECTION-INTEGRITY-AND-TRUST.md item 1/item 7 for why
+  // this can't yet be a verified individual identity.
+  actor: string;
+  action: string;
+  details?: Record<string, unknown>;
 }
 
 export interface PollState {

@@ -72,10 +72,20 @@ to Cloud Run):
      lowercase code can never collide with an old uppercase one merely by
      case. Covered by new tests in `officerCode.test.ts` and
      `datastore.test.ts`.
-- **Next, per explicit direction (2026-09-22): Phase 3 — "Start Recording" +
-  the audit log.** Not started yet. See Phase 3 below for what it involves;
-  it's the largest remaining piece and needs its own data-model design pass
-  before coding starts, same as Phase 0 did.
+- **Phase 3 — "Start Recording" + the audit log — done (2026-09-23).** The
+  `ElectionRun`/`LogEntry` model, the Dashboard "Recording" section (Start/
+  Close Recording), officer-code generation gated on a matching active run,
+  and a new "Activity Log" tab are all built, tested, and verified end-to-end
+  with a real browser run. See Phase 3 below for the exact scope, the one
+  correction to the original design (a Firestore security rule can't
+  actually enforce append-only against this app's own Admin-SDK access —
+  the real guarantee is that no update/delete code path exists at all), and
+  what's deliberately deferred (candidate-change logging, hard-gating Open
+  Poll on an active run).
+- **Next:** no explicit direction given yet for what comes after Phase 3.
+  Candidate-change logging (Phase 3's own fast-follow) or Phase 1's
+  remaining items (session/device labeling, named admin credentials) are
+  the most natural next steps — see "Bandwidth notes" below.
 
 This project currently has three plans, each with its own document:
 
@@ -241,49 +251,79 @@ needed to start entering AN's candidates for real, not wait for Phase 3/4.
   branch selector — `routes/report.ts` still doesn't accept a `branch`
   parameter at all (see Phase 0's "still open" note).
 
-## Phase 3 — "Start Recording" + the audit log (trust items 11 and 5, built together) — NEXT
+## Phase 3 — "Start Recording" + the audit log (trust items 11 and 5, built together) — DONE
 
-Explicitly the next thing to build (direction given 2026-09-22). Not started.
+Built and deployed 2026-09-23, following a clarifying-questions pass with the
+Election Commissioner beforehand (see the four decisions below marked
+"2026-09-23").
 
-Now naturally follows the "collections, not array fields" pattern Phase 0
-already established for votes — the audit log is built the same way from day
-one (its own Firestore collection, append-only security rule, one document per
-logged action) rather than needing a later migration. The `ElectionRun` record
-itself stays `electionType + start marker`, not branch-scoped, per the earlier
-decision that one recording always covers both branches together.
+Follows the "collections, not array fields" pattern Phase 0 already
+established for votes — `electionRuns` and `actionLog` are their own
+Firestore subcollections under `school-election/state`, exactly like `votes`
+(disk mode keeps them on the main document, same as before). The
+`ElectionRun` record stays `electionType + start marker`, not branch-scoped,
+per the earlier decision that one recording always covers both branches
+together.
 
-Recap of what's already decided for this phase (see
-[ELECTION-INTEGRITY-AND-TRUST.md](ELECTION-INTEGRITY-AND-TRUST.md) items 5 and
-11 for the full discussion/rationale — this is a summary, not a replacement):
+What's built, matching the design recap from before implementation:
 
-- **Why it exists at all, primarily:** the log can't start recording from when
-  the app was first touched — normal setup work (adding candidates, fixing a
-  typo, testing codes) would drown out anything that actually matters. "Start
-  Recording" draws the line: everything before it is free, unlogged setup;
-  everything after is permanent and immutable until the run closes.
-- **One button does both, atomically:** pressing "Start Recording" both names
-  the log (asks which election it covers) *and* resets votes/officer codes to
-  zero for that run — not two separate steps. Candidates are deliberately
-  **not** reset (they take real care to set up).
-- **One shared recording across both branches**, matching the already-locked
-  decision that Open Poll itself is shared, not per-branch — not one recording
-  per branch.
-- **Officer code generation stays scoped per branch *and* per type within
-  that one run** — e.g. "Generate codes for Dwarka School Elections" — four
-  distinct combinations, not one combined action.
-- **Deletion rule for codes (item 3, ties in here):** a code can only be
-  deleted if it was *never* named (not just currently blank) **and** has zero
-  votes — once named, permanent regardless of use.
-- **The log itself:** its own Firestore collection (one document per logged
-  action, not a field on the shared document — same pattern as the votes
-  migration in Phase 0), with a database-level append-only security rule and
-  its own entry in the Phase 1 backup coverage. Large, hard-to-miss styling in
-  the dashboard for anything trust-relevant (e.g. a lapse), not a quiet row in
-  a long table.
-- **Not yet decided / needs its own design pass before coding:** the exact
-  `ElectionRun` data model, what fields the "Start Recording" prompt collects
-  beyond the election name, and how sealing a run on close interacts with
-  Election History's existing archive flow.
+- **The run boundary:** "Start Recording" (`POST /election-runs/start`) asks
+  for an election type and a name, then atomically resets votes and officer
+  codes to zero for that type (both branches), and creates the run. Nothing
+  is logged before this point — normal setup work stays free and unlogged, by
+  design.
+- **One shared recording across both branches** — confirmed, one run/one log
+  covers both Dwarka and AN together, matching Open Poll's own shared state.
+- **Officer code generation gated on a matching active run** — `POST
+  /officer-codes/generate` now requires `dataStore.getCurrentRun()` to exist
+  and match the code's `electionType`; codes are tagged with `runId`.
+  Generation stays scoped per branch (via the existing `branch` param) *and*
+  per type (via the run), so the four Dwarka/AN × School/House combinations
+  still work independently within one recording.
+- **The log itself:** its own Firestore subcollection, one document per
+  action (`admin.session.claim`/`takeover`, `poll.open`/`close`/`reset`,
+  `officerCode.generate`/`name`/`reopen`/`delete`/`close`,
+  `archive.create`/`rename`/`delete`, `run.start`/`close`), with `logAction`
+  silently no-op-ing whenever no run is active. No update/delete method for
+  log entries exists anywhere in `datastore.ts` — verified by a test that
+  asserts those methods don't exist. A new "Activity Log" dashboard tab shows
+  entries for any run (current or past), with takeovers and the legacy Reset
+  Poll button (used while a recording is active) flagged in red as
+  trust-relevant.
+- **(2026-09-23) Existing production data was only test/dummy codes**,
+  confirmed with the Election Commissioner before building — so the reset-to-
+  zero behavior above needed no migration/grandfathering path.
+- **(2026-09-23) Open Poll deliberately left ungated.** Generation is gated on
+  an active run, but `POST /poll/open` is not — lower regression risk to this
+  year's live election. Can be hardened into a hard gate later once Start
+  Recording has been used successfully across a few real runs.
+- **(2026-09-23) "Close Recording" is a new, separate action, not a
+  replacement for Reset Poll.** `POST /election-runs/close` archives under the
+  run's name (reusing `archiveCurrentElection`), resets votes/codes for that
+  run's type, closes the poll, and seals the run — while the existing Reset
+  Poll button keeps its exact prior behavior, zero change, for ad-hoc
+  corrections with no run active. Reset Poll is still logged if used while a
+  run happens to be active, specifically to catch that bypass.
+- **(2026-09-23) Candidate-change logging deferred as a fast-follow**, not
+  included in this pass.
+- **One addition beyond the original design:** login now optionally captures
+  a short human-entered label ("Rajeev -- laptop"), pulled forward from trust
+  item 1, so log entries say a real name instead of an anonymous session id.
+- **One correction to the original design**, made during implementation: a
+  Firestore security rule cannot actually enforce append-only against this
+  app's own writes — Security Rules only govern client-SDK/REST access under
+  Firebase Auth, not the server-side Admin SDK this backend uses exclusively,
+  nor Cloud Console/`gcloud` access (both governed by IAM instead). No rules
+  file was added; the actual guarantee is the missing update/delete code path
+  described above. See ELECTION-INTEGRITY-AND-TRUST.md item 5 for the full
+  explanation. Item 8 (independent backup) remains the only thing that would
+  actually catch tampering via direct GCP access, and is still unbuilt.
+
+Verified end-to-end with a real browser run (not just unit tests): generation
+correctly blocked with no active run and correctly gated to the matching
+type once one starts; the Activity Log tab shows entries with the actor
+label attached; closing seals the run and produces a correctly-named
+Election History entry.
 
 ## Phase 4 — builds on an active recording
 

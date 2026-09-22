@@ -5,7 +5,7 @@ import { Firestore } from '@google-cloud/firestore';
 import { env } from '../config/env.js';
 import { DEFAULT_CANDIDATES } from '../config/posts.js';
 import { generateUniqueCodes } from '../utils/officerCode.js';
-import { Candidate, PollState, StoredVote, ElectionType, OfficerCode, ElectionArchive, HouseId, Branch } from '../types/election.js';
+import { Candidate, PollState, StoredVote, ElectionType, OfficerCode, ElectionArchive, HouseId, Branch, ElectionRun, LogEntry } from '../types/election.js';
 
 // Single document holds candidates/pollState/officerCodes/archives. This
 // keeps the in-memory, synchronous DataStore API unchanged for those; only
@@ -23,6 +23,12 @@ import { Candidate, PollState, StoredVote, ElectionType, OfficerCode, ElectionAr
 const FIRESTORE_COLLECTION = 'school-election';
 const FIRESTORE_DOC_ID = 'state';
 const FIRESTORE_VOTES_SUBCOLLECTION = 'votes';
+// Runs and log entries are brand new (no legacy data to migrate, unlike
+// votes) -- they follow the same "own subcollection, not an array field on
+// the shared document" pattern from day one. See ELECTION-INTEGRITY-AND-
+// TRUST.md items 5/11 and ROADMAP.md Phase 3.
+const FIRESTORE_RUNS_SUBCOLLECTION = 'electionRuns';
+const FIRESTORE_LOG_SUBCOLLECTION = 'actionLog';
 // Firestore batch writes cap at 500 operations; stay comfortably under that
 // so a large Reset Poll's vote deletion never risks hitting the ceiling.
 const VOTE_DELETE_BATCH_SIZE = 450;
@@ -40,6 +46,11 @@ interface ElectionData {
   pollState: PollState;
   officerCodes: OfficerCode[];
   archives: ElectionArchive[];
+  // Disk mode only (matches votes' disk-mode behavior) -- in Firestore mode
+  // these live in their own subcollections, never on this document. See
+  // loadRuns()/loadLogEntries().
+  runs: ElectionRun[];
+  actionLog: LogEntry[];
 }
 
 const cloneCandidates = (candidates: Candidate[]): Candidate[] =>
@@ -58,7 +69,9 @@ const createDefaultData = (): ElectionData => ({
   votes: [],
   pollState: createDefaultPollState(),
   officerCodes: [],
-  archives: []
+  archives: [],
+  runs: [],
+  actionLog: []
 });
 
 const isCandidate = (value: unknown): value is Candidate => {
@@ -152,6 +165,35 @@ const isElectionArchive = (value: unknown): value is ElectionArchive => {
   );
 };
 
+const isElectionRun = (value: unknown): value is ElectionRun => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const run = value as ElectionRun;
+  return (
+    typeof run.id === 'string' &&
+    (run.electionType === 'school' || run.electionType === 'house') &&
+    typeof run.name === 'string' &&
+    (run.status === 'running' || run.status === 'closed') &&
+    typeof run.startedAt === 'number' &&
+    typeof run.startedBy === 'string'
+  );
+};
+
+const isLogEntry = (value: unknown): value is LogEntry => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const entry = value as LogEntry;
+  return (
+    typeof entry.id === 'string' &&
+    typeof entry.timestamp === 'number' &&
+    typeof entry.runId === 'string' &&
+    typeof entry.actor === 'string' &&
+    typeof entry.action === 'string'
+  );
+};
+
 // What the admin dashboard's Storage status indicator reports (see
 // routes/admin.ts GET /storage-health). Distinguishes "every write so far
 // has landed" from "writes are currently failing" -- the thing a vote count
@@ -170,6 +212,10 @@ export class DataStore {
   // ElectionData.votes above for why this is separate from `this.data` once
   // Firestore mode is loaded. Populated by loadVotes() at startup.
   private votes: StoredVote[] = [];
+  // Live, in-memory source of truth for runs/log entries -- same reasoning
+  // as `votes` above. Populated by loadRuns()/loadLogEntries() at startup.
+  private runs: ElectionRun[] = [];
+  private logEntries: LogEntry[] = [];
   private writeQueue: Promise<void> = Promise.resolve();
   private readonly filePath = env.dataFile;
   private readonly firestore = env.useFirestore ? new Firestore() : null;
@@ -178,12 +224,48 @@ export class DataStore {
   async init(): Promise<void> {
     await this.load();
     await this.loadVotes();
+    await this.loadRuns();
+    await this.loadLogEntries();
     await this.flush();
     this.storageHealth = { ok: true, lastSuccessAt: Date.now(), lastErrorAt: null };
   }
 
+  private subcollection(name: string) {
+    return this.firestore!.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC_ID).collection(name);
+  }
+
   private votesCollection() {
-    return this.firestore!.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC_ID).collection(FIRESTORE_VOTES_SUBCOLLECTION);
+    return this.subcollection(FIRESTORE_VOTES_SUBCOLLECTION);
+  }
+
+  private runsCollection() {
+    return this.subcollection(FIRESTORE_RUNS_SUBCOLLECTION);
+  }
+
+  private logCollection() {
+    return this.subcollection(FIRESTORE_LOG_SUBCOLLECTION);
+  }
+
+  // No migration needed (unlike loadVotes) -- runs/log entries are a brand
+  // new concept with no legacy inline data to move. Disk mode keeps them on
+  // the main document (see ElectionData.runs/actionLog); Firestore mode
+  // reads them from their own subcollection.
+  private async loadRuns(): Promise<void> {
+    if (!this.firestore) {
+      this.runs = this.data.runs;
+      return;
+    }
+    const snapshot = await this.runsCollection().get();
+    this.runs = snapshot.docs.map((doc) => doc.data() as ElectionRun);
+  }
+
+  private async loadLogEntries(): Promise<void> {
+    if (!this.firestore) {
+      this.logEntries = this.data.actionLog;
+      return;
+    }
+    const snapshot = await this.logCollection().get();
+    this.logEntries = snapshot.docs.map((doc) => doc.data() as LogEntry);
   }
 
   // In disk mode, votes stay embedded in the main file (loadFromDisk already
@@ -304,6 +386,14 @@ export class DataStore {
       defaults.officerCodes = parsed.officerCodes.map((entry) => normalizeOfficerCode({ ...entry }));
     }
 
+    if (Array.isArray(parsed.runs) && parsed.runs.every((entry) => isElectionRun(entry))) {
+      defaults.runs = parsed.runs.map((entry) => ({ ...entry }));
+    }
+
+    if (Array.isArray(parsed.actionLog) && parsed.actionLog.every((entry) => isLogEntry(entry))) {
+      defaults.actionLog = parsed.actionLog.map((entry) => ({ ...entry, details: entry.details ? { ...entry.details } : undefined }));
+    }
+
     if (Array.isArray(parsed.archives) && parsed.archives.every((entry) => isElectionArchive(entry))) {
       defaults.archives = parsed.archives.map((entry) =>
         normalizeArchiveBranch({
@@ -333,17 +423,17 @@ export class DataStore {
 
   private async persist(): Promise<void> {
     // Built explicitly rather than persisting `this.data` as-is: in
-    // Firestore mode, this.data.votes is always [] after loadVotes()'s
-    // migration and nothing else should ever write votes back onto it, but
+    // Firestore mode, this.data.votes/runs/actionLog are always [] and
+    // nothing else should ever write them back onto the main document, but
     // building the payload this way (rather than trusting that invariant
     // silently) keeps this document guaranteed small no matter what. In disk
-    // mode, `this.votes` is the authoritative in-memory array (see
-    // resetVotes/resetVotesByType, which reassign it) -- persist() must read
-    // from `this.votes`, not `this.data.votes`, or a reset would write stale
-    // votes back to disk.
+    // mode, `this.votes`/`this.runs`/`this.logEntries` are the authoritative
+    // in-memory arrays -- persist() must read from those, not `this.data`'s
+    // copies, or a reset/run-start/log-append would write stale data back to
+    // disk.
     const payload: ElectionData = this.firestore
-      ? { ...this.data, votes: [] }
-      : { ...this.data, votes: this.votes };
+      ? { ...this.data, votes: [], runs: [], actionLog: [] }
+      : { ...this.data, votes: this.votes, runs: this.runs, actionLog: this.logEntries };
 
     if (this.firestore) {
       await this.firestore.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC_ID).set(JSON.parse(JSON.stringify(payload)));
@@ -379,6 +469,32 @@ export class DataStore {
       }
       await batch.commit();
     }
+  }
+
+  // Runs are updated in place (started -> closed), unlike votes/log entries
+  // which are pure create-only -- a full-document overwrite via .set() is
+  // fine either way since a run is a small, single document.
+  private async persistRun(run: ElectionRun): Promise<void> {
+    if (this.firestore) {
+      await this.runsCollection().doc(run.id).set(JSON.parse(JSON.stringify(run)));
+      return;
+    }
+    await this.persist();
+  }
+
+  // No update/delete counterpart exists anywhere in this class, deliberately
+  // -- this is the actual enforcement of the audit log's append-only
+  // guarantee (ELECTION-INTEGRITY-AND-TRUST.md item 5). A Firestore security
+  // rule denying update/delete on this subcollection is added as
+  // defense-in-depth, but doesn't stop direct Admin-SDK/Console access (see
+  // ROADMAP.md Phase 3's design note) -- the real guarantee is that no code
+  // path to edit or remove an entry exists in this application at all.
+  private async persistLogEntry(entry: LogEntry): Promise<void> {
+    if (this.firestore) {
+      await this.logCollection().doc(entry.id).set(JSON.parse(JSON.stringify(entry)));
+      return;
+    }
+    await this.persist();
   }
 
   // Returns a promise for THIS write specifically, so a caller that needs to
@@ -421,6 +537,14 @@ export class DataStore {
 
   private queueVoteDeletion(ids: string[]): Promise<void> {
     return this.queueWrite(() => (this.firestore ? this.deleteVoteDocs(ids) : this.persist()));
+  }
+
+  private queueRunPersist(run: ElectionRun): Promise<void> {
+    return this.queueWrite(() => this.persistRun(run));
+  }
+
+  private queueLogPersist(entry: LogEntry): Promise<void> {
+    return this.queueWrite(() => this.persistLogEntry(entry));
   }
 
   private async flush(): Promise<void> {
@@ -523,13 +647,30 @@ export class DataStore {
     return entry ? { ...entry } : undefined;
   }
 
-  generateOfficerCodes(count: number, electionType: ElectionType, house?: HouseId, branch: Branch = DEFAULT_BRANCH): OfficerCode[] {
+  generateOfficerCodes(
+    count: number,
+    electionType: ElectionType,
+    house?: HouseId,
+    branch: Branch = DEFAULT_BRANCH,
+    runId?: string
+  ): OfficerCode[] {
     const newCodes = generateUniqueCodes(count, this.data.officerCodes.map((entry) => entry.code));
     const createdAt = Date.now();
-    const entries: OfficerCode[] = newCodes.map((code) => ({ code, officerName: '', everNamed: false, electionType, house, createdAt, branch }));
+    const entries: OfficerCode[] = newCodes.map((code) => ({ code, officerName: '', everNamed: false, electionType, house, createdAt, branch, runId }));
     this.data.officerCodes.push(...entries);
     this.queuePersist();
     return entries;
+  }
+
+  // Used by "Start Recording"/"Close Recording" (ROADMAP.md Phase 3) to
+  // clear out officer codes down to zero for one election type, across both
+  // branches, at a run boundary -- deliberately bypassing item 3's
+  // never-named-and-zero-votes deletion rule, because this is a disclosed,
+  // well-logged, whole-run reset rather than a targeted single-code delete
+  // that could quietly hide misuse. Only ever called from runService.ts.
+  resetOfficerCodesByType(electionType: ElectionType): void {
+    this.data.officerCodes = this.data.officerCodes.filter((entry) => entry.electionType !== electionType);
+    this.queuePersist();
   }
 
   closeOfficerCode(code: string): OfficerCode | undefined {
@@ -622,6 +763,68 @@ export class DataStore {
       this.queuePersist();
     }
     return deleted;
+  }
+
+  // At most one run is ever 'running' at a time -- enforced by runService.ts
+  // refusing to start a new one while this returns a result.
+  getCurrentRun(): ElectionRun | undefined {
+    const running = this.runs.find((run) => run.status === 'running');
+    return running ? { ...running } : undefined;
+  }
+
+  getRun(id: string): ElectionRun | undefined {
+    const run = this.runs.find((entry) => entry.id === id);
+    return run ? { ...run } : undefined;
+  }
+
+  getRuns(): ElectionRun[] {
+    return this.runs.map((run) => ({ ...run })).sort((a, b) => b.startedAt - a.startedAt);
+  }
+
+  // Awaits persistence, same reasoning as addVote -- starting/closing a run
+  // is exactly the kind of action that must be durable before the admin is
+  // told it succeeded.
+  async startRun(electionType: ElectionType, name: string, actor: string): Promise<ElectionRun> {
+    const run: ElectionRun = {
+      id: randomUUID(),
+      electionType,
+      name: name.trim(),
+      status: 'running',
+      startedAt: Date.now(),
+      startedBy: actor
+    };
+    this.runs.push(run);
+    await this.queueRunPersist(run);
+    return { ...run };
+  }
+
+  async closeRun(runId: string, actor: string, archiveIds: string[]): Promise<ElectionRun | undefined> {
+    const run = this.runs.find((entry) => entry.id === runId);
+    if (!run) {
+      return undefined;
+    }
+    run.status = 'closed';
+    run.closedAt = Date.now();
+    run.closedBy = actor;
+    run.archiveIds = archiveIds;
+    await this.queueRunPersist(run);
+    return { ...run };
+  }
+
+  // The only way a LogEntry is ever created -- there is deliberately no
+  // corresponding update/delete method (see persistLogEntry above).
+  async appendLogEntry(entry: Omit<LogEntry, 'id' | 'timestamp'>): Promise<LogEntry> {
+    const full: LogEntry = { ...entry, id: randomUUID(), timestamp: Date.now() };
+    this.logEntries.push(full);
+    await this.queueLogPersist(full);
+    return full;
+  }
+
+  getLogEntries(runId?: string): LogEntry[] {
+    const list = runId ? this.logEntries.filter((entry) => entry.runId === runId) : this.logEntries;
+    return list
+      .map((entry) => ({ ...entry, details: entry.details ? { ...entry.details } : undefined }))
+      .sort((a, b) => a.timestamp - b.timestamp);
   }
 }
 

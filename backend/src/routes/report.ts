@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAdminSession } from '../middleware/adminAuth.js';
 import { buildElectionSnapshot } from '../services/resultsService.js';
+import { logAction } from '../services/auditLogService.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError, NotFoundError } from '../utils/httpError.js';
@@ -26,13 +27,14 @@ reportRouter.get(
 // right after Close Poll, without needing to also wipe the live data.
 reportRouter.post(
   '/archives',
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const { name } = req.body as { name?: string };
     const snapshot = buildElectionSnapshot(name);
     if (!snapshot) {
       throw new BadRequestError('No election is currently set up, so there is nothing to save yet.');
     }
     dataStore.addArchive(snapshot);
+    await logAction(req.header('x-admin-client-id'), 'archive.create', { archiveId: snapshot.id, name: snapshot.name });
     res.status(201).json({ report: snapshot });
   })
 );
@@ -68,7 +70,7 @@ reportRouter.get(
 // created before naming was added, or a typo.
 reportRouter.put(
   '/archives/:id',
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const { name } = req.body as { name?: string };
     if (typeof name !== 'string') {
       throw new BadRequestError('Name is required');
@@ -77,6 +79,7 @@ reportRouter.put(
     if (!updated) {
       throw new NotFoundError('Archived report not found');
     }
+    await logAction(req.header('x-admin-client-id'), 'archive.rename', { archiveId: updated.id, name: updated.name });
     res.json({ report: updated });
   })
 );
@@ -85,11 +88,12 @@ reportRouter.put(
 // entries left behind by a teacher testing round before real polling day.
 reportRouter.delete(
   '/archives/:id',
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const deleted = dataStore.deleteArchive(req.params.id);
     if (!deleted) {
       throw new NotFoundError('Archived report not found');
     }
+    await logAction(req.header('x-admin-client-id'), 'archive.delete', { archiveId: req.params.id });
     res.status(204).send();
   })
 );

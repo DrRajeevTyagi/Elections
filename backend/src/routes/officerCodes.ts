@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAdminSession } from '../middleware/adminAuth.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { logAction } from '../services/auditLogService.js';
 import { BadRequestError, ConflictError } from '../utils/httpError.js';
 import { isValidHouseId, isValidBranch } from '../config/posts.js';
 
@@ -23,7 +24,7 @@ officerCodesRouter.get(
 
 officerCodesRouter.post(
   '/generate',
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const { count, house, branch } = req.body as { count?: number; house?: string; branch?: string };
     const parsedCount = Number(count);
     if (!Number.isInteger(parsedCount) || parsedCount < 1 || parsedCount > 200) {
@@ -41,18 +42,45 @@ officerCodesRouter.post(
     // its electionType doesn't match whichever election is currently
     // active).
     const electionType = house !== undefined ? 'house' : 'school';
+
+    // Generation requires an active recording matching this election type
+    // (ELECTION-INTEGRITY-AND-TRUST.md item 11: "only after this point
+    // allows officer-code generation" -- every code belongs to exactly one
+    // run). Deliberately narrower than the Open Poll gate (which stays
+    // ungated for now, decided 2026-09-23) -- this only affects the
+    // "Generate codes" buttons, not already-open voting.
+    const run = dataStore.getCurrentRun();
+    if (!run) {
+      throw new BadRequestError(
+        `Start a recording for ${electionType === 'house' ? 'House' : 'School'} Elections before generating codes.`
+      );
+    }
+    if (run.electionType !== electionType) {
+      throw new BadRequestError(
+        `The active recording ("${run.name}") is for ${run.electionType === 'house' ? 'House' : 'School'} Elections, not ` +
+          `${electionType === 'house' ? 'House' : 'School'} Elections. Close it and start a matching recording first.`
+      );
+    }
+
     // Defaults to 'dwarka' when omitted, same as every other branch-aware
     // write in this codebase -- see datastore.ts's DEFAULT_BRANCH. Until the
     // admin UI sends a branch (see ROADMAP.md Phase 2), every code generated
     // stays 'dwarka', unchanged from today.
-    const codes = dataStore.generateOfficerCodes(parsedCount, electionType, house, branch);
+    const codes = dataStore.generateOfficerCodes(parsedCount, electionType, house, branch, run.id);
+    await logAction(req.header('x-admin-client-id'), 'officerCode.generate', {
+      count: parsedCount,
+      electionType,
+      house,
+      branch: branch ?? 'dwarka',
+      codes: codes.map((entry) => entry.code)
+    });
     res.status(201).json({ codes });
   })
 );
 
 officerCodesRouter.put(
   '/:code',
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const { code } = req.params;
     const { officerName } = req.body as { officerName?: string };
     // Matching is case-insensitive (see datastore.ts's codesMatch), so no
@@ -63,25 +91,30 @@ officerCodesRouter.put(
     if (!updated) {
       throw new BadRequestError('Code not found');
     }
+    await logAction(req.header('x-admin-client-id'), 'officerCode.name', {
+      code: updated.code,
+      officerName: updated.officerName
+    });
     res.json({ code: updated });
   })
 );
 
 officerCodesRouter.post(
   '/:code/reopen',
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const { code } = req.params;
     const updated = dataStore.reopenOfficerCode(code);
     if (!updated) {
       throw new BadRequestError('Code not found');
     }
+    await logAction(req.header('x-admin-client-id'), 'officerCode.reopen', { code: updated.code });
     res.json({ code: updated });
   })
 );
 
 officerCodesRouter.delete(
   '/:code',
-  asyncHandler((req, res) => {
+  asyncHandler(async (req, res) => {
     const { code } = req.params;
     const entry = dataStore.findOfficerCode(code);
     if (!entry) {
@@ -111,6 +144,7 @@ officerCodesRouter.delete(
       );
     }
     dataStore.deleteOfficerCode(entry.code);
+    await logAction(req.header('x-admin-client-id'), 'officerCode.delete', { code: entry.code });
     res.status(204).send();
   })
 );
