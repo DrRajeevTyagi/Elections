@@ -55,12 +55,13 @@ kioskRouter.post(
     // itself (set at generation time) -- never from client input.
     const house = officerCode.electionType === 'house' ? officerCode.house : undefined;
 
-    const session = kioskService.createSession(officerCode.code, house);
+    const session = kioskService.createSession(officerCode.code, house, officerCode.branch);
     const stationVoteCount = dataStore.countVotesByOfficerCode(officerCode.code);
     res.status(201).json({
       token: session.token,
       officerName: officerCode.officerName,
       house,
+      branch: officerCode.branch,
       stationVoteCount,
       expiresAt: session.activatedAt + SESSION_TTL_MS
     });

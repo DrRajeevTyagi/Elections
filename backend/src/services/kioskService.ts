@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { ForbiddenError, UnauthorizedError } from '../utils/httpError.js';
-import { HouseId } from '../types/election.js';
+import { Branch, HouseId } from '../types/election.js';
 
 export interface KioskSession {
   token: string;
@@ -8,6 +8,7 @@ export interface KioskSession {
   consumedAt?: number;
   house?: HouseId; // Required for house elections
   officerCode?: string; // Which polling officer's code activated this session
+  branch?: Branch; // Which branch the activating officer code belongs to
 }
 
 export const SESSION_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -15,13 +16,14 @@ export const SESSION_TTL_MS = 5 * 60 * 1000; // 5 minutes
 export class KioskService {
   private sessions = new Map<string, KioskSession>();
 
-  createSession(officerCode?: string, house?: HouseId): KioskSession {
+  createSession(officerCode?: string, house?: HouseId, branch?: Branch): KioskSession {
     const token = randomUUID();
     const session: KioskSession = {
       token,
       activatedAt: Date.now(),
       house,
-      officerCode
+      officerCode,
+      branch
     };
     this.sessions.set(token, session);
     return session;

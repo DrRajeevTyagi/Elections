@@ -1,5 +1,5 @@
 import { dataStore } from '../storage/datastore.js';
-import { PollState, StoredVote, ElectionType, HouseId } from '../types/election.js';
+import { PollState, StoredVote, ElectionType, HouseId, Branch } from '../types/election.js';
 import { ForbiddenError } from '../utils/httpError.js';
 
 export const getPollState = (): PollState => dataStore.getPollState();
@@ -19,8 +19,12 @@ export const recordVote = async (
   selections: StoredVote['selections'],
   electionType: ElectionType,
   house?: HouseId,
-  officerCode?: string
+  officerCode?: string,
+  branch?: Branch
 ): Promise<StoredVote> => {
   ensurePollIsOpen();
-  return dataStore.addVote(selections, electionType, house, officerCode);
+  // dataStore.addVote's branch parameter defaults to 'dwarka' when passed
+  // undefined (a plain default parameter, not a truthiness check), so it's
+  // safe to always forward it here even when the caller didn't have one.
+  return dataStore.addVote(selections, electionType, house, officerCode, branch);
 };

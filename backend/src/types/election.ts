@@ -11,6 +11,14 @@ export type HouseId = 'Anand' | 'Dhiraj' | 'Kripa' | 'Prem' | 'Namrata' | 'Nisht
 // Election types
 export type ElectionType = 'school' | 'house';
 
+// School branches -- always "AN" in capitals, never spelled out or
+// lowercased (see MULTI-BRANCH-EXPANSION-PLAN.md's naming convention: one of
+// the house names is "Anand," and lowercase "an" collides with the ordinary
+// English word). Optional everywhere for now since existing records predate
+// this field -- default to 'dwarka' wherever one is missing, the only branch
+// that has ever existed (see storage/datastore.ts normalization).
+export type Branch = 'dwarka' | 'AN';
+
 export interface Candidate {
   id: string;
   name: string;
@@ -18,6 +26,7 @@ export interface Candidate {
   electionType: ElectionType;
   house?: HouseId; // Required for house elections
   imageUrl?: string;
+  branch?: Branch;
 }
 
 export interface PollSettings {
@@ -37,6 +46,7 @@ export interface StoredVote {
   house?: HouseId; // Required for house elections
   officerCode?: string; // Which polling officer's code activated this vote
   selections: Record<PostId, string>;
+  branch?: Branch;
 }
 
 export interface OfficerCode {
@@ -49,6 +59,7 @@ export interface OfficerCode {
   house?: HouseId; // Required (and always set) when electionType is 'house'
   createdAt: number;
   closedAt?: number; // Set when the polling officer closes this booth; blocks further activations
+  branch?: Branch;
 }
 
 export interface PollState {
@@ -81,4 +92,5 @@ export interface ElectionArchive {
   results: ArchivedCandidateResult[];
   officerCodes: ArchivedOfficerCode[];
   name?: string; // Admin-given label, e.g. "School Council -- Term 1 2026"
+  branch?: Branch;
 }

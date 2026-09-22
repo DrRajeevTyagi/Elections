@@ -2,6 +2,20 @@
 
 Status: **Discussion only — no code changed yet.** This captures the plan we agreed on 2026-09-22 so implementation can start from a clear, shared understanding next session.
 
+**Sequencing:** see [ROADMAP.md](ROADMAP.md) for how this plan combines with
+[ELECTION-INTEGRITY-AND-TRUST.md](ELECTION-INTEGRITY-AND-TRUST.md) (item 12
+specifically) and [CANDIDATE-COLLECTION-PLAN.md](CANDIDATE-COLLECTION-PLAN.md).
+The `branch` field addition below and item 12's votes-storage migration turned
+out to be the same piece of work — ROADMAP.md's Phase 0 is the combined,
+authoritative build order; the "Suggested build order" section later in this
+document is superseded by it.
+
+**Progress:** the `Branch` type and `branch` field now exist on `Candidate`,
+`StoredVote`, `OfficerCode`, and `ElectionArchive` (backend data model only —
+see ROADMAP.md Phase 0). No backend route or service reads/filters by branch
+yet, and no frontend work has started — section 2 and 3 below are both still
+fully open.
+
 ## Naming convention — read this first
 
 The Anand Niketan branch is referred to and coded throughout this project as **"AN," always in capitals** — never spelled out as "Anand Niketan," never shortened to just "Anand," and never written lowercase as "an." This is deliberate, for two separate reasons: (1) one of the 8 house names is "Anand" (Anand House), and "Anand Niketan"/"Anand" alone would be misread as referring to the house instead of the branch; (2) lowercase "an" is an ordinary English word, so it would be easy to misread in code, logs, or prose (e.g. "generate an code" vs. "generate AN code"). Capital "AN" avoids both collisions.

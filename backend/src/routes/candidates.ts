@@ -5,7 +5,7 @@ import { getPollState } from '../services/voteService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError, ForbiddenError } from '../utils/httpError.js';
 import type { Candidate, ElectionType, HouseId } from '../types/election.js';
-import { isValidPostId, SCHOOL_POST_IDS, HOUSE_POST_IDS, isValidHouseId } from '../config/posts.js';
+import { isValidPostId, SCHOOL_POST_IDS, HOUSE_POST_IDS, isValidHouseId, isValidBranch } from '../config/posts.js';
 
 export const candidatesRouter = Router();
 
@@ -84,7 +84,7 @@ candidatesRouter.post(
   requireAdminSession,
   asyncHandler((req, res) => {
     ensurePollIsClosed();
-    const { id, name, post, electionType, house, imageUrl } = req.body as Partial<Candidate>;
+    const { id, name, post, electionType, house, imageUrl, branch } = req.body as Partial<Candidate>;
 
     if (!id || !name || !post) {
       throw new BadRequestError('ID, name, and post are required');
@@ -92,6 +92,10 @@ candidatesRouter.post(
 
     if (!isValidPostId(post)) {
       throw new BadRequestError('Invalid post ID');
+    }
+
+    if (branch !== undefined && !isValidBranch(branch)) {
+      throw new BadRequestError('Invalid branch');
     }
 
     // Determine election type from post if not provided
@@ -135,7 +139,11 @@ candidatesRouter.post(
       post,
       electionType: determinedElectionType,
       house: determinedElectionType === 'house' ? (house as HouseId) : undefined,
-      imageUrl: trimmedImageUrl
+      imageUrl: trimmedImageUrl,
+      // Defaults to 'dwarka' when omitted -- until the admin UI sends a
+      // branch (see ROADMAP.md Phase 2), every candidate added stays
+      // 'dwarka', unchanged from today.
+      branch: branch ?? 'dwarka'
     };
 
     candidates.push(newCandidate);

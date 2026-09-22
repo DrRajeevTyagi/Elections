@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { SCHOOL_POST_IDS, HOUSE_POST_IDS } from '../config/posts.js';
 import { dataStore } from '../storage/datastore.js';
-import { Candidate, PostId, StoredVote, ElectionType, HouseId, ElectionArchive } from '../types/election.js';
+import { Candidate, PostId, StoredVote, ElectionType, HouseId, ElectionArchive, Branch } from '../types/election.js';
 import { getPollState } from './voteService.js';
 
 export interface CandidateResult {
@@ -14,13 +14,14 @@ export interface PostResult {
   candidates: CandidateResult[];
 }
 
-const countVotes = (votes: StoredVote[], electionType: ElectionType, house?: HouseId): Map<string, number> => {
+const countVotes = (votes: StoredVote[], electionType: ElectionType, house?: HouseId, branch?: Branch): Map<string, number> => {
   const tally = new Map<string, number>();
-  
-  // Filter votes by election type and optionally house
+
+  // Filter votes by election type and optionally house/branch
   const filteredVotes = votes.filter((vote) => {
     if (vote.electionType !== electionType) return false;
     if (house && vote.house !== house) return false;
+    if (branch && vote.branch !== branch) return false;
     return true;
   });
 
@@ -42,27 +43,32 @@ const countVotes = (votes: StoredVote[], electionType: ElectionType, house?: Hou
 // votes is deleted, since a deleted candidate's selections drop out of the
 // sum entirely. This is what both the live dashboard and the archived/
 // report totals should use instead.
-export const getTotalVotes = (): number => {
+export const getTotalVotes = (branch?: Branch): number => {
   const pollState = getPollState();
   if (!pollState.activeElectionType) {
     return 0;
   }
-  return dataStore.getVotes().filter((vote) => vote.electionType === pollState.activeElectionType).length;
+  return dataStore
+    .getVotes()
+    .filter((vote) => vote.electionType === pollState.activeElectionType && (!branch || vote.branch === branch)).length;
 };
 
-export const getResults = (house?: HouseId): PostResult[] => {
+export const getResults = (house?: HouseId, branch?: Branch): PostResult[] => {
   const pollState = getPollState();
   if (!pollState.activeElectionType) {
     return []; // No active election
   }
 
   const votes = dataStore.getVotes();
-  const tally = countVotes(votes, pollState.activeElectionType, house);
-  
-  // Filter candidates by election type and optionally house
+  const tally = countVotes(votes, pollState.activeElectionType, house, branch);
+
+  // Filter candidates by election type and optionally house/branch
   let candidates = dataStore.getCandidates().filter((c) => c.electionType === pollState.activeElectionType);
   if (house) {
     candidates = candidates.filter((c) => c.house === house);
+  }
+  if (branch) {
+    candidates = candidates.filter((c) => c.branch === branch);
   }
 
   // Get post IDs based on election type

@@ -93,4 +93,29 @@ describe('POST /api/kiosk/activate', () => {
     expect(response.status).toBe(201);
     expect(response.body.house).toBe('Anand');
   });
+
+  it('carries the officer code\'s branch into the activated session response', async () => {
+    // Regression guard for ROADMAP.md Phase 0's branch wiring: a code
+    // generated for AN must produce a session (and, downstream, votes) tagged
+    // 'AN', not silently default to 'dwarka' just because the branch has to
+    // pass through kioskService in between.
+    const anCode: OfficerCode = {
+      code: 'GHI789',
+      officerName: 'Priya',
+      electionType: 'school',
+      branch: 'AN',
+      createdAt: Date.now()
+    };
+    mockedDataStore.findOfficerCode.mockReturnValue(anCode);
+    mockedDataStore.getPollState.mockReturnValue({
+      activeElectionType: 'school',
+      settings: { isOpen: true, allowRevote: false }
+    });
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/kiosk/activate').send({ secret: 'ghi789' });
+
+    expect(response.status).toBe(201);
+    expect(response.body.branch).toBe('AN');
+  });
 });

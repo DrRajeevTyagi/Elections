@@ -1,9 +1,13 @@
 import { dataStore } from '../storage/datastore.js';
-import { Candidate, PostId, ElectionType, HouseId } from '../types/election.js';
+import { Candidate, PostId, ElectionType, HouseId, Branch } from '../types/election.js';
 import { getPollState } from './voteService.js';
 import { HOUSE_IDS, HOUSE_POST_IDS, SCHOOL_POST_IDS } from '../config/posts.js';
 
-export const listCandidates = (electionType?: ElectionType, house?: HouseId): Candidate[] => {
+// `branch` is optional and additive -- omitting it (every call site today)
+// returns candidates across all branches, unchanged from before this
+// parameter existed. See ROADMAP.md Phase 2 for when callers start passing
+// it.
+export const listCandidates = (electionType?: ElectionType, house?: HouseId, branch?: Branch): Candidate[] => {
   const allCandidates = dataStore.getCandidates();
   let filtered = allCandidates;
 
@@ -15,11 +19,15 @@ export const listCandidates = (electionType?: ElectionType, house?: HouseId): Ca
     filtered = filtered.filter((c) => c.house === house);
   }
 
+  if (branch) {
+    filtered = filtered.filter((c) => c.branch === branch);
+  }
+
   return filtered;
 };
 
-export const listCandidatesByPost = (post: PostId, electionType?: ElectionType, house?: HouseId): Candidate[] => {
-  return listCandidates(electionType, house).filter((candidate) => candidate.post === post);
+export const listCandidatesByPost = (post: PostId, electionType?: ElectionType, house?: HouseId, branch?: Branch): Candidate[] => {
+  return listCandidates(electionType, house, branch).filter((candidate) => candidate.post === post);
 };
 
 // Every post (school) or every house/post combination (house) that
@@ -27,8 +35,18 @@ export const listCandidatesByPost = (post: PostId, electionType?: ElectionType, 
 // any voter who reaches that post, since the ballot has nothing to select
 // and "Next" never enables. Returns human-readable labels for the error
 // message, e.g. "Namrata House / HSC".
-export const findMissingCandidateCoverage = (electionType: ElectionType): string[] => {
-  const candidates = dataStore.getCandidates().filter((c) => c.electionType === electionType);
+//
+// `branch` is optional and, deliberately, NOT yet passed by its one caller
+// (routes/poll.ts's Open Poll gate) -- MULTI-BRANCH-EXPANSION-PLAN.md calls
+// for this to check both branches once Open Poll is shared across them, but
+// turning that on before AN actually has any candidates entered would block
+// Dwarka's real, current election from opening at all. Wire the caller once
+// AN's candidates exist (see ROADMAP.md Phase 2), not before.
+export const findMissingCandidateCoverage = (electionType: ElectionType, branch?: Branch): string[] => {
+  let candidates = dataStore.getCandidates().filter((c) => c.electionType === electionType);
+  if (branch) {
+    candidates = candidates.filter((c) => c.branch === branch);
+  }
 
   if (electionType === 'school') {
     return SCHOOL_POST_IDS.filter((post) => !candidates.some((c) => c.post === post));
@@ -45,13 +63,13 @@ export const findMissingCandidateCoverage = (electionType: ElectionType): string
   return missing;
 };
 
-export const listCandidatesForActiveElection = (house?: HouseId): Candidate[] => {
+export const listCandidatesForActiveElection = (house?: HouseId, branch?: Branch): Candidate[] => {
   const pollState = getPollState();
   const activeElectionType = pollState.activeElectionType;
-  
+
   if (!activeElectionType) {
     return []; // No active election
   }
 
-  return listCandidates(activeElectionType, house);
+  return listCandidates(activeElectionType, house, branch);
 };

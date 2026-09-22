@@ -5,17 +5,37 @@ import { Firestore } from '@google-cloud/firestore';
 import { env } from '../config/env.js';
 import { DEFAULT_CANDIDATES } from '../config/posts.js';
 import { generateUniqueCodes } from '../utils/officerCode.js';
-import { Candidate, PollState, StoredVote, ElectionType, OfficerCode, ElectionArchive, HouseId } from '../types/election.js';
+import { Candidate, PollState, StoredVote, ElectionType, OfficerCode, ElectionArchive, HouseId, Branch } from '../types/election.js';
 
-// Single document holds the whole election state. This keeps the in-memory,
-// synchronous DataStore API unchanged; only the persistence backend differs.
-// Because state lives in memory, the service must run with a single Cloud Run
-// instance (max-instances=1) so concurrent instances never diverge.
+// Single document holds candidates/pollState/officerCodes/archives. This
+// keeps the in-memory, synchronous DataStore API unchanged for those; only
+// the persistence backend differs. Because state lives in memory, the
+// service must run with a single Cloud Run instance (max-instances=1) so
+// concurrent instances never diverge.
+//
+// Votes are deliberately NOT part of this document (see the `votes` class
+// field and `votesCollection()` below) -- at the school's actual scale
+// (3,000+ students voting twice), live votes alone were measured at 59-107%
+// of Firestore's 1 MiB per-document limit. Storing each vote as its own
+// small document in a subcollection instead removes that ceiling entirely,
+// since Firestore's size limit is per-document, not per-collection. See
+// ELECTION-INTEGRITY-AND-TRUST.md item 12 and ROADMAP.md Phase 0.
 const FIRESTORE_COLLECTION = 'school-election';
 const FIRESTORE_DOC_ID = 'state';
+const FIRESTORE_VOTES_SUBCOLLECTION = 'votes';
+// Firestore batch writes cap at 500 operations; stay comfortably under that
+// so a large Reset Poll's vote deletion never risks hitting the ceiling.
+const VOTE_DELETE_BATCH_SIZE = 450;
+const DEFAULT_BRANCH: Branch = 'dwarka';
 
 interface ElectionData {
   candidates: Candidate[];
+  // In Firestore mode, this field only ever holds *legacy* inline votes read
+  // from the main document on a pre-migration deploy -- see loadVotes(). It
+  // is migrated into the votes subcollection and cleared on first load, and
+  // never written back into the main document again. In disk mode (local
+  // dev only, no Firestore size ceiling to worry about), this stays the
+  // live, ongoing home for votes, unchanged from before.
   votes: StoredVote[];
   pollState: PollState;
   officerCodes: OfficerCode[];
@@ -81,13 +101,28 @@ const isOfficerCode = (value: unknown): value is OfficerCode => {
 // storage. Infer it the same way it's always been implied: a code with a
 // house on it was generated for House elections, and one without was
 // generated for School elections -- see routes/officerCodes.ts generate.
+//
+// branch is defaulted the same way: every record that predates the
+// multi-branch field belongs to 'dwarka', the only branch that has ever
+// existed (see MULTI-BRANCH-EXPANSION-PLAN.md).
 const normalizeOfficerCode = (entry: OfficerCode): OfficerCode => ({
   ...entry,
   electionType: entry.electionType === 'house' || entry.electionType === 'school'
     ? entry.electionType
     : entry.house
     ? 'house'
-    : 'school'
+    : 'school',
+  branch: entry.branch ?? DEFAULT_BRANCH
+});
+
+const normalizeCandidateBranch = (entry: Candidate): Candidate => ({
+  ...entry,
+  branch: entry.branch ?? DEFAULT_BRANCH
+});
+
+const normalizeArchiveBranch = (entry: ElectionArchive): ElectionArchive => ({
+  ...entry,
+  branch: entry.branch ?? DEFAULT_BRANCH
 });
 
 const isElectionArchive = (value: unknown): value is ElectionArchive => {
@@ -119,6 +154,10 @@ export interface StorageHealth {
 
 export class DataStore {
   private data: ElectionData = createDefaultData();
+  // The live, in-memory source of truth for votes -- see the comment on
+  // ElectionData.votes above for why this is separate from `this.data` once
+  // Firestore mode is loaded. Populated by loadVotes() at startup.
+  private votes: StoredVote[] = [];
   private writeQueue: Promise<void> = Promise.resolve();
   private readonly filePath = env.dataFile;
   private readonly firestore = env.useFirestore ? new Firestore() : null;
@@ -126,8 +165,46 @@ export class DataStore {
 
   async init(): Promise<void> {
     await this.load();
+    await this.loadVotes();
     await this.flush();
     this.storageHealth = { ok: true, lastSuccessAt: Date.now(), lastErrorAt: null };
+  }
+
+  private votesCollection() {
+    return this.firestore!.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC_ID).collection(FIRESTORE_VOTES_SUBCOLLECTION);
+  }
+
+  // In disk mode, votes stay embedded in the main file (loadFromDisk already
+  // populated this.data.votes -- no Firestore size ceiling to avoid, so no
+  // reason to complicate local dev). In Firestore mode, votes live in their
+  // own subcollection -- this both loads them into memory and, on first run
+  // against data written before this migration existed, moves any legacy
+  // inline votes still sitting on the main document into that subcollection
+  // (defaulting their branch, since they predate the multi-branch field)
+  // before clearing them off the main document for good.
+  private async loadVotes(): Promise<void> {
+    if (!this.firestore) {
+      this.votes = this.data.votes;
+      return;
+    }
+
+    if (this.data.votes.length > 0) {
+      const legacyVotes = this.data.votes;
+      const batchSize = VOTE_DELETE_BATCH_SIZE;
+      for (let i = 0; i < legacyVotes.length; i += batchSize) {
+        const batch = this.firestore.batch();
+        for (const vote of legacyVotes.slice(i, i + batchSize)) {
+          const migrated: StoredVote = { ...vote, branch: vote.branch ?? DEFAULT_BRANCH };
+          batch.set(this.votesCollection().doc(vote.id), JSON.parse(JSON.stringify(migrated)));
+        }
+        await batch.commit();
+      }
+      this.data.votes = [];
+      await this.persist();
+    }
+
+    const snapshot = await this.votesCollection().get();
+    this.votes = snapshot.docs.map((doc) => doc.data() as StoredVote);
   }
 
   // Read by the admin dashboard so a human can tell "one write blipped and
@@ -180,17 +257,34 @@ export class DataStore {
       parsed.candidates.length > 0 &&
       parsed.candidates.every((candidate) => isCandidate(candidate))
     ) {
-      defaults.candidates = cloneCandidates(parsed.candidates);
+      defaults.candidates = cloneCandidates(parsed.candidates).map(normalizeCandidateBranch);
     }
 
-    if (Array.isArray(parsed.votes) && parsed.votes.every((vote) => isStoredVote(vote))) {
-      defaults.votes = parsed.votes.map((vote) => ({
+    // This is the one place a validation failure here would silently discard
+    // real votes (see loadVotes(), which migrates whatever survives this
+    // check into the votes subcollection). Unlike the other arrays below,
+    // losing votes silently is exactly the failure ELECTION-INTEGRITY-AND-
+    // TRUST.md item 2 warns about -- so this one case fails loudly instead of
+    // falling back to an empty array, rather than waiting for item 2's
+    // general fix to land everywhere.
+    if (Array.isArray(parsed.votes)) {
+      const validVotes = parsed.votes.filter((vote) => isStoredVote(vote));
+      if (validVotes.length !== parsed.votes.length) {
+        throw new Error(
+          `Refusing to start: ${parsed.votes.length - validVotes.length} of ${parsed.votes.length} ` +
+          'stored vote record(s) failed validation on load. Loading anyway would silently discard them ' +
+          '(and, via the votes-subcollection migration, permanently lose them). Investigate the raw data ' +
+          'before restarting.'
+        );
+      }
+      defaults.votes = validVotes.map((vote) => ({
         id: vote.id,
         timestamp: vote.timestamp,
         electionType: vote.electionType,
         house: vote.house,
         officerCode: vote.officerCode,
-        selections: { ...vote.selections }
+        selections: { ...vote.selections },
+        branch: vote.branch ?? DEFAULT_BRANCH
       }));
     }
 
@@ -199,11 +293,13 @@ export class DataStore {
     }
 
     if (Array.isArray(parsed.archives) && parsed.archives.every((entry) => isElectionArchive(entry))) {
-      defaults.archives = parsed.archives.map((entry) => ({
-        ...entry,
-        results: entry.results.map((r) => ({ ...r })),
-        officerCodes: entry.officerCodes.map((o) => ({ ...o }))
-      }));
+      defaults.archives = parsed.archives.map((entry) =>
+        normalizeArchiveBranch({
+          ...entry,
+          results: entry.results.map((r) => ({ ...r })),
+          officerCodes: entry.officerCodes.map((o) => ({ ...o }))
+        })
+      );
     }
 
     if (parsed.pollState && typeof parsed.pollState === 'object') {
@@ -224,22 +320,64 @@ export class DataStore {
   }
 
   private async persist(): Promise<void> {
+    // Built explicitly rather than persisting `this.data` as-is: in
+    // Firestore mode, this.data.votes is always [] after loadVotes()'s
+    // migration and nothing else should ever write votes back onto it, but
+    // building the payload this way (rather than trusting that invariant
+    // silently) keeps this document guaranteed small no matter what. In disk
+    // mode, `this.votes` is the authoritative in-memory array (see
+    // resetVotes/resetVotesByType, which reassign it) -- persist() must read
+    // from `this.votes`, not `this.data.votes`, or a reset would write stale
+    // votes back to disk.
+    const payload: ElectionData = this.firestore
+      ? { ...this.data, votes: [] }
+      : { ...this.data, votes: this.votes };
+
     if (this.firestore) {
-      await this.firestore.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC_ID).set(JSON.parse(JSON.stringify(this.data)));
+      await this.firestore.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC_ID).set(JSON.parse(JSON.stringify(payload)));
       return;
     }
     const directory = dirname(this.filePath);
     await mkdir(directory, { recursive: true });
-    await writeFile(this.filePath, JSON.stringify(this.data, null, 2), 'utf-8');
+    await writeFile(this.filePath, JSON.stringify(payload, null, 2), 'utf-8');
+  }
+
+  private async persistVote(vote: StoredVote): Promise<void> {
+    if (this.firestore) {
+      await this.votesCollection().doc(vote.id).set(JSON.parse(JSON.stringify(vote)));
+      return;
+    }
+    // Disk mode: votes travel with the rest of the state (see persist()).
+    await this.persist();
+  }
+
+  // Deletes vote documents by id, batched to stay under Firestore's 500-op
+  // batch limit -- used by resetVotes/resetVotesByType so a large Reset
+  // Poll's cleanup can't silently fail partway through a single oversized
+  // batch.
+  private async deleteVoteDocs(ids: string[]): Promise<void> {
+    if (!this.firestore || ids.length === 0) {
+      return;
+    }
+    const collection = this.votesCollection();
+    for (let i = 0; i < ids.length; i += VOTE_DELETE_BATCH_SIZE) {
+      const batch = this.firestore.batch();
+      for (const id of ids.slice(i, i + VOTE_DELETE_BATCH_SIZE)) {
+        batch.delete(collection.doc(id));
+      }
+      await batch.commit();
+    }
   }
 
   // Returns a promise for THIS write specifically, so a caller that needs to
   // know a particular change is durable (e.g. a cast vote, before telling
   // the voter it was recorded) can await it. The shared this.writeQueue is
   // kept alive even if this write fails (via the trailing .catch below), so
-  // one failed persist never wedges every write after it.
-  private queuePersist(): Promise<void> {
-    const attempt = this.writeQueue.then(() => this.persist());
+  // one failed write never wedges every write after it. Shared by every kind
+  // of write (main document, a single vote, or a batch of vote deletions) so
+  // they all report through the same StorageHealth the admin dashboard reads.
+  private queueWrite(operation: () => Promise<void>): Promise<void> {
+    const attempt = this.writeQueue.then(operation);
     attempt.then(
       () => {
         this.storageHealth = { ok: true, lastSuccessAt: Date.now(), lastErrorAt: this.storageHealth.lastErrorAt };
@@ -259,6 +397,18 @@ export class DataStore {
       // never wedges every write queued after it.
     });
     return attempt;
+  }
+
+  private queuePersist(): Promise<void> {
+    return this.queueWrite(() => this.persist());
+  }
+
+  private queueVotePersist(vote: StoredVote): Promise<void> {
+    return this.queueWrite(() => this.persistVote(vote));
+  }
+
+  private queueVoteDeletion(ids: string[]): Promise<void> {
+    return this.queueWrite(() => (this.firestore ? this.deleteVoteDocs(ids) : this.persist()));
   }
 
   private async flush(): Promise<void> {
@@ -295,11 +445,18 @@ export class DataStore {
   // Awaits persistence before resolving -- a vote is only reported as
   // "recorded" to the voter once it is actually durable, not just sitting
   // in memory (Cloud Run can throttle/stop this instance between requests).
+  //
+  // `branch` defaults to 'dwarka' since kiosk sessions don't carry a branch
+  // yet (that's wired up once officer codes and the kiosk flow become
+  // branch-aware -- see ROADMAP.md Phase 2); today there is only one branch
+  // actually running, so this keeps behavior unchanged while the storage
+  // layer underneath is already branch-ready.
   async addVote(
     selections: StoredVote['selections'],
     electionType: ElectionType,
     house?: string,
-    officerCode?: string
+    officerCode?: string,
+    branch: Branch = DEFAULT_BRANCH
   ): Promise<StoredVote> {
     const vote: StoredVote = {
       id: randomUUID(),
@@ -307,38 +464,42 @@ export class DataStore {
       electionType,
       house: house as StoredVote['house'],
       officerCode,
-      selections: { ...selections }
+      selections: { ...selections },
+      branch
     };
-    this.data.votes.push(vote);
+    this.votes.push(vote);
     // Left in memory even if the persist below throws -- it will be
     // included in the next successful write instead of being dropped.
-    await this.queuePersist();
+    await this.queueVotePersist(vote);
     return vote;
   }
 
   getVotes(): StoredVote[] {
-    return this.data.votes.map((vote) => ({
+    return this.votes.map((vote) => ({
       id: vote.id,
       timestamp: vote.timestamp,
       electionType: vote.electionType,
       house: vote.house,
       officerCode: vote.officerCode,
-      selections: { ...vote.selections }
+      selections: { ...vote.selections },
+      branch: vote.branch
     }));
   }
 
   resetVotes(): void {
-    this.data.votes = [];
-    this.queuePersist();
+    const removedIds = this.votes.map((vote) => vote.id);
+    this.votes = [];
+    this.queueVoteDeletion(removedIds);
   }
 
   resetVotesByType(electionType: ElectionType): void {
-    this.data.votes = this.data.votes.filter((vote) => vote.electionType !== electionType);
-    this.queuePersist();
+    const removedIds = this.votes.filter((vote) => vote.electionType === electionType).map((vote) => vote.id);
+    this.votes = this.votes.filter((vote) => vote.electionType !== electionType);
+    this.queueVoteDeletion(removedIds);
   }
 
   countVotesByOfficerCode(code: string): number {
-    return this.data.votes.filter((vote) => vote.officerCode === code).length;
+    return this.votes.filter((vote) => vote.officerCode === code).length;
   }
 
   getOfficerCodes(): OfficerCode[] {
@@ -350,10 +511,10 @@ export class DataStore {
     return entry ? { ...entry } : undefined;
   }
 
-  generateOfficerCodes(count: number, electionType: ElectionType, house?: HouseId): OfficerCode[] {
+  generateOfficerCodes(count: number, electionType: ElectionType, house?: HouseId, branch: Branch = DEFAULT_BRANCH): OfficerCode[] {
     const newCodes = generateUniqueCodes(count, this.data.officerCodes.map((entry) => entry.code));
     const createdAt = Date.now();
-    const entries: OfficerCode[] = newCodes.map((code) => ({ code, officerName: '', electionType, house, createdAt }));
+    const entries: OfficerCode[] = newCodes.map((code) => ({ code, officerName: '', electionType, house, createdAt, branch }));
     this.data.officerCodes.push(...entries);
     this.queuePersist();
     return entries;

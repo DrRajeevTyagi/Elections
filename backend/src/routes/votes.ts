@@ -56,6 +56,7 @@ votesRouter.post(
     const kioskSession = res.locals.kioskSession;
     const house = kioskSession?.house;
     const officerCode = kioskSession?.officerCode;
+    const branch = kioskSession?.branch;
 
     if (pollState.activeElectionType === 'house' && !house) {
       throw new BadRequestError('Please select a house before submitting a vote for house elections.');
@@ -78,7 +79,7 @@ votesRouter.post(
     // with the administrator first.
     let vote;
     try {
-      vote = await recordVote(submission.selections, pollState.activeElectionType, house, officerCode);
+      vote = await recordVote(submission.selections, pollState.activeElectionType, house, officerCode, branch);
     } catch (persistError) {
       console.error('Vote captured but could not be confirmed as saved', persistError);
       throw new HttpError(

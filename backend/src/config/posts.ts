@@ -1,4 +1,4 @@
-import { PostId, HousePostId, SchoolPostId, HouseId, Candidate } from '../types/election.js';
+import { PostId, HousePostId, SchoolPostId, HouseId, Candidate, Branch } from '../types/election.js';
 
 // School election posts
 export const SCHOOL_POST_IDS: SchoolPostId[] = ['HB', 'HG', 'SSC', 'SRC', 'SCC'];
@@ -12,12 +12,20 @@ export const POST_IDS: PostId[] = [...SCHOOL_POST_IDS, ...HOUSE_POST_IDS];
 // House names
 export const HOUSE_IDS: HouseId[] = ['Anand', 'Dhiraj', 'Kripa', 'Prem', 'Namrata', 'Nishtha', 'Satya', 'Shanti'];
 
+// School branches -- capital "AN" always, see MULTI-BRANCH-EXPANSION-PLAN.md's
+// naming convention.
+export const BRANCH_IDS: Branch[] = ['dwarka', 'AN'];
+
 export const isValidPostId = (value: string): value is PostId => {
   return POST_IDS.includes(value as PostId);
 };
 
 export const isValidHouseId = (value: string): value is HouseId => {
   return HOUSE_IDS.includes(value as HouseId);
+};
+
+export const isValidBranch = (value: string): value is Branch => {
+  return BRANCH_IDS.includes(value as Branch);
 };
 
 // No demo/placeholder candidates are seeded for a fresh election -- a
