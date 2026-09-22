@@ -113,7 +113,7 @@ export const VotePage = (): JSX.Element => {
         )}
         <p>Your ballot was submitted successfully.</p>
         <p style={{ fontSize: '0.9rem', color: '#6b7280' }}>
-          Recorded at {new Date(confirmation.timestamp).toLocaleString()}. This
+          Recorded at {new Date(confirmation.timestamp).toLocaleString('en-GB')}. This
           confirms your vote was saved &mdash; there is nothing you need to write
           down or keep.
         </p>

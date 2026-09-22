@@ -7,7 +7,9 @@ import type { ArchivedCandidateResult, ArchivedOfficerCode, ElectionReport } fro
 import type { HouseId, PostId } from '../types/election';
 import './ReportPage.css';
 
-export const formatTimestamp = (timestamp: number): string => new Date(timestamp).toLocaleString();
+// en-GB gives dd/mm/yyyy (and a 24-hour clock) instead of the US
+// month/day/year ordering the browser's default locale would otherwise use.
+export const formatTimestamp = (timestamp: number): string => new Date(timestamp).toLocaleString('en-GB');
 
 // Shared with TurnoutReportPage -- the separate, officer-turnout-only report
 // reachable from the Polling Officer Codes tab.

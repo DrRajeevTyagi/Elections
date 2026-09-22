@@ -32,7 +32,9 @@ import { POST_NAMES } from '../constants/posts';
 import './Page.css';
 import './admin.css';
 
-const formatTimestamp = (timestamp: number): string => new Date(timestamp).toLocaleString();
+// en-GB gives dd/mm/yyyy (and a 24-hour clock) instead of the US
+// month/day/year ordering the browser's default locale would otherwise use.
+const formatTimestamp = (timestamp: number): string => new Date(timestamp).toLocaleString('en-GB');
 
 // Helper to group results by house for house elections
 interface HouseGroupedResult {
@@ -550,7 +552,7 @@ export const AdminLandingPage = (): JSX.Element => {
     if (closedElectionType) {
       const name = window.prompt(
         'Save this election to Election History?\n\nEnter a name (e.g. "House Elections -- Term 1 2026"), or leave blank and click OK to save without one. Votes are not affected, and you can do this anytime later with "Save to Election History". Click Cancel to skip for now.',
-        `${closedElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString()}`
+        `${closedElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString('en-GB')}`
       );
       if (name !== null) {
         try {
@@ -576,7 +578,7 @@ export const AdminLandingPage = (): JSX.Element => {
 
     const name = window.prompt(
       'Save the current results to Election History.\n\nEnter a name (e.g. "House Elections -- Term 1 2026"), or leave blank and click OK to save without one. Votes are not affected.',
-      `${pollStatus.activeElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString()}`
+      `${pollStatus.activeElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString('en-GB')}`
     );
     if (name === null) {
       return;
@@ -623,7 +625,7 @@ export const AdminLandingPage = (): JSX.Element => {
     const archiveName = pollStatus?.activeElectionType
       ? window.prompt(
           'Name this election for the history record (e.g. "School Council -- Term 1 2026"). Leave blank to skip -- you can add a name later from Election History.',
-          `${pollStatus.activeElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString()}`
+          `${pollStatus.activeElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString('en-GB')}`
         )?.trim() || undefined
       : undefined;
 
@@ -789,7 +791,7 @@ export const AdminLandingPage = (): JSX.Element => {
     const archiveName = willArchive
       ? window.prompt(
           'Name this election for the history record (e.g. "School Council -- Term 1 2026"). Leave blank to skip -- you can add a name later from Election History.',
-          `${pollStatus!.activeElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString()}`
+          `${pollStatus!.activeElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString('en-GB')}`
         )?.trim() || undefined
       : undefined;
 
