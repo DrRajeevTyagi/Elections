@@ -844,18 +844,31 @@ export const AdminLandingPage = (): JSX.Element => {
           <label className="form-label" style={{ marginBottom: '0.5rem', fontWeight: 600 }}>Admin Secret</label>
           <p className="status" style={{ margin: '0 0 0.75rem 0' }}>✓ Unlocked for this browser session</p>
           <div className="admin-actions">
-            <button 
-              className="button" 
-              onClick={() => mutatePoll('open')} 
-              disabled={loading || !pollStatus?.activeElectionType}
-              title={!pollStatus?.activeElectionType ? 'Please select an election type first' : 'Open the poll for voting'}
+            <button
+              className="button"
+              onClick={() => mutatePoll('open')}
+              disabled={loading || !pollStatus?.activeElectionType || pollStatus?.settings.isOpen === true}
+              style={{ opacity: pollStatus?.settings.isOpen === true ? 0.5 : 1 }}
+              title={
+                pollStatus?.settings.isOpen === true
+                  ? 'Poll is already open'
+                  : !pollStatus?.activeElectionType
+                  ? 'Please select an election type first'
+                  : 'Open the poll for voting'
+              }
             >
               Open Poll
             </button>
-            <button className="button" onClick={() => mutatePoll('close')} disabled={loading} style={{ backgroundColor: '#dc2626' }}>
+            <button
+              className="button"
+              onClick={() => mutatePoll('close')}
+              disabled={loading || pollStatus?.settings.isOpen !== true}
+              style={{ backgroundColor: '#dc2626', opacity: pollStatus?.settings.isOpen !== true ? 0.5 : 1 }}
+              title={pollStatus?.settings.isOpen !== true ? 'Poll is already closed' : 'Close the poll'}
+            >
               Close Poll
             </button>
-            <button className="button" onClick={() => void loadDashboard()} disabled={loading} style={{ backgroundColor: '#6b7280' }}>
+            <button className="button" onClick={() => void loadDashboard()} disabled={loading} style={{ backgroundColor: '#6b7280', opacity: loading ? 0.5 : 1 }}>
               Refresh
             </button>
           </div>
@@ -886,7 +899,7 @@ export const AdminLandingPage = (): JSX.Element => {
               className="button"
               onClick={() => window.open('/admin/report', '_blank')}
               disabled={!pollStatus?.activeElectionType}
-              style={{ backgroundColor: '#4338ca', width: '100%' }}
+              style={{ backgroundColor: '#4338ca', width: '100%', opacity: !pollStatus?.activeElectionType ? 0.5 : 1 }}
               title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable results report in a new tab'}
             >
               🖨️ Download Report (current results)
@@ -1123,7 +1136,7 @@ export const AdminLandingPage = (): JSX.Element => {
               className="button"
               onClick={() => void loadDashboard()}
               disabled={loading}
-              style={{ backgroundColor: '#6b7280', padding: '0.35rem 0.7rem', fontSize: '0.8rem' }}
+              style={{ backgroundColor: '#6b7280', padding: '0.35rem 0.7rem', fontSize: '0.8rem', opacity: loading ? 0.5 : 1 }}
             >
               Refresh
             </button>
@@ -1186,7 +1199,7 @@ export const AdminLandingPage = (): JSX.Element => {
             className="button"
             onClick={() => window.open('/admin/report/turnout', '_blank')}
             disabled={!pollStatus?.activeElectionType}
-            style={{ backgroundColor: '#4338ca' }}
+            style={{ backgroundColor: '#4338ca', opacity: !pollStatus?.activeElectionType ? 0.5 : 1 }}
             title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable turnout report in a new tab'}
           >
             🖨️ Print Officer Turnout
@@ -1244,10 +1257,10 @@ export const AdminLandingPage = (): JSX.Element => {
               </div>
               <button
                 className="button"
-                style={{ backgroundColor: '#6b7280' }}
+                style={{ backgroundColor: '#6b7280', opacity: officerCodesLoading || !generateHouse ? 0.5 : 1 }}
                 onClick={handleGenerateSingleHouseCodes}
                 disabled={officerCodesLoading || !generateHouse}
-                title="Add more codes to just this one house, e.g. to replace a lost code"
+                title={!generateHouse ? 'Choose a house first' : 'Add more codes to just this one house, e.g. to replace a lost code'}
               >
                 Add to This House
               </button>
@@ -1332,7 +1345,7 @@ export const AdminLandingPage = (): JSX.Element => {
                             />
                             <button
                               className="button"
-                              style={{ backgroundColor: '#6b7280', flexShrink: 0 }}
+                              style={{ backgroundColor: '#6b7280', flexShrink: 0, opacity: officerCodesLoading ? 0.5 : 1 }}
                               disabled={officerCodesLoading}
                               onClick={() => handleSaveOfficerName(entry.code)}
                             >
@@ -1353,7 +1366,7 @@ export const AdminLandingPage = (): JSX.Element => {
                             {isClosed && (
                               <button
                                 className="button"
-                                style={{ backgroundColor: '#16a34a' }}
+                                style={{ backgroundColor: '#16a34a', opacity: officerCodesLoading ? 0.5 : 1 }}
                                 disabled={officerCodesLoading}
                                 onClick={() => handleReopenOfficerCode(entry.code)}
                               >
@@ -1362,7 +1375,7 @@ export const AdminLandingPage = (): JSX.Element => {
                             )}
                             <button
                               className="button"
-                              style={{ backgroundColor: '#dc2626' }}
+                              style={{ backgroundColor: '#dc2626', opacity: officerCodesLoading ? 0.5 : 1 }}
                               disabled={officerCodesLoading}
                               onClick={() => handleDeleteOfficerCode(entry.code)}
                             >
