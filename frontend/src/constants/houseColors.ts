@@ -19,7 +19,7 @@ export const HOUSE_COLORS: Record<HouseId, HouseColor> = {
   Anand: { text: '#8a6d00', accent: '#f5c400', stripText: '#1f2937' }, // golden yellow
   Dhiraj: { text: '#c2410c', accent: '#e8650c', stripText: '#ffffff' }, // burnt orange
   Kripa: { text: '#7e22ce', accent: '#c084fc', stripText: '#3b0764' }, // lavender purple
-  Namrata: { text: '#1e3a8a', accent: '#2563eb', stripText: '#ffffff' }, // deep royal blue
+  Namrata: { text: '#0f1f66', accent: '#1a2e8c', stripText: '#ffffff' }, // deep royal blue
   Nishtha: { text: '#6b0f28', accent: '#932145', stripText: '#ffffff' }, // burgundy
   Prem: { text: '#dc2626', accent: '#ef4444', stripText: '#ffffff' }, // scarlet red
   Satya: { text: '#047857', accent: '#10b981', stripText: '#ffffff' }, // emerald green
