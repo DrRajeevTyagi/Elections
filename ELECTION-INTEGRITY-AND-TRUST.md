@@ -776,17 +776,21 @@ fix makes it constant.
 - Candidates, officer codes, and archives can stay on the shared document for
   now — they're genuinely small and not the bottleneck.
 
-**Status:** **Votes half implemented** (backend/src/storage/datastore.ts —
-votes now live in a Firestore subcollection, one document per vote, with a
+**Status:** **Implemented and live in production** (updated 2026-09-22).
+Votes live in a Firestore subcollection, one document per vote, with a
 migration path for any pre-existing inline votes and a loud failure instead of
-silent data loss if a legacy record is malformed; covered by 8 new tests in
+silent data loss if a legacy record is malformed; covered by 8 tests in
 [datastore.test.ts](backend/src/storage/datastore.test.ts) against a simulated
-Firestore). The `Branch` type and `branch` field now exist on `Candidate`,
-`StoredVote`, `OfficerCode`, and `ElectionArchive` (optional, defaulting to
-`'dwarka'`). **Still open:** candidate photos are not yet moved to Cloud
-Storage, and no route/service yet filters or accepts `branch` from a request
-(officer-code generation, results, candidate coverage, kiosk activation,
-reports) — see ROADMAP.md Phase 0's remaining items and Phase 2.
+Firestore. `branch` is now read/written/filtered end to end: officer-code
+generation, kiosk activation, vote recording *and validation*, candidate
+creation, and results all respect it, with a real bug in this rollout (the
+ballot itself wasn't filtered by branch — see ROADMAP.md Phase 0) found in
+live use and fixed. **Still open:** candidate photos are not moved to Cloud
+Storage (deliberately deferred — no photos this year at all, see
+CANDIDATE-COLLECTION-PLAN.md); `routes/report.ts` doesn't take a branch
+parameter yet; Open Poll's coverage gate and archive-splitting are
+deliberately not branch-aware yet (real regression risk until AN has data) —
+see ROADMAP.md Phase 0 for the full current state.
 
 ---
 

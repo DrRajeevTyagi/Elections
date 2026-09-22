@@ -1,6 +1,9 @@
 # Multi-Branch Expansion Plan (Dwarka + AN)
 
-Status: **Discussion only — no code changed yet.** This captures the plan we agreed on 2026-09-22 so implementation can start from a clear, shared understanding next session.
+Status: **Partially implemented and live in production.** This captures the
+plan agreed on 2026-09-22; see the Progress note below for exactly what's
+built versus still open, and [ROADMAP.md](ROADMAP.md) for the authoritative
+sequencing of what's left.
 
 **Sequencing:** see [ROADMAP.md](ROADMAP.md) for how this plan combines with
 [ELECTION-INTEGRITY-AND-TRUST.md](ELECTION-INTEGRITY-AND-TRUST.md) (item 12
@@ -10,11 +13,28 @@ out to be the same piece of work — ROADMAP.md's Phase 0 is the combined,
 authoritative build order; the "Suggested build order" section later in this
 document is superseded by it.
 
-**Progress:** the `Branch` type and `branch` field now exist on `Candidate`,
-`StoredVote`, `OfficerCode`, and `ElectionArchive` (backend data model only —
-see ROADMAP.md Phase 0). No backend route or service reads/filters by branch
-yet, and no frontend work has started — section 2 and 3 below are both still
-fully open.
+**Progress (updated 2026-09-22):**
+- The `Branch` type and `branch` field exist on `Candidate`, `StoredVote`,
+  `OfficerCode`, and `ElectionArchive`.
+- **Backend (section 2, mostly done):** officer code generation, kiosk
+  activation/session, vote recording *and validation*, candidate creation, and
+  results (`getResults`/`getTotalVotes`) all read/write/filter by branch.
+  `candidateService.findMissingCandidateCoverage` and
+  `buildElectionSnapshot`/`archiveCurrentElection` gained the capability but
+  are deliberately not yet wired into Open Poll's gate or Reset's archiving —
+  see ROADMAP.md Phase 0 for why (real regression risk to this year's live
+  Dwarka election before AN has data). `routes/report.ts` doesn't accept
+  `branch` yet.
+- **Frontend (section 3, partially done):** Manage Candidates, Live Results,
+  and Polling Officer Codes all have a shared branch toggle and are fully
+  functional per-branch. Election History branch grouping and report pages'
+  branch selector are not built.
+- **A real bug shipped and was fixed in this rollout:** the first backend
+  branch-wiring pass missed the actual ballot (`GET /posts`) and vote
+  validation, so an AN ballot could show and accept Dwarka candidates. Caught
+  by the Election Commissioner in live testing, fixed at the vote-validation
+  trust boundary, covered by a regression test. See ROADMAP.md Phase 0 for
+  the full account — worth reading before touching this area again.
 
 ## Naming convention — read this first
 

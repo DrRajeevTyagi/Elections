@@ -1,9 +1,43 @@
 # Combined Build Roadmap
 
-Status: **Planning — supersedes the separate "Suggested build order" /
+Status: **In progress — supersedes the separate "Suggested build order" /
 "Suggested build order" sections in the three plan documents below as the
 authoritative sequencing.** Written 2026-09-22 once it became clear the three
 plans in flight can't be sequenced independently without redoing work.
+
+## Current status (read this first)
+
+As of 2026-09-22, all committed and deployed to production (`main` auto-deploys
+to Cloud Run):
+
+- **Phase 0 is essentially done.** Votes moved off the single Firestore
+  document into their own subcollection (closes the measured 59-107%-of-ceiling
+  risk); the `Branch` type exists everywhere; officer codes, kiosk sessions,
+  vote recording, and candidate creation are all branch-aware. A real bug in
+  this pass — the actual ballot (`GET /posts`) and vote validation weren't
+  filtering by branch, so an AN ballot could show/accept Dwarka candidates —
+  was found by the Election Commissioner in live testing and fixed (see the
+  "Bug found and fixed in real use" note under Phase 0 below). Two pieces
+  remain deliberately deferred (Open Poll's coverage gate, per-branch
+  archiving) until AN actually has real data — see Phase 0 for why.
+- **Phase 2 (multi-branch frontend) is partially done**, ahead of its
+  originally planned position, because the Election Commissioner needed to
+  start entering AN's candidates for real. Done: a shared Dwarka/AN branch
+  toggle on Manage Candidates, Live Results, and Polling Officer Codes (add
+  candidates, generate codes, and view results scoped to whichever branch is
+  selected). Not done: Election History branch grouping, report pages taking a
+  branch selector. See Phase 2 below for the exact breakdown.
+- **Extra, outside the original three plans:** Live Results now shows a
+  "Total votes for this post" line under every post's candidates (the actual
+  ballot count for that specific post — within one house, all three posts'
+  totals should always agree, which doubles as a consistency check), and the
+  House Elections header total is relabeled "Total Ballots (all 8 houses
+  combined)" instead of looking like a per-house figure. Requested directly,
+  2026-09-22.
+- **Next, per explicit direction (2026-09-22): Phase 3 — "Start Recording" +
+  the audit log.** Not started yet. See Phase 3 below for what it involves;
+  it's the largest remaining piece and needs its own data-model design pass
+  before coding starts, same as Phase 0 did.
 
 This project currently has three plans, each with its own document:
 
@@ -145,13 +179,33 @@ Minimal file overlap with Phase 0, so these don't need to wait:
 
 ## Phase 2 — Multi-branch frontend (depends on Phase 0's backend branch support)
 
-Per [MULTI-BRANCH-EXPANSION-PLAN.md](MULTI-BRANCH-EXPANSION-PLAN.md) section 3:
-Manage Candidates as its own tab with Dwarka/AN sub-tabs, Live Results branch
-sub-tabs, Officer Codes tab branch grouping and a branch selector on
-generation, Election History branch grouping, report pages take a branch
-selector.
+Pulled forward out of its original order because the Election Commissioner
+needed to start entering AN's candidates for real, not wait for Phase 3/4.
 
-## Phase 3 — "Start Recording" + the audit log (trust items 11 and 5, built together)
+**Done:**
+- A shared Dwarka/AN branch toggle (`renderBranchToggle` helper in
+  [AdminLandingPage.tsx](frontend/src/pages/AdminLandingPage.tsx)), present on
+  Manage Candidates, Live Results, and Polling Officer Codes — one shared
+  `selectedBranch` state drives all three, not independent per-tab state.
+  Deliberately kept outside the fullscreen ref on Live Results so it never
+  shows up on a projector.
+- Manage Candidates: add/view candidates scoped to the selected branch.
+- Live Results: results filtered to the selected branch (shares the same
+  fetch as Manage Candidates).
+- Polling Officer Codes: generation and the codes list both scoped to the
+  selected branch, so Dwarka's and AN's codes don't mix in the same table.
+- All verified with real headless-browser runs against local dev servers
+  (not just typecheck/build) — see commit history for what each run checked.
+
+**Not done yet:**
+- Election History branch grouping.
+- Report pages (`routes/report.ts`, `TurnoutReportPage.tsx`, etc.) taking a
+  branch selector — `routes/report.ts` still doesn't accept a `branch`
+  parameter at all (see Phase 0's "still open" note).
+
+## Phase 3 — "Start Recording" + the audit log (trust items 11 and 5, built together) — NEXT
+
+Explicitly the next thing to build (direction given 2026-09-22). Not started.
 
 Now naturally follows the "collections, not array fields" pattern Phase 0
 already established for votes — the audit log is built the same way from day
@@ -159,6 +213,39 @@ one (its own Firestore collection, append-only security rule, one document per
 logged action) rather than needing a later migration. The `ElectionRun` record
 itself stays `electionType + start marker`, not branch-scoped, per the earlier
 decision that one recording always covers both branches together.
+
+Recap of what's already decided for this phase (see
+[ELECTION-INTEGRITY-AND-TRUST.md](ELECTION-INTEGRITY-AND-TRUST.md) items 5 and
+11 for the full discussion/rationale — this is a summary, not a replacement):
+
+- **Why it exists at all, primarily:** the log can't start recording from when
+  the app was first touched — normal setup work (adding candidates, fixing a
+  typo, testing codes) would drown out anything that actually matters. "Start
+  Recording" draws the line: everything before it is free, unlogged setup;
+  everything after is permanent and immutable until the run closes.
+- **One button does both, atomically:** pressing "Start Recording" both names
+  the log (asks which election it covers) *and* resets votes/officer codes to
+  zero for that run — not two separate steps. Candidates are deliberately
+  **not** reset (they take real care to set up).
+- **One shared recording across both branches**, matching the already-locked
+  decision that Open Poll itself is shared, not per-branch — not one recording
+  per branch.
+- **Officer code generation stays scoped per branch *and* per type within
+  that one run** — e.g. "Generate codes for Dwarka School Elections" — four
+  distinct combinations, not one combined action.
+- **Deletion rule for codes (item 3, ties in here):** a code can only be
+  deleted if it was *never* named (not just currently blank) **and** has zero
+  votes — once named, permanent regardless of use.
+- **The log itself:** its own Firestore collection (one document per logged
+  action, not a field on the shared document — same pattern as the votes
+  migration in Phase 0), with a database-level append-only security rule and
+  its own entry in the Phase 1 backup coverage. Large, hard-to-miss styling in
+  the dashboard for anything trust-relevant (e.g. a lapse), not a quiet row in
+  a long table.
+- **Not yet decided / needs its own design pass before coding:** the exact
+  `ElectionRun` data model, what fields the "Start Recording" prompt collects
+  beyond the election name, and how sealing a run on close interacts with
+  Election History's existing archive flow.
 
 ## Phase 4 — builds on an active recording
 
