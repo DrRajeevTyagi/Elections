@@ -1100,7 +1100,7 @@ export const AdminLandingPage = (): JSX.Element => {
                 <p className="status-card-title">Screen Data</p>
                 <p className="status-card-value">{lastUpdated ? formatTimestamp(lastUpdated) : 'Not loaded yet'}</p>
                 <p className="status-card-hint">
-                  How recently the poll status and vote counts on this screen were fetched from the server &mdash; click "Refresh this Page" above to update now.
+                  How recently the poll status and vote counts on this screen were fetched from the server. This updates automatically every 3 seconds while the poll is open &mdash; click "Refresh this Page" above to update it immediately.
                 </p>
               </div>
             </div>
@@ -1206,7 +1206,8 @@ export const AdminLandingPage = (): JSX.Element => {
               {pollStatus?.activeElectionType === 'house' ? 'House Elections' : 'School Elections'} &mdash; Live Results
             </h2>
             <p style={{ color: '#6b7280', margin: '0.15rem 0 0 0', fontSize: '0.75rem' }}>
-              Last updated on: {lastUpdated ? formatTimestamp(lastUpdated) : '—'}
+              {pollStatus?.settings.isOpen ? '🔄 Auto-refreshing every 3 seconds' : 'Click Refresh to update'}
+              {lastUpdated && ` — last updated on: ${formatTimestamp(lastUpdated)}`}
             </p>
           </div>
           <p style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1f2937', margin: 0 }}>
