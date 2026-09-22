@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAdminSecret } from '../middleware/adminAuth.js';
+import { requireAdminSession } from '../middleware/adminAuth.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError } from '../utils/httpError.js';
@@ -7,7 +7,7 @@ import { isValidHouseId } from '../config/posts.js';
 
 export const officerCodesRouter = Router();
 
-officerCodesRouter.use(requireAdminSecret);
+officerCodesRouter.use(requireAdminSession);
 
 officerCodesRouter.get(
   '/',

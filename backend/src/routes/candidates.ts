@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAdminSecret } from '../middleware/adminAuth.js';
+import { requireAdminSession } from '../middleware/adminAuth.js';
 import { dataStore } from '../storage/datastore.js';
 import { getPollState } from '../services/voteService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -40,7 +40,7 @@ const validateImageUrl = (imageUrl: string): void => {
 
 candidatesRouter.put(
   '/:candidateId',
-  requireAdminSecret,
+  requireAdminSession,
   asyncHandler((req, res) => {
     ensurePollIsClosed();
     const { candidateId } = req.params;
@@ -81,7 +81,7 @@ candidatesRouter.put(
 
 candidatesRouter.post(
   '/',
-  requireAdminSecret,
+  requireAdminSession,
   asyncHandler((req, res) => {
     ensurePollIsClosed();
     const { id, name, post, electionType, house, imageUrl } = req.body as Partial<Candidate>;
@@ -147,7 +147,7 @@ candidatesRouter.post(
 
 candidatesRouter.delete(
   '/:candidateId',
-  requireAdminSecret,
+  requireAdminSession,
   asyncHandler((req, res) => {
     ensurePollIsClosed();
     const { candidateId } = req.params;

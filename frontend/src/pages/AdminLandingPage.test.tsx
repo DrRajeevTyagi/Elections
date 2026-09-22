@@ -18,7 +18,10 @@ const mockApi = vi.hoisted(() => ({
   updateOfficerCode: vi.fn(),
   deleteOfficerCode: vi.fn(),
   reopenOfficerCode: vi.fn(),
-  getArchivesList: vi.fn()
+  getArchivesList: vi.fn(),
+  getStorageHealth: vi.fn().mockResolvedValue({ ok: true, lastSuccessAt: null, lastErrorAt: null }),
+  logoutAdmin: vi.fn(),
+  setAdminSessionLostHandler: vi.fn()
 }));
 
 vi.mock('../services/api', () => mockApi);

@@ -20,6 +20,34 @@ const api = axios.create({
   baseURL: '/api'
 });
 
+// Identifies this browser tab to the backend's single-admin-console lock
+// (see backend/src/services/adminSessionService.ts) -- separate from the
+// admin secret, which is a shared password everyone with access knows.
+// Stored in sessionStorage so it survives a page refresh within the same
+// tab (and is copied into report tabs opened via window.open) but a
+// genuinely different tab/terminal always gets its own id.
+const ADMIN_CLIENT_ID_KEY = 'adminClientId';
+
+const getAdminClientId = (): string => {
+  let clientId = sessionStorage.getItem(ADMIN_CLIENT_ID_KEY);
+  if (!clientId) {
+    clientId = crypto.randomUUID();
+    sessionStorage.setItem(ADMIN_CLIENT_ID_KEY, clientId);
+  }
+  return clientId;
+};
+
+api.defaults.headers.common['x-admin-client-id'] = getAdminClientId();
+
+// Set by AdminLandingPage (and ReportPage) so the response interceptor
+// below can force a logout the moment any admin request comes back
+// rejected because this tab lost the single-admin-console slot -- e.g. it
+// was taken over from another device, or timed out from inactivity.
+let onAdminSessionLost: (() => void) | null = null;
+export const setAdminSessionLostHandler = (handler: (() => void) | null): void => {
+  onAdminSessionLost = handler;
+};
+
 // Surface the backend's human-readable "error" message instead of axios's
 // generic "Request failed with status code 4xx" text.
 api.interceptors.response.use(
@@ -36,6 +64,9 @@ api.interceptors.response.use(
     // built-in error.code (e.g. "ERR_BAD_REQUEST").
     if (typeof serverCode === 'string') {
       error.errorCode = serverCode;
+    }
+    if (serverCode === 'ADMIN_SESSION_LOST') {
+      onAdminSessionLost?.();
     }
     return Promise.reject(error);
   }
@@ -82,11 +113,27 @@ export const getPollStatus = async (): Promise<PollResponse> => {
   return response.data;
 };
 
-export const verifyAdminSecret = async (adminSecret: string): Promise<void> => {
+// `force` deliberately evicts another terminal that currently holds the
+// single admin-console slot -- see ADMIN_SESSION_CONFLICT handling in
+// AdminLandingPage. Only pass it after the user has explicitly confirmed
+// a takeover.
+export const verifyAdminSecret = async (adminSecret: string, force = false): Promise<void> => {
   await api.post('/admin/verify', undefined, {
     headers: {
-      'x-admin-secret': adminSecret
+      'x-admin-secret': adminSecret,
+      ...(force ? { 'x-admin-force': 'true' } : {})
     }
+  });
+};
+
+// Frees this terminal's hold on the admin-console slot immediately, so
+// another terminal can log in right away instead of waiting out the idle
+// timeout.
+export const logoutAdmin = async (): Promise<void> => {
+  await api.post('/admin/logout').catch(() => {
+    // Best-effort -- the local session is cleared either way (see
+    // AdminLandingPage.handleLogout), and the slot will free itself once
+    // this tab stops sending heartbeats regardless.
   });
 };
 

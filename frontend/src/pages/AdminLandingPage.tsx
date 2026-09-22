@@ -18,7 +18,9 @@ import {
   getArchivesList,
   getStorageHealth,
   renameArchive,
-  deleteArchive
+  deleteArchive,
+  logoutAdmin,
+  setAdminSessionLostHandler
 } from '../services/api';
 import type { PollStatus, PostResult, CandidateResult, OfficerCode, ArchiveSummary, StorageHealth } from '../types/api';
 import type { PostId, ElectionType, HouseId, SchoolPostId } from '../types/election';
@@ -89,6 +91,7 @@ export const AdminLandingPage = (): JSX.Element => {
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [sessionConflict, setSessionConflict] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
   const [pollStatus, setPollStatus] = useState<PollStatus | null>(null);
   const [results, setResults] = useState<PostResult[]>([]);
@@ -127,6 +130,26 @@ export const AdminLandingPage = (): JSX.Element => {
     const timeoutId = setTimeout(() => setMessage(null), 5000);
     return () => clearTimeout(timeoutId);
   }, [message]);
+
+  // Only one terminal may hold the admin console at a time (see
+  // adminSessionService on the backend). If this tab's hold on that slot is
+  // lost -- taken over from another device, or timed out from inactivity --
+  // the very next admin request comes back rejected, and the api layer
+  // calls this handler so the dashboard drops back to the login screen
+  // instead of silently failing every subsequent action.
+  useEffect(() => {
+    setAdminSessionLostHandler(() => {
+      sessionStorage.removeItem('adminSecret');
+      setAdminSecret('');
+      setAuthenticated(false);
+      setPollStatus(null);
+      setResults([]);
+      setAuthError(
+        'This terminal was signed out -- the admin console was taken over from another device, or this session timed out from inactivity. Please log in again.'
+      );
+    });
+    return () => setAdminSessionLostHandler(null);
+  }, []);
 
   const handlePresentFullScreen = () => {
     liveResultsRef.current?.requestFullscreen?.().catch(() => {
@@ -393,17 +416,43 @@ export const AdminLandingPage = (): JSX.Element => {
     try {
       setUnlocking(true);
       setAuthError(null);
+      setSessionConflict(null);
       await verifyAdminSecret(adminSecret.trim());
       sessionStorage.setItem('adminSecret', adminSecret.trim());
       setAuthenticated(true);
     } catch (verifyError) {
-      setAuthError(verifyError instanceof Error ? verifyError.message : 'Incorrect admin secret');
+      const code = (verifyError as { errorCode?: string })?.errorCode;
+      const messageText = verifyError instanceof Error ? verifyError.message : 'Incorrect admin secret';
+      if (code === 'ADMIN_SESSION_CONFLICT') {
+        setSessionConflict(messageText);
+      } else {
+        setAuthError(messageText);
+      }
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
+  // Only reachable after the user has explicitly confirmed a takeover in
+  // response to the ADMIN_SESSION_CONFLICT prompt above -- disconnects
+  // whichever other terminal currently holds the admin console.
+  const handleTakeOver = async () => {
+    try {
+      setUnlocking(true);
+      setAuthError(null);
+      await verifyAdminSecret(adminSecret.trim(), true);
+      sessionStorage.setItem('adminSecret', adminSecret.trim());
+      setSessionConflict(null);
+      setAuthenticated(true);
+    } catch (verifyError) {
+      setAuthError(verifyError instanceof Error ? verifyError.message : 'Failed to take over the admin console');
     } finally {
       setUnlocking(false);
     }
   };
 
   const handleLogout = () => {
+    void logoutAdmin();
     sessionStorage.removeItem('adminSecret');
     setAdminSecret('');
     setAuthenticated(false);
@@ -713,11 +762,40 @@ export const AdminLandingPage = (): JSX.Element => {
             className="form-input"
             type="password"
             value={adminSecret}
-            onChange={(event) => setAdminSecret(event.target.value)}
+            onChange={(event) => {
+              setAdminSecret(event.target.value);
+              setSessionConflict(null);
+            }}
             placeholder="Enter admin secret"
             autoFocus
           />
           {authError && <p style={{ color: '#dc2626', fontWeight: 600 }}>{authError}</p>}
+          {sessionConflict && (
+            <div
+              style={{
+                padding: '0.75rem 1rem',
+                backgroundColor: '#fffbeb',
+                border: '2px solid #f59e0b',
+                borderRadius: '8px',
+                color: '#92400e'
+              }}
+            >
+              <p style={{ margin: 0, fontWeight: 600 }}>{sessionConflict}</p>
+              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem' }}>
+                Only one terminal can control the election at a time. Taking over will immediately sign the other
+                device out.
+              </p>
+              <button
+                type="button"
+                className="button"
+                onClick={handleTakeOver}
+                disabled={unlocking}
+                style={{ backgroundColor: '#ea580c', marginTop: '0.75rem' }}
+              >
+                {unlocking ? 'Taking over...' : 'Take Over This Terminal'}
+              </button>
+            </div>
+          )}
           <button className="button" type="submit" disabled={unlocking || !adminSecret.trim()}>
             {unlocking ? 'Checking...' : 'Unlock Admin Dashboard'}
           </button>

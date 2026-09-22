@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAdminSecret } from '../middleware/adminAuth.js';
+import { requireAdminSession } from '../middleware/adminAuth.js';
 import { buildElectionSnapshot } from '../services/resultsService.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -7,7 +7,7 @@ import { BadRequestError, NotFoundError } from '../utils/httpError.js';
 
 export const reportRouter = Router();
 
-reportRouter.use(requireAdminSecret);
+reportRouter.use(requireAdminSession);
 
 // Live snapshot of the currently active election -- not persisted. Powers
 // "Download Report" at any time, independent of Reset Poll.

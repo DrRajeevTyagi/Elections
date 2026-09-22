@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAdminSecret } from '../middleware/adminAuth.js';
+import { requireAdminSession } from '../middleware/adminAuth.js';
 import { kioskService } from '../services/kioskService.js';
 import { getPollState } from '../services/voteService.js';
 import { buildElectionSnapshot } from '../services/resultsService.js';
@@ -22,7 +22,7 @@ pollRouter.get(
 
 pollRouter.post(
   '/set-type',
-  requireAdminSecret,
+  requireAdminSession,
   asyncHandler((req, res) => {
     const { electionType, name } = req.body as { electionType?: string; name?: string };
 
@@ -66,7 +66,7 @@ pollRouter.post(
 
 pollRouter.post(
   '/open',
-  requireAdminSecret,
+  requireAdminSession,
   asyncHandler((_req, res) => {
     const currentState = getPollState();
     if (!currentState.activeElectionType) {
@@ -95,7 +95,7 @@ pollRouter.post(
 
 pollRouter.post(
   '/close',
-  requireAdminSecret,
+  requireAdminSession,
   asyncHandler((_req, res) => {
     kioskService.clearSessions();
     const poll = dataStore.updatePollState((state) => ({
@@ -113,7 +113,7 @@ pollRouter.post(
 
 pollRouter.post(
   '/reset',
-  requireAdminSecret,
+  requireAdminSession,
   asyncHandler((req, res) => {
     const { name } = req.body as { name?: string };
     // Snapshot the current election's results before wiping votes, so a
