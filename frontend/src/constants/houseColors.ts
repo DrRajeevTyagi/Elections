@@ -16,7 +16,7 @@ export interface HouseColor {
 // since a handful (Anand's golden yellow, Kripa's lavender) are light
 // enough to need dark text while the rest need white.
 export const HOUSE_COLORS: Record<HouseId, HouseColor> = {
-  Anand: { text: '#8a6d00', accent: '#f5c400', stripText: '#1f2937' }, // golden yellow
+  Anand: { text: '#8a6d00', accent: '#ffc800', stripText: '#000000' }, // golden yellow
   Dhiraj: { text: '#c2410c', accent: '#e8650c', stripText: '#ffffff' }, // burnt orange
   Kripa: { text: '#7e22ce', accent: '#c084fc', stripText: '#3b0764' }, // lavender purple
   Namrata: { text: '#0f1f66', accent: '#1a2e8c', stripText: '#ffffff' }, // deep royal blue
