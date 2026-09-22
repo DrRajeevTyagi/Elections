@@ -12,6 +12,7 @@ export interface ActivateResponse {
   token: string;
   officerName?: string;
   house?: HouseId;
+  branch?: Branch;
   stationVoteCount?: number;
   expiresAt?: number;
 }

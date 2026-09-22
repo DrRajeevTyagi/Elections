@@ -1,12 +1,21 @@
 import { Router } from 'express';
-import { SCHOOL_POST_IDS, HOUSE_POST_IDS, isValidPostId, isValidHouseId } from '../config/posts.js';
+import { SCHOOL_POST_IDS, HOUSE_POST_IDS, isValidPostId, isValidHouseId, isValidBranch } from '../config/posts.js';
 import { listCandidatesForActiveElection, listCandidatesByPost } from '../services/candidateService.js';
 import { getPollState } from '../services/voteService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError, ForbiddenError } from '../utils/httpError.js';
-import type { HouseId } from '../types/election.js';
+import type { Branch, HouseId } from '../types/election.js';
 
 export const postsRouter = Router();
+
+// `branch` here is a display convenience, not a trust boundary -- this
+// route has no session binding (unlike POST /votes), so a `branch` query
+// param is just client-supplied input. The real enforcement is in
+// routes/votes.ts, which derives branch from the kiosk session server-side.
+// This just needs to match what the kiosk will actually be allowed to
+// submit, so the ballot the voter sees isn't misleading.
+const parseBranch = (value: unknown): Branch | undefined =>
+  typeof value === 'string' && isValidBranch(value) ? value : undefined;
 
 postsRouter.get(
   '/',
@@ -23,16 +32,17 @@ postsRouter.get(
         throw new BadRequestError('House parameter is required for house elections');
       }
     }
+    const branch = parseBranch(req.query.branch);
 
     // Get post IDs based on election type
     const postIds = pollState.activeElectionType === 'school' ? SCHOOL_POST_IDS : HOUSE_POST_IDS;
-    
+
     const posts = postIds.map((postId) => ({
       post: postId,
-      candidates: listCandidatesByPost(postId, pollState.activeElectionType ?? undefined, house as HouseId | undefined)
+      candidates: listCandidatesByPost(postId, pollState.activeElectionType ?? undefined, house as HouseId | undefined, branch)
     }));
 
-    const candidates = listCandidatesForActiveElection(house as HouseId | undefined);
+    const candidates = listCandidatesForActiveElection(house as HouseId | undefined, branch);
 
     res.json({
       posts,
@@ -62,10 +72,11 @@ postsRouter.get(
         throw new BadRequestError('Please select a house before viewing candidates for house elections.');
       }
     }
+    const branch = parseBranch(req.query.branch);
 
     res.json({
       post: postId,
-      candidates: listCandidatesByPost(postId, pollState.activeElectionType, house as HouseId | undefined)
+      candidates: listCandidatesByPost(postId, pollState.activeElectionType, house as HouseId | undefined, branch)
     });
   })
 );

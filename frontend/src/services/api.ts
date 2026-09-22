@@ -72,8 +72,8 @@ api.interceptors.response.use(
   }
 );
 
-export const fetchPosts = async (house?: HouseId): Promise<PostsResponse> => {
-  const params = house ? { house } : {};
+export const fetchPosts = async (house?: HouseId, branch?: Branch): Promise<PostsResponse> => {
+  const params = { ...(house ? { house } : {}), ...(branch ? { branch } : {}) };
   const response = await api.get<PostsResponse>('/posts', { params });
   return response.data;
 };

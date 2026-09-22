@@ -3,13 +3,22 @@ import { SCHOOL_POST_IDS, HOUSE_POST_IDS } from '../config/posts.js';
 import { listCandidatesByPost } from '../services/candidateService.js';
 import { recordVote, getPollState } from '../services/voteService.js';
 import { dataStore } from '../storage/datastore.js';
-import type { HouseId, VoteSubmission } from '../types/election.js';
+import type { Branch, HouseId, VoteSubmission } from '../types/election.js';
 import { requireKioskSession } from '../middleware/kioskSession.js';
 import { kioskService } from '../services/kioskService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError, HttpError } from '../utils/httpError.js';
 
-const validateVote = (body: unknown, electionType: 'school' | 'house', house?: HouseId): VoteSubmission => {
+// `branch` comes from the kiosk session (server-derived from the officer
+// code used to activate, not client input -- see routes/kiosk.ts activate)
+// so this is the actual trust boundary for branch correctness. The list of
+// candidates shown to the voter (GET /posts) is a display convenience only
+// and is NOT itself trustworthy input -- without this check, a ballot
+// activated with an AN code could submit a Dwarka candidate's id (since it
+// genuinely exists for that post/electionType/house, just the wrong
+// branch), corrupting both branches' results with a vote that's tagged one
+// branch but counts toward a candidate in the other.
+const validateVote = (body: unknown, electionType: 'school' | 'house', house?: HouseId, branch?: Branch): VoteSubmission => {
   if (!body || typeof body !== 'object') {
     throw new BadRequestError('Vote payload must be an object');
   }
@@ -30,7 +39,7 @@ const validateVote = (body: unknown, electionType: 'school' | 'house', house?: H
       throw new BadRequestError('Missing candidate selection for ' + postId);
     }
 
-    const candidates = listCandidatesByPost(postId, electionType, house);
+    const candidates = listCandidatesByPost(postId, electionType, house, branch);
     if (!candidates.some((candidate) => candidate.id === selected)) {
       throw new BadRequestError('Invalid candidate selected for ' + postId);
     }
@@ -66,7 +75,7 @@ votesRouter.post(
     // payload (or a candidate that was edited/removed mid-vote) never burns
     // the voter's code without a vote having been recorded -- see
     // kioskService.getActiveSession/markConsumed.
-    const submission = validateVote(req.body, pollState.activeElectionType, house);
+    const submission = validateVote(req.body, pollState.activeElectionType, house, branch);
     kioskService.markConsumed(res.locals.kioskToken!);
 
     // recordVote captures the vote in memory synchronously and only the

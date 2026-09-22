@@ -67,12 +67,18 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
         token: sessionToken,
         officerName: activatedOfficerName,
         // The house (if any) always comes from the code itself, resolved
-        // server-side -- see routes/kiosk.ts activate.
+        // server-side -- see routes/kiosk.ts activate. Same for branch: it's
+        // whatever the officer code was generated for, not something this
+        // client chooses -- passing it through here just makes the ballot
+        // shown match what the server will actually accept at submit time
+        // (the real enforcement is server-side in routes/votes.ts, keyed off
+        // the session, not this value).
         house: resolvedHouse,
+        branch: resolvedBranch,
         stationVoteCount: activatedStationVoteCount,
         expiresAt: sessionExpiresAt
       } = await activateKiosk(secret.trim());
-      const { posts: fetchedPosts } = await fetchPosts(resolvedHouse);
+      const { posts: fetchedPosts } = await fetchPosts(resolvedHouse, resolvedBranch);
       if (resolvedHouse) {
         setHouseState(resolvedHouse);
       }
