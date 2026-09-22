@@ -88,6 +88,125 @@
   color: #dc2626;
 }
 
+/* Dashboard tab: a title row with a status pill, a two-card strip
+   explaining "is my data safe?" vs. "how fresh is this screen?", and
+   named sections instead of one long unlabeled stack of controls. */
+.dashboard-panel {
+  gap: 1.25rem;
+}
+
+.dashboard-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dashboard-title-row h2 {
+  margin: 0;
+}
+
+/* Decorative only -- kept out of the actual text node (via ::before rather
+   than in the JSX) so it doesn't change what "Poll Controls" matches
+   against in tests or screen readers. */
+.dashboard-title-row h2::before {
+  content: '\1F5F3\FE0F  ';
+}
+
+.poll-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.poll-status-pill.is-open {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.poll-status-pill.is-closed {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.poll-status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem;
+}
+
+.status-card {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+}
+
+.status-card-danger {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.status-card-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.status-card-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1f2937;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.status-card-value {
+  margin: 0.15rem 0 0 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.status-card-hint {
+  margin: 0.3rem 0 0 0;
+  font-size: 0.78rem;
+  color: #6b7280;
+  line-height: 1.35;
+}
+
+.dashboard-section {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.dashboard-section-title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+
 /* Live Results tab: escape the admin page's normal width cap when
    presented full-screen, so it actually uses the whole monitor instead of
    staying capped at the admin page's max-width. */

@@ -68,7 +68,7 @@ This is the checklist for everyone on duty for the voting app — the Chief Elec
 
 Please don't spend testing time reporting these; they're intentional:
 
-- A ballot session (after "Officer Activation") times out after 10 minutes of inactivity, with an on-screen warning in the last 90 seconds.
+- A ballot session (after "Officer Activation") times out after 5 minutes of inactivity, with an on-screen warning in the last 90 seconds.
 - The app cannot stop the same physical voter from voting twice — that's controlled entirely by your physical voter list, by design, not by the software.
 - Refreshing or closing the browser mid-vote loses that ballot's in-progress selections, because nothing was submitted yet. Just reactivate and start again.
 - Close Poll and Reset Poll both ask for confirmation before doing anything — that's on purpose.

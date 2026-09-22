@@ -115,7 +115,7 @@ export const AdminLandingPage = (): JSX.Element => {
   const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
   const [archives, setArchives] = useState<ArchiveSummary[]>([]);
   const [archiveNameDrafts, setArchiveNameDrafts] = useState<Record<string, string>>({});
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'results' | 'codes' | 'history'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'candidates' | 'results' | 'codes' | 'history'>('dashboard');
   const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
   const liveResultsRef = useRef<HTMLDivElement | null>(null);
 
@@ -909,16 +909,11 @@ export const AdminLandingPage = (): JSX.Element => {
           </p>
         </div>
       )}
-      {storageHealth?.ok && (
-        <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: '#6b7280' }}>
-          💾 Storage: OK{storageHealth.lastSuccessAt && ` -- last saved ${formatTimestamp(storageHealth.lastSuccessAt)}`}
-        </p>
-      )}
-
       <div className="admin-tabs" style={{ display: 'flex', gap: '0.5rem', margin: '1rem 0', borderBottom: '2px solid #e5e7eb' }}>
         {(
           [
             { key: 'dashboard', label: 'Dashboard' },
+            { key: 'candidates', label: 'Manage Candidates' },
             { key: 'results', label: 'Live Results' },
             { key: 'codes', label: `Polling Officer Codes${officerCodes.length > 0 ? ` (${officerCodes.length})` : ''}` },
             { key: 'history', label: 'Election History' }
@@ -941,169 +936,201 @@ export const AdminLandingPage = (): JSX.Element => {
       </div>
 
       {activeTab === 'dashboard' && (
-      <div className="admin-grid">
-        <div className="admin-panel">
-          <h2>Poll Controls</h2>
-          {pollStatus && (
-            <p
-              className="status"
-              style={{
-                margin: '0 0 1rem 0',
-                fontSize: '1rem',
-                fontWeight: 700,
-                color: pollStatus.settings.isOpen ? '#16a34a' : '#dc2626'
-              }}
-            >
-              Status: {pollStatus.settings.isOpen ? 'Poll Open' : 'Poll Closed'}
-            </p>
-          )}
-
-          {/* Election Type Selector */}
-          <div style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
-            <label className="form-label" style={{ marginBottom: '0.5rem', fontWeight: 600 }}>
-              Election Type
-            </label>
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <button
-                className="button"
-                onClick={() => handleSetElectionType('school')}
-                disabled={loading || pollStatus?.settings.isOpen === true || pollStatus?.activeElectionType === 'school'}
-                style={{
-                  backgroundColor: pollStatus?.activeElectionType === 'school' ? '#16a34a' : '#6b7280',
-                  flex: 1,
-                  opacity: pollStatus?.settings.isOpen ? 0.5 : 1
-                }}
-                title={pollStatus?.settings.isOpen ? 'Close poll before changing election type' : 'Switch to School Elections'}
-              >
-                🏫 School
-              </button>
-              <button
-                className="button"
-                onClick={() => handleSetElectionType('house')}
-                disabled={loading || pollStatus?.settings.isOpen === true || pollStatus?.activeElectionType === 'house'}
-                style={{
-                  backgroundColor: pollStatus?.activeElectionType === 'house' ? '#16a34a' : '#6b7280',
-                  flex: 1,
-                  opacity: pollStatus?.settings.isOpen ? 0.5 : 1
-                }}
-                title={pollStatus?.settings.isOpen ? 'Close poll before changing election type' : 'Switch to House Elections'}
-              >
-                🏠 House
-              </button>
-            </div>
-            {pollStatus?.activeElectionType ? (
-              <p className="status" style={{ margin: 0, fontSize: '0.875rem' }}>
-                Active: <strong>{pollStatus.activeElectionType === 'school' ? 'School Elections' : 'House Elections'}</strong>
-              </p>
-            ) : (
-              <p className="status" style={{ margin: 0, fontSize: '0.875rem', color: '#dc2626' }}>
-                No election type selected
-              </p>
+        <div className="admin-panel dashboard-panel">
+          <div className="dashboard-title-row">
+            <h2>Poll Controls</h2>
+            {pollStatus && (
+              <span className={`poll-status-pill ${pollStatus.settings.isOpen ? 'is-open' : 'is-closed'}`}>
+                <span className="poll-status-dot" aria-hidden="true" />
+                {pollStatus.settings.isOpen ? 'Poll Open' : 'Poll Closed'}
+              </span>
             )}
           </div>
 
-          <label className="form-label" style={{ marginBottom: '0.5rem', fontWeight: 600 }}>Admin Secret</label>
-          <p className="status" style={{ margin: '0 0 0.75rem 0' }}>✓ Unlocked for this browser session</p>
-          <div className="admin-actions">
-            <button
-              className="button"
-              onClick={() => mutatePoll('open')}
-              disabled={loading || !pollStatus?.activeElectionType || pollStatus?.settings.isOpen === true}
-              style={{ opacity: pollStatus?.settings.isOpen === true ? 0.5 : 1 }}
-              title={
-                pollStatus?.settings.isOpen === true
-                  ? 'Poll is already open'
-                  : !pollStatus?.activeElectionType
-                  ? 'Please select an election type first'
-                  : 'Open the poll for voting'
-              }
-            >
-              Open Poll
-            </button>
-            <button
-              className="button"
-              onClick={() => mutatePoll('close')}
-              disabled={loading || pollStatus?.settings.isOpen !== true}
-              style={{ backgroundColor: '#dc2626', opacity: pollStatus?.settings.isOpen !== true ? 0.5 : 1 }}
-              title={pollStatus?.settings.isOpen !== true ? 'Poll is already closed' : 'Close the poll'}
-            >
-              Close Poll
-            </button>
-            <button className="button" onClick={() => void loadDashboard()} disabled={loading} style={{ backgroundColor: '#6b7280', opacity: loading ? 0.5 : 1 }}>
-              Refresh
-            </button>
+          {/* Combines the two timestamps that used to be shown separately
+              (a global "Storage: OK" line above the tabs, and "Last
+              updated" buried at the bottom of this panel) into one place,
+              each labelled with what it actually tells the admin -- they
+              answer two different questions ("is my data safe?" vs. "how
+              fresh is what I'm looking at?") that are easy to conflate. */}
+          <div className="status-strip">
+            <div className={`status-card${storageHealth?.ok === false ? ' status-card-danger' : ''}`}>
+              <span className="status-card-icon" aria-hidden="true">💾</span>
+              <div>
+                <p className="status-card-title">
+                  Storage {storageHealth ? (storageHealth.ok ? 'OK' : 'Not Saving') : ''}
+                </p>
+                <p className="status-card-value">
+                  {storageHealth?.ok === false
+                    ? 'See the red alert above -- get IT/developer help immediately.'
+                    : storageHealth?.lastSuccessAt
+                    ? `Last saved ${formatTimestamp(storageHealth.lastSuccessAt)}`
+                    : 'No save confirmed yet'}
+                </p>
+                <p className="status-card-hint">
+                  Confirms votes and other changes made so far are safely and durably saved on the server &mdash; not just held in memory.
+                </p>
+              </div>
+            </div>
+            <div className="status-card">
+              <span className="status-card-icon" aria-hidden="true">🔄</span>
+              <div>
+                <p className="status-card-title">Screen Data</p>
+                <p className="status-card-value">{lastUpdated ? formatTimestamp(lastUpdated) : 'Not loaded yet'}</p>
+                <p className="status-card-hint">
+                  How recently the poll status and vote counts on this screen were fetched from the server &mdash; click Refresh below to update now.
+                </p>
+              </div>
+            </div>
           </div>
-          <div className="admin-actions" style={{ marginTop: '0.5rem' }}>
-            <button
-              className="button"
-              onClick={handleSaveToHistory}
-              disabled={loading || !pollStatus?.activeElectionType}
-              style={{
-                backgroundColor: '#0f766e',
-                width: '100%',
-                opacity: !pollStatus?.activeElectionType ? 0.5 : 1
-              }}
-              title={
-                !pollStatus?.activeElectionType
-                  ? 'Select an election type first'
-                  : 'Save the current results to Election History -- does not affect any votes'
-              }
-            >
-              📋 Save to Election History
-            </button>
-          </div>
-          <div className="admin-actions" style={{ marginTop: '0.5rem' }}>
-            <button
-              className="button"
-              onClick={handleReset}
-              disabled={loading || pollStatus?.settings.isOpen === true}
-              style={{ 
-                backgroundColor: pollStatus?.settings.isOpen ? '#9ca3af' : '#ea580c', 
-                width: '100%',
-                opacity: pollStatus?.settings.isOpen ? 0.5 : 1
-              }}
-              title={pollStatus?.settings.isOpen ? 'Close the poll before resetting' : 'Delete all votes and reset the poll'}
-            >
-              🗑️ Reset Poll (Clear All Votes)
-              {pollStatus?.settings.isOpen && ' (Close poll first)'}
-            </button>
-          </div>
-          {lastUpdated && <p className="status">Last updated: {formatTimestamp(lastUpdated)}</p>}
-          <div className="admin-actions" style={{ marginTop: '0.75rem' }}>
-            <button
-              className="button"
-              onClick={() => window.open('/admin/report', '_blank')}
-              disabled={!pollStatus?.activeElectionType}
-              style={{ backgroundColor: '#4338ca', width: '100%', opacity: !pollStatus?.activeElectionType ? 0.5 : 1 }}
-              title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable results report in a new tab'}
-            >
-              🖨️ Download Report (current results)
-            </button>
-          </div>
-        </div>
 
+          <section className="dashboard-section">
+            <h3 className="dashboard-section-title">Election Type</h3>
+            <div style={{ padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <button
+                  className="button"
+                  onClick={() => handleSetElectionType('school')}
+                  disabled={loading || pollStatus?.settings.isOpen === true || pollStatus?.activeElectionType === 'school'}
+                  style={{
+                    backgroundColor: pollStatus?.activeElectionType === 'school' ? '#16a34a' : '#6b7280',
+                    flex: 1,
+                    opacity: pollStatus?.settings.isOpen ? 0.5 : 1
+                  }}
+                  title={pollStatus?.settings.isOpen ? 'Close poll before changing election type' : 'Switch to School Elections'}
+                >
+                  🏫 School
+                </button>
+                <button
+                  className="button"
+                  onClick={() => handleSetElectionType('house')}
+                  disabled={loading || pollStatus?.settings.isOpen === true || pollStatus?.activeElectionType === 'house'}
+                  style={{
+                    backgroundColor: pollStatus?.activeElectionType === 'house' ? '#16a34a' : '#6b7280',
+                    flex: 1,
+                    opacity: pollStatus?.settings.isOpen ? 0.5 : 1
+                  }}
+                  title={pollStatus?.settings.isOpen ? 'Close poll before changing election type' : 'Switch to House Elections'}
+                >
+                  🏠 House
+                </button>
+              </div>
+              {pollStatus?.activeElectionType ? (
+                <p className="status" style={{ margin: 0, fontSize: '0.875rem' }}>
+                  Active: <strong>{pollStatus.activeElectionType === 'school' ? 'School Elections' : 'House Elections'}</strong>
+                </p>
+              ) : (
+                <p className="status" style={{ margin: 0, fontSize: '0.875rem', color: '#dc2626' }}>
+                  No election type selected
+                </p>
+              )}
+            </div>
+          </section>
+
+          <section className="dashboard-section">
+            <h3 className="dashboard-section-title">Voting</h3>
+            <div className="admin-actions">
+              <button
+                className="button"
+                onClick={() => mutatePoll('open')}
+                disabled={loading || !pollStatus?.activeElectionType || pollStatus?.settings.isOpen === true}
+                style={{ opacity: pollStatus?.settings.isOpen === true ? 0.5 : 1 }}
+                title={
+                  pollStatus?.settings.isOpen === true
+                    ? 'Poll is already open'
+                    : !pollStatus?.activeElectionType
+                    ? 'Please select an election type first'
+                    : 'Open the poll for voting'
+                }
+              >
+                Open Poll
+              </button>
+              <button
+                className="button"
+                onClick={() => mutatePoll('close')}
+                disabled={loading || pollStatus?.settings.isOpen !== true}
+                style={{ backgroundColor: '#dc2626', opacity: pollStatus?.settings.isOpen !== true ? 0.5 : 1 }}
+                title={pollStatus?.settings.isOpen !== true ? 'Poll is already closed' : 'Close the poll'}
+              >
+                Close Poll
+              </button>
+              <button className="button" onClick={() => void loadDashboard()} disabled={loading} style={{ backgroundColor: '#6b7280', opacity: loading ? 0.5 : 1 }}>
+                Refresh
+              </button>
+            </div>
+          </section>
+
+          <section className="dashboard-section">
+            <h3 className="dashboard-section-title">Records &amp; Reports</h3>
+            <div className="admin-actions" style={{ flexDirection: 'column' }}>
+              <button
+                className="button"
+                onClick={handleSaveToHistory}
+                disabled={loading || !pollStatus?.activeElectionType}
+                style={{
+                  backgroundColor: '#0f766e',
+                  width: '100%',
+                  opacity: !pollStatus?.activeElectionType ? 0.5 : 1
+                }}
+                title={
+                  !pollStatus?.activeElectionType
+                    ? 'Select an election type first'
+                    : 'Save the current results to Election History -- does not affect any votes'
+                }
+              >
+                📋 Save to Election History
+              </button>
+              <button
+                className="button"
+                onClick={() => window.open('/admin/report', '_blank')}
+                disabled={!pollStatus?.activeElectionType}
+                style={{ backgroundColor: '#4338ca', width: '100%', opacity: !pollStatus?.activeElectionType ? 0.5 : 1 }}
+                title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable results report in a new tab'}
+              >
+                🖨️ Download Report (current results)
+              </button>
+              <button
+                className="button"
+                onClick={handleReset}
+                disabled={loading || pollStatus?.settings.isOpen === true}
+                style={{
+                  backgroundColor: pollStatus?.settings.isOpen ? '#9ca3af' : '#ea580c',
+                  width: '100%',
+                  opacity: pollStatus?.settings.isOpen ? 0.5 : 1
+                }}
+                title={pollStatus?.settings.isOpen ? 'Close the poll before resetting' : 'Delete all votes and reset the poll'}
+              >
+                🗑️ Reset Poll (Clear All Votes)
+                {pollStatus?.settings.isOpen && ' (Close poll first)'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {activeTab === 'candidates' && (
         <div className="admin-panel">
           <h2>Manage Candidates</h2>
           <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
-            {pollStatus?.activeElectionType === 'house' 
+            {pollStatus?.activeElectionType === 'house'
               ? 'Edit, delete, or add candidates for each house and post'
               : 'Edit, delete, or add candidates for each post'}
           </p>
-          
+
           {pollStatus?.activeElectionType === 'house' && houseGroupedResults ? (
             // House elections: Group by house, then by post
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
               {houseGroupedResults.map((houseGroup) => (
-                <div key={houseGroup.house} style={{ 
-                  border: '2px solid #e5e7eb', 
-                  borderRadius: '12px', 
+                <div key={houseGroup.house} style={{
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '12px',
                   padding: '1.5rem',
                   backgroundColor: '#f9fafb'
                 }}>
-                  <h3 style={{ 
-                    fontSize: '1.5rem', 
-                    fontWeight: 700, 
-                    color: '#1f2937', 
+                  <h3 style={{
+                    fontSize: '1.5rem',
+                    fontWeight: 700,
+                    color: '#1f2937',
                     marginBottom: '1rem',
                     borderBottom: '2px solid #3b82f6',
                     paddingBottom: '0.5rem'
@@ -1114,7 +1141,7 @@ export const AdminLandingPage = (): JSX.Element => {
                     {HOUSE_POST_IDS.map((postId) => {
                       const postResult = houseGroup.posts.find(p => p.post === postId);
                       const postCandidates = postResult?.candidates || [];
-                      
+
                       return (
                         <div key={`${houseGroup.house}-${postId}`} className="result-card">
                           <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.75rem' }}>
@@ -1169,128 +1196,6 @@ export const AdminLandingPage = (): JSX.Element => {
             </div>
           )}
         </div>
-
-        <div className="admin-panel">
-          <h2>Results Overview</h2>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <p style={{ fontSize: '0.9rem', color: '#6b7280', margin: 0 }}>
-              {pollStatus?.settings.isOpen ? (
-                <span>
-                  🔄 Auto-refreshing every 3 seconds
-                  {lastUpdated && (
-                    <span style={{ fontSize: '0.8rem', marginLeft: '0.5rem' }}>
-                      (Last updated: {formatTimestamp(lastUpdated)})
-                    </span>
-                  )}
-                </span>
-              ) : (
-                'Click "Refresh" to update vote counts'
-              )}
-            </p>
-            <p style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1f2937', margin: 0 }}>
-              Total Votes: {totalVotes}
-            </p>
-          </div>
-          
-          {pollStatus?.activeElectionType === 'house' && houseGroupedResults ? (
-            // House elections: Group by house, then by post
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-              {houseGroupedResults.map((houseGroup) => (
-                <div key={houseGroup.house} style={{ 
-                  border: '2px solid #e5e7eb', 
-                  borderRadius: '12px', 
-                  padding: '1.5rem',
-                  backgroundColor: '#f9fafb'
-                }}>
-                  <h3 style={{ 
-                    fontSize: '1.5rem', 
-                    fontWeight: 700, 
-                    color: '#1f2937', 
-                    marginBottom: '1rem',
-                    borderBottom: '2px solid #3b82f6',
-                    paddingBottom: '0.5rem'
-                  }}>
-                    🏠 {houseGroup.house} House
-                  </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    {HOUSE_POST_IDS.map((postId) => {
-                      const postResult = houseGroup.posts.find(p => p.post === postId);
-                      const postCandidates = postResult?.candidates || [];
-                      
-                      const sortedCandidates = [...postCandidates].sort((a, b) => b.total - a.total);
-
-                      return (
-                        <div key={`${houseGroup.house}-${postId}`} className="result-card">
-                          <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.75rem' }}>
-                            {postId}
-                          </h4>
-                          <ul>
-                            {sortedCandidates.length > 0 ? (
-                              sortedCandidates.map((candidateResult, index) => (
-                                <li key={candidateResult.candidate.id} style={{ 
-                                  backgroundColor: index === 0 && candidateResult.total > 0 ? '#f0fdf4' : 'transparent',
-                                  padding: '0.5rem',
-                                  borderRadius: '6px',
-                                  marginBottom: '0.25rem'
-                                }}>
-                                  <span style={{ fontWeight: index === 0 && candidateResult.total > 0 ? 600 : 400 }}>
-                                    {candidateResult.candidate.name}
-                                  </span>
-                                  <span className="badge" style={{ 
-                                    backgroundColor: index === 0 && candidateResult.total > 0 ? '#16a34a' : '#1c64f2'
-                                  }}>
-                                    {candidateResult.total} {candidateResult.total === 1 ? 'vote' : 'votes'}
-                                  </span>
-                                </li>
-                              ))
-                            ) : (
-                              <li style={{ color: '#9ca3af', fontSize: '0.9rem', fontStyle: 'italic' }}>
-                                No candidates
-                              </li>
-                            )}
-                          </ul>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            // School elections: Group by post only
-            <div className="results-grid">
-              {results.map((postResult) => {
-                const sortedCandidates = [...postResult.candidates].sort((a, b) => b.total - a.total);
-                return (
-                <div key={postResult.post} className="result-card">
-                  <h3>{postResult.post}</h3>
-                  <ul>
-                    {sortedCandidates.map((candidateResult, index) => (
-                      <li key={candidateResult.candidate.id} style={{ 
-                        backgroundColor: index === 0 && candidateResult.total > 0 ? '#f0fdf4' : 'transparent',
-                        padding: '0.5rem',
-                        borderRadius: '6px',
-                        marginBottom: '0.25rem'
-                      }}>
-                        <span style={{ fontWeight: index === 0 && candidateResult.total > 0 ? 600 : 400 }}>
-                          {candidateResult.candidate.name}
-                        </span>
-                        <span className="badge" style={{ 
-                          backgroundColor: index === 0 && candidateResult.total > 0 ? '#16a34a' : '#1c64f2'
-                        }}>
-                          {candidateResult.total} {candidateResult.total === 1 ? 'vote' : 'votes'}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                );
-              })}
-              {results.length === 0 && <p>No votes recorded yet.</p>}
-            </div>
-          )}
-        </div>
-      </div>
       )}
 
       {activeTab === 'results' && (
@@ -1304,6 +1209,9 @@ export const AdminLandingPage = (): JSX.Element => {
               Last updated on: {lastUpdated ? formatTimestamp(lastUpdated) : '—'}
             </p>
           </div>
+          <p style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1f2937', margin: 0 }}>
+            Total Votes: {totalVotes}
+          </p>
           <div style={{ display: 'flex', gap: '0.4rem' }}>
             <button
               className="button"

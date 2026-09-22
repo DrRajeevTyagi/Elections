@@ -8,7 +8,7 @@ import type { PostCandidateGroup, PostId } from '../types/election';
 import './Page.css';
 import './Evm.css';
 
-// Below this many seconds left on the 10-minute ballot session, show a
+// Below this many seconds left on the 5-minute ballot session, show a
 // warning banner so a slow voter isn't blindsided by a sudden "session
 // expired" error with no notice.
 const EXPIRY_WARNING_MS = 90 * 1000;

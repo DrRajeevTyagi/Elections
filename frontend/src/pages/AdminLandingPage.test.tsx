@@ -75,6 +75,20 @@ describe('AdminLandingPage tabs', () => {
     expect(screen.getByText('Poll Controls')).toBeInTheDocument();
     expect(screen.queryByText('Generate codes for House Elections')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Election History' })).not.toBeInTheDocument();
+    // Manage Candidates and Results Overview were moved/removed from the
+    // Dashboard tab (see MULTI-BRANCH-EXPANSION-PLAN.md / TESTING-DEMO-SCRIPT.md)
+    // -- lock in that neither still renders here.
+    expect(screen.queryByRole('heading', { name: 'Manage Candidates' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Results Overview' })).not.toBeInTheDocument();
+
+    // Switch to the new Manage Candidates tab -- its own top-level tab now,
+    // second after Dashboard.
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Candidates' }));
+    await screen.findByRole('heading', { name: 'Manage Candidates' });
+    expect(screen.getByText('Riya')).toBeInTheDocument();
+    expect(screen.queryByText('Poll Controls')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Dashboard' }));
+    await screen.findByText('Poll Controls');
 
     // Switch to Live Results tab -- this is the tab meant to be projected
     // alone on a large monitor, so it must show real vote data grouped by

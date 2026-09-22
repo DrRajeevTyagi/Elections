@@ -82,7 +82,7 @@ Manages elections for **3 house-level posts**:
 
 ### Voting Security Features
 - **Per-officer single-use tokens**: each activation creates a unique session token
-- **Token expiration**: tokens expire after 10 minutes if unused, with an
+- **Token expiration**: tokens expire after 5 minutes if unused, with an
   on-screen warning banner once the last 90 seconds are reached
 - **Consumed tokens**: invalidated immediately after a vote is submitted
 - **No demo candidates**: a brand-new election starts with zero candidates
