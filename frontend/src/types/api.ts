@@ -6,7 +6,6 @@ export interface PostsResponse {
 
 export interface ActivateRequest {
   secret: string;
-  house?: HouseId;
 }
 
 export interface ActivateResponse {

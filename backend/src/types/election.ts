@@ -42,7 +42,11 @@ export interface StoredVote {
 export interface OfficerCode {
   code: string;
   officerName: string;
-  house?: HouseId; // Bound house for a house-election code; undefined works for any house (legacy/manual flow)
+  // Which election this code was generated for -- a code generated for one
+  // election type must never activate a ballot while the other is active,
+  // even if the poll happens to be open (see routes/kiosk.ts activate).
+  electionType: ElectionType;
+  house?: HouseId; // Required (and always set) when electionType is 'house'
   createdAt: number;
   closedAt?: number; // Set when the polling officer closes this booth; blocks further activations
 }

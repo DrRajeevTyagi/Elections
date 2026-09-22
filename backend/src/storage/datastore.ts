@@ -77,6 +77,19 @@ const isOfficerCode = (value: unknown): value is OfficerCode => {
   return typeof entry.code === 'string' && typeof entry.officerName === 'string' && typeof entry.createdAt === 'number';
 };
 
+// electionType was added after codes without it could already exist in
+// storage. Infer it the same way it's always been implied: a code with a
+// house on it was generated for House elections, and one without was
+// generated for School elections -- see routes/officerCodes.ts generate.
+const normalizeOfficerCode = (entry: OfficerCode): OfficerCode => ({
+  ...entry,
+  electionType: entry.electionType === 'house' || entry.electionType === 'school'
+    ? entry.electionType
+    : entry.house
+    ? 'house'
+    : 'school'
+});
+
 const isElectionArchive = (value: unknown): value is ElectionArchive => {
   if (typeof value !== 'object' || value === null) {
     return false;
@@ -182,7 +195,7 @@ export class DataStore {
     }
 
     if (Array.isArray(parsed.officerCodes) && parsed.officerCodes.every((entry) => isOfficerCode(entry))) {
-      defaults.officerCodes = parsed.officerCodes.map((entry) => ({ ...entry }));
+      defaults.officerCodes = parsed.officerCodes.map((entry) => normalizeOfficerCode({ ...entry }));
     }
 
     if (Array.isArray(parsed.archives) && parsed.archives.every((entry) => isElectionArchive(entry))) {
@@ -337,10 +350,10 @@ export class DataStore {
     return entry ? { ...entry } : undefined;
   }
 
-  generateOfficerCodes(count: number, house?: HouseId): OfficerCode[] {
+  generateOfficerCodes(count: number, electionType: ElectionType, house?: HouseId): OfficerCode[] {
     const newCodes = generateUniqueCodes(count, this.data.officerCodes.map((entry) => entry.code));
     const createdAt = Date.now();
-    const entries: OfficerCode[] = newCodes.map((code) => ({ code, officerName: '', house, createdAt }));
+    const entries: OfficerCode[] = newCodes.map((code) => ({ code, officerName: '', electionType, house, createdAt }));
     this.data.officerCodes.push(...entries);
     this.queuePersist();
     return entries;

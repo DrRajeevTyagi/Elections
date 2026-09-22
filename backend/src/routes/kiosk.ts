@@ -3,13 +3,11 @@ import { getPollState } from '../services/voteService.js';
 import { kioskService, SESSION_TTL_MS } from '../services/kioskService.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { ForbiddenError, UnauthorizedError, BadRequestError } from '../utils/httpError.js';
-import { isValidHouseId } from '../config/posts.js';
+import { ForbiddenError, UnauthorizedError } from '../utils/httpError.js';
 import { kioskGuessLimiter } from '../middleware/rateLimit.js';
 
 interface ActivationRequest {
   secret?: string;
-  house?: string;
 }
 
 export const kioskRouter = Router();
@@ -18,7 +16,7 @@ kioskRouter.post(
   '/activate',
   kioskGuessLimiter,
   asyncHandler((req, res) => {
-    const { secret, house: requestedHouse } = req.body as ActivationRequest;
+    const { secret } = req.body as ActivationRequest;
     const enteredCode = typeof secret === 'string' ? secret.trim().toUpperCase() : '';
     const officerCode = enteredCode ? dataStore.findOfficerCode(enteredCode) : undefined;
     if (!officerCode) {
@@ -40,25 +38,24 @@ kioskRouter.post(
       throw new ForbiddenError('No election has been set up yet. Please contact the election administrator.');
     }
 
-    let house: string | undefined;
-    if (pollState.activeElectionType === 'house') {
-      if (officerCode.house) {
-        // The code carries its own house identity -- always use it and
-        // ignore any house the client may have sent.
-        house = officerCode.house;
-      } else if (requestedHouse && isValidHouseId(requestedHouse)) {
-        // Legacy/unbound code: fall back to the house the officer selected manually.
-        house = requestedHouse;
-      } else {
-        throw new BadRequestError('Please select a house before activating a ballot for house elections.', 'HOUSE_REQUIRED');
-      }
-    } else if (pollState.activeElectionType === 'school' && officerCode.house) {
+    // A code generated for one election must never activate a ballot for
+    // the other, even if that other election happens to be the one
+    // currently open -- e.g. a School code must be rejected outright while
+    // House elections are active, not treated as "no house preference" and
+    // let the officer pick any house.
+    if (officerCode.electionType !== pollState.activeElectionType) {
+      const codeKind = officerCode.electionType === 'house' ? 'House' : 'School';
+      const activeKind = pollState.activeElectionType === 'house' ? 'House' : 'School';
       throw new ForbiddenError(
-        `This code is bound to the ${officerCode.house} house and can only be used during House elections.`
+        `This code is for ${codeKind} Elections and cannot be used while ${activeKind} Elections are active. Ask the election administrator for a ${activeKind} Elections code.`
       );
     }
 
-    const session = kioskService.createSession(officerCode.code, house && isValidHouseId(house) ? house : undefined);
+    // For a house-election code, the house always comes from the code
+    // itself (set at generation time) -- never from client input.
+    const house = officerCode.electionType === 'house' ? officerCode.house : undefined;
+
+    const session = kioskService.createSession(officerCode.code, house);
     const stationVoteCount = dataStore.countVotesByOfficerCode(officerCode.code);
     res.status(201).json({
       token: session.token,

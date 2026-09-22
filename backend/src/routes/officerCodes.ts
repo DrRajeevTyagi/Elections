@@ -32,7 +32,13 @@ officerCodesRouter.post(
     if (house !== undefined && !isValidHouseId(house)) {
       throw new BadRequestError('Invalid house');
     }
-    const codes = dataStore.generateOfficerCodes(parsedCount, house);
+    // A house is only ever passed by the "Generate for House Elections"
+    // controls -- its presence is what distinguishes a House code from a
+    // School code (see kiosk.ts activate, which rejects a code outright if
+    // its electionType doesn't match whichever election is currently
+    // active).
+    const electionType = house !== undefined ? 'house' : 'school';
+    const codes = dataStore.generateOfficerCodes(parsedCount, electionType, house);
     res.status(201).json({ codes });
   })
 );

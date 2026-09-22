@@ -78,11 +78,8 @@ export const fetchPosts = async (house?: HouseId): Promise<PostsResponse> => {
   return response.data;
 };
 
-export const activateKiosk = async (secret: string, house?: HouseId): Promise<ActivateResponse> => {
+export const activateKiosk = async (secret: string): Promise<ActivateResponse> => {
   const payload: ActivateRequest = { secret };
-  if (house) {
-    payload.house = house;
-  }
   const response = await api.post<ActivateResponse>('/kiosk/activate', payload);
   return response.data;
 };

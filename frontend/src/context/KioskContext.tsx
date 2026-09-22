@@ -23,7 +23,7 @@ interface KioskContextValue {
   confirmation?: VoteConfirmation;
   stationVoteCount?: number;
   setHouse: (house: HouseId | null) => void;
-  activate: (secret: string, houseOverride?: HouseId) => Promise<void>;
+  activate: (secret: string) => Promise<void>;
   updateSelection: (post: PostId, candidateId: string) => void;
   submit: () => Promise<void>;
   reset: () => Promise<void>;
@@ -57,27 +57,24 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
     setHouseState(newHouse);
   }, []);
 
-  const activate = useCallback(async (secret: string, houseOverride?: HouseId) => {
+  const activate = useCallback(async (secret: string) => {
     setStatus('activating');
     setError(undefined);
     setConfirmation(undefined);
 
     try {
-      const requestedHouse = houseOverride ?? house ?? undefined;
       const {
         token: sessionToken,
         officerName: activatedOfficerName,
-        // The server resolves the house from the code itself when the code
-        // is house-bound, which may differ from (or be absent from) what we
-        // requested -- always trust the response over our own guess.
+        // The house (if any) always comes from the code itself, resolved
+        // server-side -- see routes/kiosk.ts activate.
         house: resolvedHouse,
         stationVoteCount: activatedStationVoteCount,
         expiresAt: sessionExpiresAt
-      } = await activateKiosk(secret.trim(), requestedHouse);
-      const effectiveHouse = resolvedHouse ?? requestedHouse;
-      const { posts: fetchedPosts } = await fetchPosts(effectiveHouse);
-      if (effectiveHouse) {
-        setHouseState(effectiveHouse);
+      } = await activateKiosk(secret.trim());
+      const { posts: fetchedPosts } = await fetchPosts(resolvedHouse);
+      if (resolvedHouse) {
+        setHouseState(resolvedHouse);
       }
       setToken(sessionToken);
       setOfficerName(activatedOfficerName);
@@ -95,7 +92,7 @@ export const KioskProvider = ({ children }: PropsWithChildren): JSX.Element => {
       setError(activationError instanceof Error ? activationError.message : 'Activation failed');
       throw activationError;
     }
-  }, [house]);
+  }, []);
 
   const updateSelection = useCallback((post: PostId, candidateId: string) => {
     setSelections((prev) => ({
