@@ -1,4 +1,4 @@
-import type { Candidate, PostCandidateGroup, PostId, ElectionType, HouseId } from './election';
+import type { Candidate, PostCandidateGroup, PostId, ElectionType, HouseId, Branch } from './election';
 
 export interface PostsResponse {
   posts: PostCandidateGroup[];
@@ -71,6 +71,7 @@ export interface OfficerCode {
   createdAt: number;
   closedAt?: number;
   voteCount: number;
+  branch?: Branch;
 }
 
 export interface OfficerCodesResponse {

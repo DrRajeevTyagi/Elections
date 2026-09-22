@@ -261,9 +261,9 @@ export const AdminLandingPage = (): JSX.Element => {
       setOfficerCodesLoading(true);
       setError(null);
       for (const houseId of HOUSE_IDS) {
-        await generateOfficerCodes(perHouseCount, adminSecret, houseId);
+        await generateOfficerCodes(perHouseCount, adminSecret, houseId, selectedBranch);
       }
-      setMessage(`Generated ${perHouseCount} code${perHouseCount === 1 ? '' : 's'} for each of the 8 houses.`);
+      setMessage(`Generated ${perHouseCount} code${perHouseCount === 1 ? '' : 's'} for each of the 8 houses (${selectedBranch === 'AN' ? 'AN' : 'Dwarka'}).`);
       await loadOfficerCodes();
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : 'Failed to generate codes for all houses');
@@ -287,8 +287,8 @@ export const AdminLandingPage = (): JSX.Element => {
     try {
       setOfficerCodesLoading(true);
       setError(null);
-      await generateOfficerCodes(count, adminSecret, generateHouse);
-      setMessage(`Generated ${count} new code${count === 1 ? '' : 's'} for ${generateHouse} House.`);
+      await generateOfficerCodes(count, adminSecret, generateHouse, selectedBranch);
+      setMessage(`Generated ${count} new code${count === 1 ? '' : 's'} for ${generateHouse} House (${selectedBranch === 'AN' ? 'AN' : 'Dwarka'}).`);
       await loadOfficerCodes();
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : 'Failed to generate codes');
@@ -306,8 +306,8 @@ export const AdminLandingPage = (): JSX.Element => {
     try {
       setOfficerCodesLoading(true);
       setError(null);
-      await generateOfficerCodes(count, adminSecret);
-      setMessage(`Generated ${count} new school code${count === 1 ? '' : 's'}.`);
+      await generateOfficerCodes(count, adminSecret, undefined, selectedBranch);
+      setMessage(`Generated ${count} new school code${count === 1 ? '' : 's'} (${selectedBranch === 'AN' ? 'AN' : 'Dwarka'}).`);
       await loadOfficerCodes();
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : 'Failed to generate codes');
@@ -706,6 +706,43 @@ export const AdminLandingPage = (): JSX.Element => {
     }
   };
 
+  // Shared by Manage Candidates, Live Results, and Polling Officer Codes --
+  // all three read/write through the same branch-scoped `results`/
+  // `officerCodes` state, so the control needs to be reachable from each one,
+  // not just wherever it happened to be added first (a real gap: it was
+  // originally only on Manage Candidates, so switching to AN there silently
+  // carried over to Live Results with no visible toggle to explain why).
+  const renderBranchToggle = (subject: string) => (
+    <>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }} role="tablist" aria-label="Branch">
+        {(['dwarka', 'AN'] as const).map((branch) => (
+          <button
+            key={branch}
+            role="tab"
+            aria-selected={selectedBranch === branch}
+            onClick={() => setSelectedBranch(branch)}
+            disabled={loading}
+            style={{
+              padding: '0.5rem 1.25rem',
+              borderRadius: '8px',
+              border: selectedBranch === branch ? '2px solid #3b82f6' : '1px solid #d1d5db',
+              backgroundColor: selectedBranch === branch ? '#eff6ff' : '#ffffff',
+              color: selectedBranch === branch ? '#1d4ed8' : '#374151',
+              fontWeight: selectedBranch === branch ? 700 : 500,
+              cursor: loading ? 'default' : 'pointer'
+            }}
+          >
+            {branch === 'AN' ? 'AN' : 'Dwarka'}
+          </button>
+        ))}
+      </div>
+      <p style={{ fontSize: '0.8rem', color: '#9ca3af', marginBottom: '1rem' }}>
+        Showing {subject} for {selectedBranch === 'AN' ? 'AN' : 'Dwarka'} only. This applies across Manage
+        Candidates, Live Results, and Polling Officer Codes together.
+      </p>
+    </>
+  );
+
   // Renders one school post's card for the Live Results tab -- pulled out
   // so all 5 posts can share the same card markup and colored header.
   const renderSchoolPostCard = (postId: SchoolPostId) => {
@@ -747,7 +784,11 @@ export const AdminLandingPage = (): JSX.Element => {
   const groupedOfficerCodes = useMemo(() => {
     const byHouse = new Map<HouseId, OfficerCode[]>();
     const unbound: OfficerCode[] = [];
-    for (const entry of officerCodes) {
+    // Codes generated before the branch field existed have no `branch` set
+    // client-side either -- treat that the same way the backend defaults it,
+    // so old Dwarka codes still show up under "Dwarka" instead of vanishing.
+    const branchFiltered = officerCodes.filter((entry) => (entry.branch ?? 'dwarka') === selectedBranch);
+    for (const entry of branchFiltered) {
       if (entry.house) {
         const list = byHouse.get(entry.house) ?? [];
         list.push(entry);
@@ -768,7 +809,7 @@ export const AdminLandingPage = (): JSX.Element => {
       groups.push({ label: 'School Posts', codes: [...unbound].sort((a, b) => a.createdAt - b.createdAt) });
     }
     return groups;
-  }, [officerCodes]);
+  }, [officerCodes, selectedBranch]);
 
   const handleSetElectionType = async (electionType: ElectionType) => {
     if (!adminSecret.trim()) {
@@ -1120,32 +1161,7 @@ export const AdminLandingPage = (): JSX.Element => {
               : 'Edit, delete, or add candidates for each post'}
           </p>
 
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }} role="tablist" aria-label="Branch">
-            {(['dwarka', 'AN'] as const).map((branch) => (
-              <button
-                key={branch}
-                role="tab"
-                aria-selected={selectedBranch === branch}
-                onClick={() => setSelectedBranch(branch)}
-                disabled={loading}
-                style={{
-                  padding: '0.5rem 1.25rem',
-                  borderRadius: '8px',
-                  border: selectedBranch === branch ? '2px solid #3b82f6' : '1px solid #d1d5db',
-                  backgroundColor: selectedBranch === branch ? '#eff6ff' : '#ffffff',
-                  color: selectedBranch === branch ? '#1d4ed8' : '#374151',
-                  fontWeight: selectedBranch === branch ? 700 : 500,
-                  cursor: loading ? 'default' : 'pointer'
-                }}
-              >
-                {branch === 'AN' ? 'AN' : 'Dwarka'}
-              </button>
-            ))}
-          </div>
-          <p style={{ fontSize: '0.8rem', color: '#9ca3af', marginTop: '-1rem', marginBottom: '1rem' }}>
-            Showing and adding candidates for {selectedBranch === 'AN' ? 'AN' : 'Dwarka'} only. Switching branch also
-            filters Live Results to match.
-          </p>
+          {renderBranchToggle('and adding candidates')}
 
           {pollStatus?.activeElectionType === 'house' && houseGroupedResults ? (
             // House elections: Group by house, then by post
@@ -1229,6 +1245,12 @@ export const AdminLandingPage = (): JSX.Element => {
       )}
 
       {activeTab === 'results' && (
+      <>
+      {/* Deliberately outside the fullscreen ref below -- "Present Full
+          Screen" is meant for a clean projector view, and this toggle has
+          no business being visible to the audience watching it. Set the
+          branch here first, then present. */}
+      {renderBranchToggle('results')}
       <div className="admin-panel" ref={liveResultsRef} style={{ backgroundColor: '#ffffff', padding: '0.6rem 0.75rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
           <div>
@@ -1309,10 +1331,12 @@ export const AdminLandingPage = (): JSX.Element => {
           </div>
         )}
       </div>
+      </>
       )}
 
       {activeTab === 'codes' && (
       <div className="admin-panel">
+        {renderBranchToggle('codes')}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
           <h2 style={{ margin: 0 }}>Polling Officer Codes</h2>
           <button

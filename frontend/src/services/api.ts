@@ -196,11 +196,12 @@ export const getOfficerCodes = async (adminSecret: string): Promise<OfficerCodes
 export const generateOfficerCodes = async (
   count: number,
   adminSecret: string,
-  house?: HouseId
+  house?: HouseId,
+  branch?: Branch
 ): Promise<OfficerCodesResponse> => {
   const response = await api.post<OfficerCodesResponse>(
     '/officer-codes/generate',
-    house ? { count, house } : { count },
+    { count, ...(house ? { house } : {}), ...(branch ? { branch } : {}) },
     { headers: { 'x-admin-secret': adminSecret } }
   );
   return response.data;
