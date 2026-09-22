@@ -943,7 +943,20 @@ export const AdminLandingPage = (): JSX.Element => {
       <div className="admin-grid">
         <div className="admin-panel">
           <h2>Poll Controls</h2>
-          
+          {pollStatus && (
+            <p
+              className="status"
+              style={{
+                margin: '0 0 1rem 0',
+                fontSize: '1rem',
+                fontWeight: 700,
+                color: pollStatus.settings.isOpen ? '#16a34a' : '#dc2626'
+              }}
+            >
+              Status: {pollStatus.settings.isOpen ? 'Poll Open' : 'Poll Closed'}
+            </p>
+          )}
+
           {/* Election Type Selector */}
           <div style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
             <label className="form-label" style={{ marginBottom: '0.5rem', fontWeight: 600 }}>
@@ -1054,11 +1067,6 @@ export const AdminLandingPage = (): JSX.Element => {
               {pollStatus?.settings.isOpen && ' (Close poll first)'}
             </button>
           </div>
-          {pollStatus && (
-            <p className="status">
-              Status: <strong>{pollStatus.settings.isOpen ? 'Open' : 'Closed'}</strong>
-            </p>
-          )}
           {lastUpdated && <p className="status">Last updated: {formatTimestamp(lastUpdated)}</p>}
           <div className="admin-actions" style={{ marginTop: '0.75rem' }}>
             <button
