@@ -40,7 +40,7 @@ const checkSessionHolder: RequestHandler = (req, _res, next) => {
   const clientId = req.header(CLIENT_ID_HEADER);
   if (!clientId || !adminSessionService.touch(clientId)) {
     throw new UnauthorizedError(
-      'This admin console is no longer the active session -- it may have been taken over from another device, or timed out from inactivity. Please log in again.',
+      'This admin console is no longer the active session -- it was taken over from another device. Please log in again.',
       'ADMIN_SESSION_LOST'
     );
   }

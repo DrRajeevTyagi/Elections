@@ -41,21 +41,15 @@ describe('AdminSessionService', () => {
     expect(service.touch('terminal-a')).toBe(true);
   });
 
-  it('frees the slot for anyone once the holder goes idle past the timeout', () => {
+  it('never expires the holder no matter how long it goes quiet', () => {
     service.claim('terminal-a', false);
-    vi.advanceTimersByTime(61 * 1000);
-    // The idle holder no longer passes touch()...
-    expect(service.touch('terminal-a')).toBe(false);
-    // ...and a new client can claim without needing force.
-    expect(service.claim('terminal-b', false)).toEqual({ ok: true });
-  });
-
-  it('does not expire a holder who keeps heartbeating via touch()', () => {
-    service.claim('terminal-a', false);
-    vi.advanceTimersByTime(50 * 1000);
-    expect(service.touch('terminal-a')).toBe(true); // refreshes lastSeenAt
-    vi.advanceTimersByTime(50 * 1000); // 100s total, but only 50s since the touch
+    // Deliberately no idle timeout -- a quiet tab, a backgrounded browser
+    // throttling its timers, an admin who steps away for hours, etc. must
+    // never silently free the slot. A day of silence changes nothing.
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000);
     expect(service.touch('terminal-a')).toBe(true);
+    // ...and a second client still can't claim it without force.
+    expect(service.claim('terminal-b', false)).toEqual({ ok: false, activeSince: expect.any(Number) });
   });
 
   it('release() frees the slot immediately for the holder', () => {

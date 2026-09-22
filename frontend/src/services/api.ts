@@ -41,8 +41,8 @@ api.defaults.headers.common['x-admin-client-id'] = getAdminClientId();
 
 // Set by AdminLandingPage (and ReportPage) so the response interceptor
 // below can force a logout the moment any admin request comes back
-// rejected because this tab lost the single-admin-console slot -- e.g. it
-// was taken over from another device, or timed out from inactivity.
+// rejected because this tab lost the single-admin-console slot -- i.e. it
+// was taken over from another device (the slot never expires on its own).
 let onAdminSessionLost: (() => void) | null = null;
 export const setAdminSessionLostHandler = (handler: (() => void) | null): void => {
   onAdminSessionLost = handler;
@@ -123,9 +123,9 @@ export const verifyAdminSecret = async (adminSecret: string, force = false): Pro
   });
 };
 
-// Frees this terminal's hold on the admin-console slot immediately, so
-// another terminal can log in right away instead of waiting out the idle
-// timeout.
+// Frees this terminal's hold on the admin-console slot immediately -- since
+// the slot never expires on its own, this is the only voluntary way to let
+// another terminal log in without forcing a takeover.
 export const logoutAdmin = async (): Promise<void> => {
   await api.post('/admin/logout').catch(() => {
     // Best-effort -- the local session is cleared either way (see

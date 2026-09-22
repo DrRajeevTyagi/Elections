@@ -140,11 +140,12 @@ export const AdminLandingPage = (): JSX.Element => {
   }, [message]);
 
   // Only one terminal may hold the admin console at a time (see
-  // adminSessionService on the backend). If this tab's hold on that slot is
-  // lost -- taken over from another device, or timed out from inactivity --
-  // the very next admin request comes back rejected, and the api layer
-  // calls this handler so the dashboard drops back to the login screen
-  // instead of silently failing every subsequent action.
+  // adminSessionService on the backend), and that hold never expires from
+  // inactivity -- the only way to lose it is another device logging in and
+  // taking over. If that happens, the very next admin request from this
+  // tab comes back rejected, and the api layer calls this handler so the
+  // dashboard drops back to the login screen instead of silently failing
+  // every subsequent action.
   useEffect(() => {
     setAdminSessionLostHandler(() => {
       sessionStorage.removeItem('adminSecret');
@@ -153,7 +154,7 @@ export const AdminLandingPage = (): JSX.Element => {
       setPollStatus(null);
       setResults([]);
       setAuthError(
-        'This terminal was signed out -- the admin console was taken over from another device, or this session timed out from inactivity. Please log in again.'
+        'This terminal was signed out -- the admin console was taken over from another device. Please log in again.'
       );
     });
     return () => setAdminSessionLostHandler(null);
