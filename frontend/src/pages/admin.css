@@ -183,11 +183,20 @@
   color: #111827;
 }
 
+/* Uses transform: scale() rather than relying on font-size alone -- some
+   browsers enforce a minimum font size (an accessibility setting, common
+   on shared/school devices) that silently overrides small font-size
+   values, which is why earlier attempts at a smaller font-size here had
+   no visible effect. transform scales the already-rendered text instead,
+   which isn't subject to that floor. transform-origin keeps it anchored
+   to the top-left instead of shrinking toward the center. */
 .status-card-hint {
-  margin: 0.3rem 0 0 0;
+  margin: 0.3rem 0 -0.5rem 0;
   font-size: 0.62rem;
   color: #6b7280;
   line-height: 1.3;
+  transform: scale(0.8);
+  transform-origin: top left;
 }
 
 .dashboard-section {
