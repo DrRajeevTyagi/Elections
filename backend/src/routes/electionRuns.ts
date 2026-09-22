@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { requireAdminSession } from '../middleware/adminAuth.js';
 import { dataStore } from '../storage/datastore.js';
+import type { LogSearchFilter } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError, NotFoundError } from '../utils/httpError.js';
 import { startRecording, closeRecording } from '../services/runService.js';
+import { isValidBranch } from '../config/posts.js';
 
 export const electionRunsRouter = Router();
 
@@ -24,6 +26,40 @@ electionRunsRouter.get(
   '/',
   asyncHandler((_req, res) => {
     res.json({ runs: dataStore.getRuns() });
+  })
+);
+
+// The "Ask your data" search: filters the permanent action log across any
+// run (or a specific one), by election type, branch, actor, action, or a
+// code -- e.g. "who were the polling officers for AN House Elections" (all
+// officerCode.name entries, branch=AN, electionType=house), "what happened
+// under code abc123" (code=abc123), "what did the admin account do for this
+// run" (runId=..., adminOnly=true). See datastore.ts's searchLogEntries for
+// the exact filter semantics. Placed before /:id/log so "search" is never
+// mistaken for a run id.
+electionRunsRouter.get(
+  '/log/search',
+  asyncHandler((req, res) => {
+    const { runId, electionType, branch, actor, action, code, adminOnly } = req.query as Record<string, string | undefined>;
+
+    if (electionType !== undefined && electionType !== 'school' && electionType !== 'house') {
+      throw new BadRequestError('Invalid election type. Must be "school" or "house"');
+    }
+    if (branch !== undefined && !isValidBranch(branch)) {
+      throw new BadRequestError('Invalid branch');
+    }
+
+    const filter: LogSearchFilter = {
+      runId: runId || undefined,
+      electionType: electionType === 'school' || electionType === 'house' ? electionType : undefined,
+      branch: branch && isValidBranch(branch) ? branch : undefined,
+      actor: actor || undefined,
+      action: action || undefined,
+      code: code || undefined,
+      adminOnly: adminOnly === 'true'
+    };
+
+    res.json({ entries: dataStore.searchLogEntries(filter) });
   })
 );
 

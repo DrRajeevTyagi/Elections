@@ -311,6 +311,77 @@ describe('DataStore -- election runs and the append-only action log (ROADMAP.md 
     expect(store.getLogEntries()).toHaveLength(2); // no filter -- everything
   });
 
+  it('searchLogEntries filters by electionType, branch, code, and adminOnly, newest first', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    const run = await store.startRun('house', 'Search Test', 'Rajeev -- laptop');
+    await store.appendLogEntry({
+      runId: run.id,
+      actor: 'Rajeev -- laptop',
+      action: 'officerCode.generate',
+      details: { codes: ['abc123'] },
+      electionType: 'house',
+      branch: 'AN'
+    });
+    await store.appendLogEntry({
+      runId: run.id,
+      actor: 'Rajeev -- laptop',
+      action: 'officerCode.name',
+      details: { code: 'abc123', officerName: 'Mrs. Sharma' },
+      electionType: 'house',
+      branch: 'AN'
+    });
+    await store.appendLogEntry({
+      runId: run.id,
+      actor: 'officer:Mrs. Sharma',
+      action: 'officerCode.close',
+      details: { code: 'abc123' },
+      electionType: 'house',
+      branch: 'AN'
+    });
+    await store.appendLogEntry({
+      runId: run.id,
+      actor: 'Rajeev -- laptop',
+      action: 'officerCode.generate',
+      details: { codes: ['xyz999'] },
+      electionType: 'house',
+      branch: 'dwarka'
+    });
+
+    // Branch filter: "activity for AN branch".
+    expect(store.searchLogEntries({ branch: 'AN' })).toHaveLength(3);
+    // Code filter, substring/case-insensitive: "what happened under code ABC123".
+    expect(store.searchLogEntries({ code: 'ABC123' })).toHaveLength(3);
+    // adminOnly excludes the polling officer's own self-service action.
+    const adminOnly = store.searchLogEntries({ branch: 'AN', adminOnly: true });
+    expect(adminOnly).toHaveLength(2);
+    expect(adminOnly.every((entry) => !entry.actor.startsWith('officer:'))).toBe(true);
+    // "Who were the polling officers" -- action filter finds the naming entries.
+    const naming = store.searchLogEntries({ action: 'officerCode.name' });
+    expect(naming).toHaveLength(1);
+    expect(naming[0].details?.officerName).toBe('Mrs. Sharma');
+    // Every entry is still findable with no filter at all.
+    expect(store.searchLogEntries({})).toHaveLength(4);
+  });
+
+  it('searchLogEntries sorts newest first', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = await importFreshDataStore();
+      await store.init();
+      const run = await store.startRun('school', 'Order Test', 'actor-1');
+      vi.setSystemTime(1000);
+      await store.appendLogEntry({ runId: run.id, actor: 'actor-1', action: 'first', electionType: 'school' });
+      vi.setSystemTime(2000);
+      await store.appendLogEntry({ runId: run.id, actor: 'actor-1', action: 'second', electionType: 'school' });
+
+      const results = store.searchLogEntries({});
+      expect(results.map((entry) => entry.action)).toEqual(['second', 'first']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('resetOfficerCodesByType clears codes of one type without touching the other', async () => {
     const store = await importFreshDataStore();
     await store.init();

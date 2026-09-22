@@ -20,6 +20,7 @@ const mockedDataStore = {
   getRuns: vi.fn<[], ElectionRun[]>(() => []),
   getRun: vi.fn<[string], ElectionRun | undefined>(),
   getLogEntries: vi.fn(() => []),
+  searchLogEntries: vi.fn(() => []),
   getPollState: vi.fn<[], PollState>(),
   updatePollState: vi.fn((updater: (state: PollState) => PollState) =>
     updater({ activeElectionType: 'school', settings: { isOpen: false, allowRevote: false } })
@@ -159,5 +160,50 @@ describe('GET /api/election-runs/current', () => {
     const { createApp } = await import('../app.js');
     const response = await request(createApp()).get('/api/election-runs/current');
     expect(response.body.run.id).toBe(runningRun.id);
+  });
+});
+
+describe('GET /api/election-runs/log/search', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('rejects an invalid election type', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).get('/api/election-runs/log/search?electionType=nonsense');
+    expect(response.status).toBe(400);
+    expect(mockedDataStore.searchLogEntries).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid branch', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).get('/api/election-runs/log/search?branch=nonsense');
+    expect(response.status).toBe(400);
+    expect(mockedDataStore.searchLogEntries).not.toHaveBeenCalled();
+  });
+
+  it('passes query params through as a filter, coercing adminOnly to a boolean', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).get(
+      '/api/election-runs/log/search?electionType=house&branch=AN&actor=Rajeev&action=officerCode&code=abc123&adminOnly=true'
+    );
+    expect(response.status).toBe(200);
+    expect(mockedDataStore.searchLogEntries).toHaveBeenCalledWith({
+      runId: undefined,
+      electionType: 'house',
+      branch: 'AN',
+      actor: 'Rajeev',
+      action: 'officerCode',
+      code: 'abc123',
+      adminOnly: true
+    });
+  });
+
+  it('defaults adminOnly to false when omitted', async () => {
+    const { createApp } = await import('../app.js');
+    await request(createApp()).get('/api/election-runs/log/search');
+    expect(mockedDataStore.searchLogEntries).toHaveBeenCalledWith(
+      expect.objectContaining({ adminOnly: false })
+    );
   });
 });

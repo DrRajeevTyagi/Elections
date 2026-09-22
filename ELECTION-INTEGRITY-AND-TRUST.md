@@ -385,6 +385,18 @@ fast-follow, see ROADMAP.md Phase 3) are all built and covered by tests. Item
 8 (independent backup) is still open and is what would actually catch
 out-of-band tampering — see the correction above.
 
+**Follow-up, same day:** "visibility is the point, not just existence" (this
+item's own proposed handling, above) turned out to need more than a plain
+table — the Election Commissioner pointed out a long log book is
+impractical to actually read, so nobody would use it. Added a search/filter
+UI on the same tab (`GET /election-runs/log/search`, filtering by run,
+election type, branch, actor, action, or code) plus a one-click "Who were
+the polling officers?" button, rather than a natural-language chatbot — see
+ROADMAP.md's "Why a search UI instead of a chatbot" for the reasoning
+(mainly: every real question asked was a structured lookup, and an
+LLM-based answer carries a hallucination risk that's especially bad for a
+trust/audit tool).
+
 ---
 
 ## 6. Irreversible actions have no second-person confirmation

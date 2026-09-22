@@ -12,6 +12,8 @@ import type {
   ResultsResponse,
   RunLogResponse,
   RunsListResponse,
+  LogSearchFilter,
+  LogSearchResponse,
   StorageHealth,
   VoteRequest,
   VoteResponse,
@@ -330,6 +332,27 @@ export const getRuns = async (adminSecret: string): Promise<RunsListResponse> =>
 
 export const getRunLog = async (runId: string, adminSecret: string): Promise<RunLogResponse> => {
   const response = await api.get<RunLogResponse>(`/election-runs/${runId}/log`, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data;
+};
+
+// "Ask your data" -- filters the permanent action log across any run (or a
+// specific one), by election type, branch, actor, action, or code. See
+// datastore.ts's searchLogEntries for exact filter semantics (substring,
+// case-insensitive, all filters combine with AND).
+export const searchRunLog = async (filter: LogSearchFilter, adminSecret: string): Promise<LogSearchResponse> => {
+  const params = {
+    ...(filter.runId ? { runId: filter.runId } : {}),
+    ...(filter.electionType ? { electionType: filter.electionType } : {}),
+    ...(filter.branch ? { branch: filter.branch } : {}),
+    ...(filter.actor ? { actor: filter.actor } : {}),
+    ...(filter.action ? { action: filter.action } : {}),
+    ...(filter.code ? { code: filter.code } : {}),
+    ...(filter.adminOnly ? { adminOnly: 'true' } : {})
+  };
+  const response = await api.get<LogSearchResponse>('/election-runs/log/search', {
+    params,
     headers: { 'x-admin-secret': adminSecret }
   });
   return response.data;

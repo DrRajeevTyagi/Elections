@@ -24,7 +24,7 @@ import {
   saveElectionToHistory,
   getCurrentRun,
   getRuns,
-  getRunLog,
+  searchRunLog,
   startRecording,
   closeRecording
 } from '../services/api';
@@ -147,13 +147,23 @@ export const AdminLandingPage = (): JSX.Element => {
   const [showStartRecordingForm, setShowStartRecordingForm] = useState(false);
   const [startRunName, setStartRunName] = useState('');
   const [startRunElectionType, setStartRunElectionType] = useState<ElectionType>('school');
-  // Activity Log tab -- defaults to the current run if one is active,
-  // otherwise lets the admin pick a past (closed) run to review its sealed
-  // log.
+  // Activity Log tab ("Ask your data") -- a filter, not a fixed picker: Run
+  // defaults to the current run if one is active, otherwise "All Runs".
+  // Every other field narrows the search further (see LogSearchFilter).
   const [pastRuns, setPastRuns] = useState<ElectionRun[]>([]);
-  const [selectedLogRunId, setSelectedLogRunId] = useState<string | null>(null);
-  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  const emptyLogFilters = {
+    runId: '',
+    electionType: '' as ElectionType | '',
+    branch: '' as Branch | '',
+    actor: '',
+    action: '',
+    code: '',
+    adminOnly: false
+  };
+  const [logFilters, setLogFilters] = useState(emptyLogFilters);
+  const [logResults, setLogResults] = useState<LogEntry[]>([]);
   const [logLoading, setLogLoading] = useState(false);
+  const [logSearched, setLogSearched] = useState(false);
   // Which branch Manage Candidates (and, as a result, Live Results too,
   // since they share the same `results` fetch) is currently scoped to.
   // Year 1 is manual entry only for both branches -- see
@@ -357,18 +367,60 @@ export const AdminLandingPage = (): JSX.Element => {
     }
   }, []);
 
-  const loadRunLog = useCallback(async (runId: string) => {
+  // "Ask your data" -- runs whatever's currently in logFilters against the
+  // search endpoint. Empty/'' fields are simply omitted (searchRunLog only
+  // sends filters that have a real value), so an all-blank form searches
+  // everything.
+  const runLogSearch = useCallback(async (filters: typeof emptyLogFilters) => {
     try {
       setLogLoading(true);
       setError(null);
-      const response = await getRunLog(runId, adminSecret);
-      setLogEntries(response.entries);
+      const response = await searchRunLog(
+        {
+          runId: filters.runId || undefined,
+          electionType: filters.electionType || undefined,
+          branch: filters.branch || undefined,
+          actor: filters.actor || undefined,
+          action: filters.action || undefined,
+          code: filters.code || undefined,
+          adminOnly: filters.adminOnly
+        },
+        adminSecret
+      );
+      setLogResults(response.entries);
+      setLogSearched(true);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Failed to load the activity log');
+      setError(loadError instanceof Error ? loadError.message : 'Failed to search the activity log');
     } finally {
       setLogLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminSecret]);
+
+  const handleLogFilterChange = (updates: Partial<typeof emptyLogFilters>) => {
+    setLogFilters((prev) => ({ ...prev, ...updates }));
+  };
+
+  const handleLogSearchSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    void runLogSearch(logFilters);
+  };
+
+  const handleClearLogFilters = () => {
+    setLogFilters(emptyLogFilters);
+    void runLogSearch(emptyLogFilters);
+  };
+
+  // One-click answer to "who were the polling officers/teachers given a
+  // code" -- every officerCode.name entry is itself a record of "this code
+  // was allotted to this name at this time," so filtering to that action is
+  // the log's own audit trail of the roster (including any corrections),
+  // not just the current live snapshot the Officer Codes tab shows.
+  const handleShowOfficerRoster = () => {
+    const next = { ...emptyLogFilters, runId: logFilters.runId, action: 'officerCode.name' };
+    setLogFilters(next);
+    void runLogSearch(next);
+  };
 
   // Generates the same number of house-bound codes for every one of the 8
   // houses in one go, instead of the admin having to repeat "Generate" 8 times.
@@ -617,28 +669,22 @@ export const AdminLandingPage = (): JSX.Element => {
     }
   }, [authenticated, loadDashboard, loadOfficerCodes, loadArchives, loadStorageHealth, loadCurrentRun]);
 
-  // Activity Log tab: on first visit, default to the current run's log if
-  // one is active, otherwise the most recently closed run. Also (re)loads
-  // the list of past runs so the picker below stays current.
+  // Activity Log tab: on first visit, default the Run filter to the current
+  // run if one is active (otherwise "All Runs") and run that search
+  // immediately, so the tab never opens empty. Also (re)loads the list of
+  // past runs so the Run dropdown stays current.
   useEffect(() => {
     if (activeTab !== 'log') {
       return;
     }
     void loadPastRuns();
-    if (!selectedLogRunId) {
-      const defaultRunId = currentRun?.id ?? pastRuns[0]?.id;
-      if (defaultRunId) {
-        setSelectedLogRunId(defaultRunId);
-      }
+    if (!logSearched) {
+      const initial = { ...emptyLogFilters, runId: currentRun?.id ?? '' };
+      setLogFilters(initial);
+      void runLogSearch(initial);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, currentRun, loadPastRuns]);
-
-  useEffect(() => {
-    if (activeTab === 'log' && selectedLogRunId) {
-      void loadRunLog(selectedLogRunId);
-    }
-  }, [activeTab, selectedLogRunId, loadRunLog]);
 
   // Checked on its own steady cadence -- independent of whether the poll is
   // open -- so the indicator stays current even after voting has stopped.
@@ -1951,83 +1997,190 @@ export const AdminLandingPage = (): JSX.Element => {
         <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
           Every action taken while a recording is active, permanent and unmutable -- nothing here can be edited or
           deleted, by anyone. Setup work done before a recording starts is not logged at all (see the Dashboard
-          tab's Recording section).
+          tab's Recording section). Search below instead of reading straight through -- e.g. paste a code to see
+          everything that happened to it, or filter by branch/election type/actor.
         </p>
 
         {pastRuns.length === 0 ? (
           <p>No recordings yet. Start one from the Dashboard tab.</p>
         ) : (
           <>
-            <div style={{ marginBottom: '1rem' }}>
-              <label className="form-label" htmlFor="log-run-picker">Recording</label>
-              <select
-                id="log-run-picker"
-                className="form-input"
-                style={{ maxWidth: '420px' }}
-                value={selectedLogRunId ?? ''}
-                onChange={(event) => setSelectedLogRunId(event.target.value)}
+            <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button className="button" style={{ backgroundColor: '#0f766e' }} onClick={handleShowOfficerRoster}>
+                👥 Who were the polling officers?
+              </button>
+              <button
+                className="button"
+                style={{ backgroundColor: '#4338ca' }}
+                onClick={() => handleLogFilterChange({ adminOnly: !logFilters.adminOnly })}
               >
-                {pastRuns.map((run) => (
-                  <option key={run.id} value={run.id}>
-                    {run.status === 'running' ? '🔴 ' : ''}
-                    {run.name} &mdash; {run.electionType === 'house' ? 'House' : 'School'} &mdash; {formatTimestamp(run.startedAt)}
-                  </option>
-                ))}
-              </select>
+                {logFilters.adminOnly ? '☑' : '☐'} Admin actions only
+              </button>
             </div>
+
+            <form
+              onSubmit={handleLogSearchSubmit}
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
+                padding: '1rem',
+                backgroundColor: '#f3f4f6',
+                borderRadius: '8px',
+                marginBottom: '1rem',
+                alignItems: 'flex-end'
+              }}
+            >
+              <div>
+                <label className="form-label" htmlFor="log-filter-run">Recording</label>
+                <select
+                  id="log-filter-run"
+                  className="form-input"
+                  style={{ width: '220px' }}
+                  value={logFilters.runId}
+                  onChange={(event) => handleLogFilterChange({ runId: event.target.value })}
+                >
+                  <option value="">All Runs</option>
+                  {pastRuns.map((run) => (
+                    <option key={run.id} value={run.id}>
+                      {run.status === 'running' ? '🔴 ' : ''}
+                      {run.name} &mdash; {formatTimestamp(run.startedAt)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="form-label" htmlFor="log-filter-type">Election Type</label>
+                <select
+                  id="log-filter-type"
+                  className="form-input"
+                  style={{ width: '140px' }}
+                  value={logFilters.electionType}
+                  onChange={(event) => handleLogFilterChange({ electionType: event.target.value as ElectionType | '' })}
+                >
+                  <option value="">All</option>
+                  <option value="school">🏫 School</option>
+                  <option value="house">🏠 House</option>
+                </select>
+              </div>
+              <div>
+                <label className="form-label" htmlFor="log-filter-branch">Branch</label>
+                <select
+                  id="log-filter-branch"
+                  className="form-input"
+                  style={{ width: '120px' }}
+                  value={logFilters.branch}
+                  onChange={(event) => handleLogFilterChange({ branch: event.target.value as Branch | '' })}
+                >
+                  <option value="">All</option>
+                  <option value="dwarka">Dwarka</option>
+                  <option value="AN">AN</option>
+                </select>
+              </div>
+              <div>
+                <label className="form-label" htmlFor="log-filter-code">Code</label>
+                <input
+                  id="log-filter-code"
+                  className="form-input"
+                  style={{ width: '120px' }}
+                  value={logFilters.code}
+                  onChange={(event) => handleLogFilterChange({ code: event.target.value })}
+                  placeholder="e.g. ab2k7m"
+                />
+              </div>
+              <div>
+                <label className="form-label" htmlFor="log-filter-actor">Actor contains</label>
+                <input
+                  id="log-filter-actor"
+                  className="form-input"
+                  style={{ width: '150px' }}
+                  value={logFilters.actor}
+                  onChange={(event) => handleLogFilterChange({ actor: event.target.value })}
+                  placeholder="e.g. Rajeev"
+                />
+              </div>
+              <div>
+                <label className="form-label" htmlFor="log-filter-action">Action contains</label>
+                <input
+                  id="log-filter-action"
+                  className="form-input"
+                  style={{ width: '170px' }}
+                  value={logFilters.action}
+                  onChange={(event) => handleLogFilterChange({ action: event.target.value })}
+                  placeholder="e.g. officerCode"
+                />
+              </div>
+              <button className="button" type="submit" disabled={logLoading}>
+                {logLoading ? 'Searching...' : '🔎 Search'}
+              </button>
+              <button className="button" type="button" style={{ backgroundColor: '#6b7280' }} onClick={handleClearLogFilters}>
+                Clear
+              </button>
+            </form>
 
             {logLoading ? (
               <p>Loading...</p>
-            ) : logEntries.length === 0 ? (
-              <p>No actions logged yet for this recording.</p>
+            ) : logResults.length === 0 ? (
+              <p>{logSearched ? 'No actions match this search.' : 'No actions logged yet.'}</p>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ textAlign: 'left', borderBottom: '2px solid #e5e7eb' }}>
-                      <th style={{ padding: '0.5rem' }}>Time</th>
-                      <th style={{ padding: '0.5rem' }}>Actor</th>
-                      <th style={{ padding: '0.5rem' }}>Action</th>
-                      <th style={{ padding: '0.5rem' }}>Details</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {logEntries.map((entry) => {
-                      // Flagged prominently -- a takeover or the legacy Reset
-                      // Poll button used while a recording is active are both
-                      // exactly the kind of thing this log exists to surface,
-                      // not bury in an ordinary row (ELECTION-INTEGRITY-AND-
-                      // TRUST.md item 5).
-                      const isNotable = entry.action === 'admin.session.takeover' || entry.action === 'poll.reset';
-                      return (
-                        <tr
-                          key={entry.id}
-                          style={{
-                            borderBottom: '1px solid #f3f4f6',
-                            backgroundColor: isNotable ? '#fef2f2' : undefined
-                          }}
-                        >
-                          <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
-                            {formatTimestamp(entry.timestamp)}
-                          </td>
-                          <td style={{ padding: '0.5rem', fontSize: '0.85rem' }}>{entry.actor}</td>
-                          <td style={{ padding: '0.5rem', fontWeight: isNotable ? 700 : 500, color: isNotable ? '#991b1b' : undefined }}>
-                            {isNotable && '⚠ '}
-                            {entry.action}
-                          </td>
-                          <td style={{ padding: '0.5rem', fontSize: '0.8rem', color: '#6b7280', fontFamily: 'monospace' }}>
-                            {entry.details && Object.keys(entry.details).length > 0
-                              ? Object.entries(entry.details)
-                                  .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
-                                  .join(' ')
-                              : ''}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <p style={{ fontSize: '0.85rem', color: '#6b7280', margin: '0 0 0.5rem 0' }}>
+                  {logResults.length} action{logResults.length === 1 ? '' : 's'} &middot;{' '}
+                  {new Set(logResults.map((entry) => entry.actor)).size} distinct actor
+                  {new Set(logResults.map((entry) => entry.actor)).size === 1 ? '' : 's'}
+                </p>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ textAlign: 'left', borderBottom: '2px solid #e5e7eb' }}>
+                        <th style={{ padding: '0.5rem' }}>Time</th>
+                        <th style={{ padding: '0.5rem' }}>Actor</th>
+                        <th style={{ padding: '0.5rem' }}>Action</th>
+                        <th style={{ padding: '0.5rem' }}>Branch</th>
+                        <th style={{ padding: '0.5rem' }}>Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {logResults.map((entry) => {
+                        // Flagged prominently -- a takeover or the legacy
+                        // Reset Poll button used while a recording is active
+                        // are both exactly the kind of thing this log exists
+                        // to surface, not bury in an ordinary row
+                        // (ELECTION-INTEGRITY-AND-TRUST.md item 5).
+                        const isNotable = entry.action === 'admin.session.takeover' || entry.action === 'poll.reset';
+                        return (
+                          <tr
+                            key={entry.id}
+                            style={{
+                              borderBottom: '1px solid #f3f4f6',
+                              backgroundColor: isNotable ? '#fef2f2' : undefined
+                            }}
+                          >
+                            <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                              {formatTimestamp(entry.timestamp)}
+                            </td>
+                            <td style={{ padding: '0.5rem', fontSize: '0.85rem' }}>{entry.actor}</td>
+                            <td style={{ padding: '0.5rem', fontWeight: isNotable ? 700 : 500, color: isNotable ? '#991b1b' : undefined }}>
+                              {isNotable && '⚠ '}
+                              {entry.action}
+                            </td>
+                            <td style={{ padding: '0.5rem', fontSize: '0.85rem' }}>
+                              {entry.branch === 'AN' ? 'AN' : entry.branch === 'dwarka' ? 'Dwarka' : ''}
+                            </td>
+                            <td style={{ padding: '0.5rem', fontSize: '0.8rem', color: '#6b7280', fontFamily: 'monospace' }}>
+                              {entry.details && Object.keys(entry.details).length > 0
+                                ? Object.entries(entry.details)
+                                    .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
+                                    .join(' ')
+                                : ''}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </>
         )}

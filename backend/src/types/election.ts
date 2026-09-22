@@ -117,6 +117,17 @@ export interface LogEntry {
   actor: string;
   action: string;
   details?: Record<string, unknown>;
+  // First-class, top-level filter fields -- deliberately NOT left buried
+  // inside `details`, so the search endpoint (routes/electionRuns.ts
+  // GET /election-runs/log/search) can filter on them directly without
+  // needing to know which actions happen to carry which detail keys.
+  // `electionType` is stamped on every entry from the run it belongs to
+  // (a run always has exactly one). `branch` is only set for actions that
+  // are actually about one specific branch (officer-code actions); it's
+  // left undefined for run/poll/archive/admin-session actions, which apply
+  // to both branches together.
+  electionType?: ElectionType;
+  branch?: Branch;
 }
 
 export interface PollState {

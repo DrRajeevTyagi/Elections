@@ -108,7 +108,12 @@ kioskRouter.post(
     // one -- there's no admin session/client id here to resolve a human
     // label from (see auditLogService.resolveActor), so the officer's own
     // name on the code stands in as the actor instead.
-    await logAction(`officer:${officerCode.officerName || officerCode.code}`, 'officerCode.close', { code: officerCode.code });
+    await logAction(
+      `officer:${officerCode.officerName || officerCode.code}`,
+      'officerCode.close',
+      { code: officerCode.code },
+      officerCode.branch
+    );
     res.status(200).json({ message: 'Polling closed for this booth. This code can no longer be used to activate a ballot.' });
   })
 );

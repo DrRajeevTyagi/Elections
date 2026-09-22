@@ -24,7 +24,7 @@ const mockApi = vi.hoisted(() => ({
   setAdminSessionLostHandler: vi.fn(),
   getCurrentRun: vi.fn().mockResolvedValue({ run: null }),
   getRuns: vi.fn().mockResolvedValue({ runs: [] }),
-  getRunLog: vi.fn(),
+  searchRunLog: vi.fn().mockResolvedValue({ entries: [] }),
   startRecording: vi.fn(),
   closeRecording: vi.fn()
 }));
@@ -201,5 +201,46 @@ describe('AdminLandingPage tabs', () => {
     await screen.findByText('Generate codes for House Elections');
     expect(screen.getByRole('button', { name: 'Generate for All 8 Houses' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Generate School Codes' })).not.toBeDisabled();
+  });
+
+  it('Activity Log "Who were the polling officers?" searches officerCode.name entries and shows the result', async () => {
+    mockApi.verifyAdminSecret.mockResolvedValue(undefined);
+    mockApi.getPollStatus.mockResolvedValue({
+      poll: { activeElectionType: 'school', settings: { isOpen: false, allowRevote: false } }
+    });
+    mockApi.getResults.mockResolvedValue({ results: [], totalVotes: 0 });
+    mockApi.getOfficerCodes.mockResolvedValue({ codes: [] });
+    mockApi.getArchivesList.mockResolvedValue({ archives: [] });
+    mockApi.getCurrentRun.mockResolvedValue({ run: null });
+    mockApi.getRuns.mockResolvedValue({
+      runs: [{ id: 'run-1', electionType: 'school', name: 'Term 1', status: 'closed', startedAt: Date.now(), startedBy: 'Rajeev' }]
+    });
+    mockApi.searchRunLog.mockResolvedValue({ entries: [] });
+
+    await unlockAsAdmin();
+    fireEvent.click(screen.getByRole('button', { name: /Activity Log/ }));
+    await screen.findByText('👥 Who were the polling officers?');
+
+    mockApi.searchRunLog.mockResolvedValue({
+      entries: [
+        {
+          id: 'log-1',
+          timestamp: Date.now(),
+          runId: 'run-1',
+          actor: 'Rajeev -- laptop',
+          action: 'officerCode.name',
+          details: { code: 'ab2k7m', officerName: 'Mrs. Sharma' },
+          electionType: 'school',
+          branch: 'dwarka'
+        }
+      ]
+    });
+    fireEvent.click(screen.getByText('👥 Who were the polling officers?'));
+
+    await screen.findByText('Mrs. Sharma', { exact: false });
+    expect(mockApi.searchRunLog).toHaveBeenLastCalledWith(
+      expect.objectContaining({ action: 'officerCode.name' }),
+      expect.any(String)
+    );
   });
 });

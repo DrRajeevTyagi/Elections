@@ -67,13 +67,12 @@ officerCodesRouter.post(
     // admin UI sends a branch (see ROADMAP.md Phase 2), every code generated
     // stays 'dwarka', unchanged from today.
     const codes = dataStore.generateOfficerCodes(parsedCount, electionType, house, branch, run.id);
-    await logAction(req.header('x-admin-client-id'), 'officerCode.generate', {
-      count: parsedCount,
-      electionType,
-      house,
-      branch: branch ?? 'dwarka',
-      codes: codes.map((entry) => entry.code)
-    });
+    await logAction(
+      req.header('x-admin-client-id'),
+      'officerCode.generate',
+      { count: parsedCount, electionType, house, branch: branch ?? 'dwarka', codes: codes.map((entry) => entry.code) },
+      branch ?? 'dwarka'
+    );
     res.status(201).json({ codes });
   })
 );
@@ -91,10 +90,12 @@ officerCodesRouter.put(
     if (!updated) {
       throw new BadRequestError('Code not found');
     }
-    await logAction(req.header('x-admin-client-id'), 'officerCode.name', {
-      code: updated.code,
-      officerName: updated.officerName
-    });
+    await logAction(
+      req.header('x-admin-client-id'),
+      'officerCode.name',
+      { code: updated.code, officerName: updated.officerName },
+      updated.branch
+    );
     res.json({ code: updated });
   })
 );
@@ -107,7 +108,7 @@ officerCodesRouter.post(
     if (!updated) {
       throw new BadRequestError('Code not found');
     }
-    await logAction(req.header('x-admin-client-id'), 'officerCode.reopen', { code: updated.code });
+    await logAction(req.header('x-admin-client-id'), 'officerCode.reopen', { code: updated.code }, updated.branch);
     res.json({ code: updated });
   })
 );
@@ -144,7 +145,7 @@ officerCodesRouter.delete(
       );
     }
     dataStore.deleteOfficerCode(entry.code);
-    await logAction(req.header('x-admin-client-id'), 'officerCode.delete', { code: entry.code });
+    await logAction(req.header('x-admin-client-id'), 'officerCode.delete', { code: entry.code }, entry.branch);
     res.status(204).send();
   })
 );

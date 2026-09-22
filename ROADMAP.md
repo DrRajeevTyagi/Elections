@@ -82,10 +82,48 @@ to Cloud Run):
   the real guarantee is that no update/delete code path exists at all), and
   what's deliberately deferred (candidate-change logging, hard-gating Open
   Poll on an active run).
-- **Next:** no explicit direction given yet for what comes after Phase 3.
+- **"Ask your data" log search — done (2026-09-23), same-day follow-up to
+  Phase 3.** The Election Commissioner's own framing: reading the raw log
+  top-to-bottom is impractical and "no one will use it," so a search/filter
+  UI was built directly into the Activity Log tab instead of a chatbot (an
+  LLM-based "ask a question" interface was considered and explicitly
+  rejected — see the discussion right after Phase 3's "Next" note below for
+  why). `GET /election-runs/log/search` filters the log by run, election
+  type, branch, actor, action, or code (all substring/case-insensitive,
+  combine with AND); `LogEntry` gained first-class `electionType`/`branch`
+  fields so this doesn't need to cross-reference other collections. A
+  one-click "Who were the polling officers?" button answers that exact
+  question from the Election Commissioner's original request; pasting a
+  code answers "what happened under this code"; Election Type + Branch +
+  "Admin actions only" together answer "what did the admin account do for
+  School/House Elections, Dwarka/AN." Verified end-to-end with a real
+  browser run.
+- **Next:** no explicit direction given yet for what comes after this.
   Candidate-change logging (Phase 3's own fast-follow) or Phase 1's
   remaining items (session/device labeling, named admin credentials) are
   the most natural next steps — see "Bandwidth notes" below.
+
+### Why a search UI instead of a chatbot
+
+The Election Commissioner asked directly whether the log should be exposed
+through a natural-language "ask your data" chatbot (an LLM answering
+questions like "who were the polling officers for AN House Elections").
+Recommendation given, and agreed: **build structured filtering first, not an
+LLM chatbot** —
+- Every example question asked ("who held code X," "activity for a code,"
+  "superadmin's actions for School/AN") is a structured lookup by a small,
+  fixed set of dimensions (run, election type, branch, actor, action, code),
+  not something that needs open-ended reasoning.
+- A chatbot wired to an LLM adds an external API dependency, per-query cost,
+  latency, and — the decisive concern for a trust/audit tool — real
+  hallucination risk. A wrong answer about "who did what" is exactly the
+  failure this log exists to prevent; a filter UI's answers are always
+  literally the underlying data, nothing more.
+- The structured version was also simply faster and cheaper to build and
+  ships with zero new infrastructure or ongoing cost.
+A natural-language layer on top of this same search endpoint remains a
+possible future addition if the structured UI turns out not to be enough in
+practice — not ruled out, just not built first.
 
 This project currently has three plans, each with its own document:
 

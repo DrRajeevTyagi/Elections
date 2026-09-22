@@ -106,10 +106,28 @@ export interface LogEntry {
   actor: string;
   action: string;
   details?: Record<string, unknown>;
+  electionType?: ElectionType;
+  branch?: Branch;
 }
 
 export interface RunLogResponse {
   run: ElectionRun;
+  entries: LogEntry[];
+}
+
+// "Ask your data" search filters (all optional, combine with AND) -- see
+// backend/src/storage/datastore.ts's searchLogEntries for exact semantics.
+export interface LogSearchFilter {
+  runId?: string;
+  electionType?: ElectionType;
+  branch?: Branch;
+  actor?: string;
+  action?: string;
+  code?: string;
+  adminOnly?: boolean;
+}
+
+export interface LogSearchResponse {
   entries: LogEntry[];
 }
 

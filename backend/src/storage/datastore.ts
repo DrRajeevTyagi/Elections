@@ -206,6 +206,17 @@ export interface StorageHealth {
   lastError?: string;
 }
 
+// See DataStore.searchLogEntries below.
+export interface LogSearchFilter {
+  runId?: string;
+  electionType?: ElectionType;
+  branch?: Branch;
+  actor?: string;
+  action?: string;
+  code?: string;
+  adminOnly?: boolean;
+}
+
 export class DataStore {
   private data: ElectionData = createDefaultData();
   // The live, in-memory source of truth for votes -- see the comment on
@@ -825,6 +836,53 @@ export class DataStore {
     return list
       .map((entry) => ({ ...entry, details: entry.details ? { ...entry.details } : undefined }))
       .sort((a, b) => a.timestamp - b.timestamp);
+  }
+
+  // Backs GET /election-runs/log/search -- lets the admin ask questions like
+  // "what happened under this code," "what did the superadmin do for AN
+  // House Elections," or "activity across every run of School Elections,"
+  // without reading a long log book start to finish. All filters are
+  // optional and combine with AND; string filters are substring,
+  // case-insensitive matches, not exact-match, so a partial code/action
+  // still finds results. Sorted newest-first (unlike getLogEntries, which
+  // reads chronologically for one run's own story) since a search result is
+  // a report on "what happened," not a run's narrative.
+  searchLogEntries(filter: LogSearchFilter): LogEntry[] {
+    const actorQuery = filter.actor?.trim().toLowerCase();
+    const actionQuery = filter.action?.trim().toLowerCase();
+    const codeQuery = filter.code?.trim().toLowerCase();
+
+    const matches = this.logEntries.filter((entry) => {
+      if (filter.runId && entry.runId !== filter.runId) return false;
+      if (filter.electionType && entry.electionType !== filter.electionType) return false;
+      if (filter.branch && entry.branch !== filter.branch) return false;
+      // Excludes a polling officer's own self-service actions (e.g. closing
+      // their own booth) -- see kiosk.ts's `officer:` actor prefix -- so
+      // "what did the admin account do" doesn't also pull in officers'
+      // routine end-of-day close-booth actions.
+      if (filter.adminOnly && entry.actor.startsWith('officer:')) return false;
+      if (actorQuery && !entry.actor.toLowerCase().includes(actorQuery)) return false;
+      if (actionQuery && !entry.action.toLowerCase().includes(actionQuery)) return false;
+      if (codeQuery) {
+        // Most code-specific actions carry a single `code` string (name,
+        // reopen, delete, close); `officerCode.generate` instead carries a
+        // `codes` array (a whole batch generated at once) -- check both, so
+        // "what happened under this code" also finds the generation event
+        // that first created it.
+        const singleCode = typeof entry.details?.code === 'string' ? entry.details.code.toLowerCase() : '';
+        const codesArray = Array.isArray(entry.details?.codes)
+          ? (entry.details.codes as unknown[]).filter((c): c is string => typeof c === 'string').map((c) => c.toLowerCase())
+          : [];
+        const matchesSingle = singleCode.includes(codeQuery);
+        const matchesArray = codesArray.some((c) => c.includes(codeQuery));
+        if (!matchesSingle && !matchesArray) return false;
+      }
+      return true;
+    });
+
+    return matches
+      .map((entry) => ({ ...entry, details: entry.details ? { ...entry.details } : undefined }))
+      .sort((a, b) => b.timestamp - a.timestamp);
   }
 }
 
