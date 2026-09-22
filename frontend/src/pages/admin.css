@@ -292,16 +292,23 @@
 .live-house-card {
   background: #ffffff;
   border: 2px solid #e5e7eb;
-  border-top-width: 4px;
   border-radius: 10px;
   padding: 0.4rem 0.5rem 0.35rem;
+  overflow: hidden;
 }
 
+/* The house name sits on a full-width strip in that house's own color
+   (set inline via HOUSE_COLORS, with a matching black/white text chosen
+   per house for readability) -- bleeds to the card's edges via a negative
+   margin matching the card's own padding, same technique used for
+   .live-post-card h3 below. */
 .live-house-card h3 {
-  margin: 0 0 0.15rem 0;
+  margin: -0.4rem -0.5rem 0.3rem -0.5rem;
+  padding: 0.3rem 0.5rem;
   font-size: 0.95rem;
   font-weight: 700;
   line-height: 1.2;
+  border-radius: 8px 8px 0 0;
 }
 
 .live-house-post {

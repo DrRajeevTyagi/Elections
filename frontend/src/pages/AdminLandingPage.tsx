@@ -1232,12 +1232,15 @@ export const AdminLandingPage = (): JSX.Element => {
         {pollStatus?.activeElectionType === 'house' && houseGroupedResults ? (
           <div className="live-house-grid">
             {houseGroupedResults.map((houseGroup) => (
-              <div
-                key={houseGroup.house}
-                className="live-house-card"
-                style={{ borderTopColor: HOUSE_COLORS[houseGroup.house].accent }}
-              >
-                <h3 style={{ color: HOUSE_COLORS[houseGroup.house].text }}>🏠 {houseGroup.house}</h3>
+              <div key={houseGroup.house} className="live-house-card">
+                <h3
+                  style={{
+                    backgroundColor: HOUSE_COLORS[houseGroup.house].accent,
+                    color: HOUSE_COLORS[houseGroup.house].stripText
+                  }}
+                >
+                  🏠 {houseGroup.house}
+                </h3>
                 {HOUSE_POST_IDS.map((postId) => {
                   const postResult = houseGroup.posts.find((p) => p.post === postId);
                   const sortedCandidates = [...(postResult?.candidates ?? [])].sort((a, b) => b.total - a.total);
