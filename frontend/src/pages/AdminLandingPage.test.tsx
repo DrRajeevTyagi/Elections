@@ -267,31 +267,31 @@ describe('AdminLandingPage tabs', () => {
     await unlockAsAdmin();
     fireEvent.click(screen.getByRole('button', { name: /Start the Election Process/ }));
 
-    // a. Name it
-    await screen.findByLabelText('Election name');
-    fireEvent.change(screen.getByLabelText('Election name'), { target: { value: 'Term 1 2026' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-
-    // b. Confirm election type (already 'school', matching pollStatus) -- no API call expected.
+    // a. Confirm election type (already 'school', matching pollStatus) -- no API call expected.
     await screen.findByText(/currently set for/);
     fireEvent.click(screen.getByRole('button', { name: 'Yes, proceed' }));
     expect(mockApi.setElectionType).not.toHaveBeenCalled();
 
-    // c. Vote counts reset notice
+    // b. Vote counts reset notice
     await screen.findByText(/Starting this election resets/i);
     fireEvent.click(screen.getByRole('button', { name: 'Proceed' }));
 
-    // d. Codes generated? (none exist -- still allowed to proceed)
+    // c. Codes generated? (none exist -- still allowed to proceed)
     await screen.findByText(/No School codes have been generated yet/);
     fireEvent.click(screen.getByRole('button', { name: 'Proceed' }));
 
-    // e. Codes distributed?
-    await screen.findByText(/received their code/);
-    fireEvent.click(screen.getByRole('button', { name: /Yes, distributed/ }));
+    // d. Codes allotted to persons?
+    await screen.findByText(/allotted their code/);
+    fireEvent.click(screen.getByRole('button', { name: /Yes, allotted/ }));
 
-    // f. Candidates lock notice
+    // e. Candidates lock notice
     await screen.findByText(/Candidates cannot be changed/);
     fireEvent.click(screen.getByRole('button', { name: 'Proceed' }));
+
+    // f. Name it -- now the last checklist step, right before opening.
+    await screen.findByLabelText('Election name');
+    fireEvent.change(screen.getByLabelText('Election name'), { target: { value: 'Term 1 2026' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     // g. Open the poll -- the one continuous commit.
     await screen.findByRole('button', { name: /Open the Poll/ });

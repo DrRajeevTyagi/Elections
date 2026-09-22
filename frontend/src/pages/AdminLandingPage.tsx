@@ -697,7 +697,7 @@ export const AdminLandingPage = (): JSX.Element => {
 
     if (action === 'close') {
       const confirmed = window.confirm(
-        'Close the poll?\n\nNo booth will be able to activate or submit a ballot until you Open the poll again. This is safe and reversible -- it will not affect any votes already cast.'
+        'Pause polling?\n\nNo booth will be able to activate or submit a ballot until you re-start polling. This is safe and reversible -- it will not affect any votes already cast.'
       );
       if (!confirmed) {
         return;
@@ -710,7 +710,7 @@ export const AdminLandingPage = (): JSX.Element => {
       setError(null);
       setMessage(null);
       await (action === 'open' ? openPoll(adminSecret) : closePoll(adminSecret));
-      setMessage(`Poll ${action === 'open' ? 'opened' : 'closed'} successfully.`);
+      setMessage(`Polling ${action === 'open' ? 're-started' : 'paused'} successfully.`);
       if (action === 'close') {
         closedElectionType = pollStatus?.activeElectionType ?? null;
       }
@@ -1178,22 +1178,22 @@ export const AdminLandingPage = (): JSX.Element => {
                 style={{ opacity: pollStatus?.settings.isOpen === true ? 0.5 : 1 }}
                 title={
                   pollStatus?.settings.isOpen === true
-                    ? 'Poll is already open'
+                    ? 'Voting is already running'
                     : !currentRun
                     ? 'Start the election process first'
                     : 'Resume voting'
                 }
               >
-                Open Poll
+                ▶ Re-start Polling
               </button>
               <button
                 className="button"
                 onClick={() => mutatePoll('close')}
                 disabled={loading || pollStatus?.settings.isOpen !== true}
                 style={{ backgroundColor: '#dc2626', opacity: pollStatus?.settings.isOpen !== true ? 0.5 : 1 }}
-                title={pollStatus?.settings.isOpen !== true ? 'Poll is already closed' : 'Close the poll'}
+                title={pollStatus?.settings.isOpen !== true ? 'Voting is already paused' : 'Pause voting'}
               >
-                Close Poll
+                ⏸ Pause Polling
               </button>
               <button className="button" onClick={() => void loadDashboard()} disabled={loading} style={{ backgroundColor: '#6b7280', opacity: loading ? 0.5 : 1 }}>
                 Refresh this Page

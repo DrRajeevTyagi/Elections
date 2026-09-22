@@ -13,15 +13,20 @@ interface StartElectionWizardProps {
   onStarted: (message: string) => void;
 }
 
-type Step = 'name' | 'type' | 'votes' | 'codes' | 'distributed' | 'candidates' | 'open';
-const STEPS: Step[] = ['name', 'type', 'votes', 'codes', 'distributed', 'candidates', 'open'];
+// "Name this election" is deliberately the last checklist step, not the
+// first -- everything else (type, votes, codes, candidates) is decided
+// before the admin commits to naming the record, per feedback that naming
+// felt more natural right before the final action than as the opening
+// question.
+type Step = 'type' | 'votes' | 'codes' | 'allotted' | 'candidates' | 'name' | 'open';
+const STEPS: Step[] = ['type', 'votes', 'codes', 'allotted', 'candidates', 'name', 'open'];
 const STEP_TITLES: Record<Step, string> = {
-  name: 'Name this election',
   type: 'Confirm the election type',
   votes: 'Vote counts will reset to zero',
   codes: 'Are polling officer codes ready?',
-  distributed: 'Have codes been distributed?',
+  allotted: 'Have the codes been allotted to persons?',
   candidates: 'Candidates will be locked',
+  name: 'Name this election',
   open: 'Open the poll'
 };
 
@@ -55,6 +60,21 @@ export const StartElectionWizard = ({
     setWizError(null);
     setStepIndex((i) => Math.max(i - 1, 0));
   };
+
+  // Kept right next to whichever buttons move the flow forward on each
+  // step -- not tucked away in a corner -- so the "get out of this" option
+  // is always where the admin is already looking.
+  const AbortButton = () => (
+    <button
+      type="button"
+      className="button"
+      style={{ backgroundColor: '#6b7280' }}
+      onClick={onClose}
+      disabled={submitting || typeChangeLoading}
+    >
+      Abort
+    </button>
+  );
 
   const handleConfirmType = async (chosen: ElectionType) => {
     if (chosen === electionType && !changingType) {
@@ -107,42 +127,10 @@ export const StartElectionWizard = ({
 
   return (
     <div style={{ padding: '1.25rem', backgroundColor: '#f3f4f6', borderRadius: '8px', border: '2px solid #3b82f6' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-        <p style={{ margin: 0, fontSize: '0.8rem', color: '#6b7280', fontWeight: 600 }}>
-          Step {stepIndex + 1} of {STEPS.length}
-        </p>
-        <button
-          type="button"
-          className="button"
-          style={{ backgroundColor: '#6b7280', padding: '0.3rem 0.75rem', fontSize: '0.85rem' }}
-          onClick={onClose}
-          disabled={submitting}
-        >
-          Abort
-        </button>
-      </div>
+      <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.8rem', color: '#6b7280', fontWeight: 600 }}>
+        Step {stepIndex + 1} of {STEPS.length}
+      </p>
       <h3 style={{ margin: '0 0 0.75rem 0' }}>{STEP_TITLES[step]}</h3>
-
-      {step === 'name' && (
-        <div>
-          <label className="form-label" htmlFor="wizard-election-name">Election name</label>
-          <input
-            id="wizard-election-name"
-            className="form-input"
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="e.g. School Elections -- Term 1 2026"
-            autoFocus
-          />
-          <p style={{ fontSize: '0.8rem', color: '#9ca3af', margin: '0.5rem 0 0.75rem 0' }}>
-            This name identifies this election in the Election History and Activity Log tabs.
-          </p>
-          <button className="button" onClick={goNext} disabled={!name.trim()}>
-            Continue
-          </button>
-        </div>
-      )}
 
       {step === 'type' && (
         <div>
@@ -151,7 +139,7 @@ export const StartElectionWizard = ({
               <p style={{ margin: '0 0 0.75rem 0' }}>
                 This election is currently set for <strong>{electionType === 'house' ? 'House' : 'School'} Elections</strong>.
               </p>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <button className="button" onClick={() => handleConfirmType(electionType)}>
                   Yes, proceed
                 </button>
@@ -163,10 +151,11 @@ export const StartElectionWizard = ({
                 >
                   No, change it
                 </button>
+                <AbortButton />
               </div>
             </>
           ) : (
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button
                 className="button"
                 style={{ backgroundColor: electionType === 'school' ? '#16a34a' : '#6b7280' }}
@@ -183,6 +172,7 @@ export const StartElectionWizard = ({
               >
                 🏠 House
               </button>
+              <AbortButton />
             </div>
           )}
         </div>
@@ -194,7 +184,10 @@ export const StartElectionWizard = ({
             Starting this election resets all {electionType === 'house' ? 'House' : 'School'} Elections vote counts
             to zero, across both branches. Candidates are left untouched.
           </p>
-          <button className="button" onClick={goNext}>Proceed</button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button className="button" onClick={goNext}>Proceed</button>
+            <AbortButton />
+          </div>
         </div>
       )}
 
@@ -212,23 +205,22 @@ export const StartElectionWizard = ({
           )}
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button className="button" onClick={goNext}>Proceed</button>
-            <button type="button" className="button" style={{ backgroundColor: '#6b7280' }} onClick={onClose}>
-              Go generate codes first
-            </button>
+            <AbortButton />
           </div>
         </div>
       )}
 
-      {step === 'distributed' && (
+      {step === 'allotted' && (
         <div>
-          <p style={{ margin: '0 0 0.75rem 0' }}>
-            Confirm every polling officer has received their code before voting opens.
+          <p style={{ margin: '0 0 0.5rem 0' }}>
+            Confirm every polling officer has been allotted their code.
+          </p>
+          <p style={{ fontSize: '0.8rem', color: '#9ca3af', margin: '0 0 0.75rem 0' }}>
+            Note: a code cannot be used to cast votes without allotting it to a person.
           </p>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button className="button" onClick={goNext}>Yes, distributed -- proceed</button>
-            <button type="button" className="button" style={{ backgroundColor: '#6b7280' }} onClick={onClose}>
-              Not yet -- abort
-            </button>
+            <button className="button" onClick={goNext}>Yes, allotted -- proceed</button>
+            <AbortButton />
           </div>
         </div>
       )}
@@ -238,7 +230,45 @@ export const StartElectionWizard = ({
           <p style={{ margin: '0 0 0.75rem 0' }}>
             Candidates cannot be changed once voting starts.
           </p>
-          <button className="button" onClick={goNext}>Proceed</button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button className="button" onClick={goNext}>Proceed</button>
+            <AbortButton />
+          </div>
+        </div>
+      )}
+
+      {step === 'name' && (
+        <div
+          style={{
+            backgroundColor: '#ffffff',
+            border: '1px solid #d1d5db',
+            borderRadius: '10px',
+            padding: '1.5rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+          }}
+        >
+          <label className="form-label" htmlFor="wizard-election-name" style={{ fontSize: '0.95rem', fontWeight: 600 }}>
+            Election name
+          </label>
+          <input
+            id="wizard-election-name"
+            className="form-input"
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="e.g. School Elections -- Term 1 2026"
+            autoFocus
+            style={{ fontSize: '1.05rem', padding: '0.65rem 0.75rem' }}
+          />
+          <p style={{ fontSize: '0.8rem', color: '#9ca3af', margin: '0.5rem 0 1rem 0' }}>
+            This name identifies this election in the Election History and Activity Log tabs.
+          </p>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button className="button" onClick={goNext} disabled={!name.trim()}>
+              Continue
+            </button>
+            <AbortButton />
+          </div>
         </div>
       )}
 
@@ -249,9 +279,12 @@ export const StartElectionWizard = ({
             {name.trim() ? <> &mdash; "{name.trim()}"</> : null}. All activities related to this election will be
             found under the Activity Log tab, and under Election History once it closes.
           </p>
-          <button className="button" onClick={handleOpenPoll} disabled={submitting}>
-            {submitting ? 'Opening...' : '🗳️ Open the Poll -- Start Voting'}
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button className="button" onClick={handleOpenPoll} disabled={submitting}>
+              {submitting ? 'Opening...' : '🗳️ Open the Poll -- Start Voting'}
+            </button>
+            <AbortButton />
+          </div>
         </div>
       )}
 
