@@ -98,10 +98,52 @@ to Cloud Run):
   "Admin actions only" together answer "what did the admin account do for
   School/House Elections, Dwarka/AN." Verified end-to-end with a real
   browser run.
+- **"Start Recording" redesigned into a guided wizard; officer codes
+  decoupled from needing an active run — done (2026-09-23), same-day
+  follow-up.** The Election Commissioner pushed back hard on the Phase 3
+  UI: the "Your name & device" login field felt unwanted, "Start
+  Recording" read as stressful/tape-recorder language for something that's
+  really just a log window, and officer-code generation being gated on a
+  run made routine prep work feel like it was racing a clock when it's
+  conceptually the same kind of pre-work as setting up candidates. Fixed
+  all three:
+  1. **Officer codes are prep work now**, exactly like candidates —
+     `POST /officer-codes/generate` no longer requires an active run.
+     `runService.ts` `startRecording` no longer wipes officer codes at the
+     *start* boundary (only `closeRecording` still does); any codes
+     already generated for that type are carried into the new run and
+     stamped with its `runId` (`datastore.ts` `stampOfficerCodesRunId`).
+     Verified with a real browser run: codes generated and named *before*
+     starting an election survive the start and land correctly attached to
+     the new run.
+  2. **"Start Recording" replaced by a guided wizard**,
+     `StartElectionWizard.tsx` — name it, confirm/change the election
+     type, a vote-reset notice, a codes-readiness checklist (showing real
+     generated/named counts, not a blind checkbox), a codes-distributed
+     confirmation, a candidates-lock notice, then one final action that
+     starts the run *and* opens the poll together — no separate manual
+     "Open Poll" click afterward. Abortable with zero effect at any point
+     before that final step, since nothing hits the backend until then
+     (aside from an inline election-type change, which is the same real
+     change the old standalone control made). The standalone Dashboard
+     "Election Type" section is gone, folded into the wizard's confirm
+     step. User-facing copy renamed throughout ("RECORDING" →
+     "ELECTION IN PROGRESS", "Close Recording" → "End the Election
+     Process") — internal names (`closeRecording`, the `run.start`/
+     `run.close` log action strings) deliberately left unchanged so
+     existing logged data stays valid.
+  3. **The login "Your name & device" field is gone.** In its place, an
+     automatically-derived, silent device tag (e.g. "Chrome / Windows",
+     from `navigator.userAgent`, no prompt) is sent as the session label —
+     `api.ts` `getDeviceTag`. Keeps Activity Log entries and takeover
+     messages readable without asking anyone to type anything.
+
+  See Phase 3 below for the addendum to the original "Start Recording"
+  writeup.
 - **Next:** no explicit direction given yet for what comes after this.
   Candidate-change logging (Phase 3's own fast-follow) or Phase 1's
-  remaining items (session/device labeling, named admin credentials) are
-  the most natural next steps — see "Bandwidth notes" below.
+  remaining items (named admin credentials) are the most natural next
+  steps — see "Bandwidth notes" below.
 
 ### Why a search UI instead of a chatbot
 
@@ -252,10 +294,13 @@ Minimal file overlap with Phase 0, so these don't need to wait:
 
 - Item 8 (trust doc): enable scheduled Firestore backups. Pure Cloud Console
   configuration, zero code, do anytime.
-- Item 1's core fixes: human-entered device/person label at login and
-  takeover, active eviction banner, distinguishing a harmless second tab from a
-  genuinely different session. Touches `adminAuth.ts`/`adminSessionService.ts`
-  — essentially no overlap with Phase 0.
+- Item 1's core fixes: a device/person label at login and takeover (built
+  2026-09-23 as a human-entered field, then replaced the same day by an
+  automatic device tag — see the "Start Recording redesigned" addendum
+  under Current status), active eviction banner, distinguishing a harmless
+  second tab from a genuinely different session. Touches
+  `adminAuth.ts`/`adminSessionService.ts` — essentially no overlap with
+  Phase 0.
 - Item 3's core fixes: require an officer name before a code can activate a
   ballot; the stricter deletion rule (never-named + zero-votes). Touches
   `officerCodes.ts`/`kiosk.ts`, which Phase 0 also touches for branch-scoping —
@@ -362,6 +407,16 @@ correctly blocked with no active run and correctly gated to the matching
 type once one starts; the Activity Log tab shows entries with the actor
 label attached; closing seals the run and produces a correctly-named
 Election History entry.
+
+**Addendum (2026-09-23, later the same day): the two bullets above about
+generation-gating and the login label are superseded.** Following direct
+feedback that the gate made routine prep work feel rushed and the login
+field was unwanted, generation is no longer gated on an active run (see the
+"Current status" bullet above for the full account), and the login label
+field was removed in favor of an automatic device tag. "Start Recording" as
+a single button is also superseded by `StartElectionWizard.tsx`. The rest of
+this section (the run/log data model, the append-only guarantee, one-shared-
+recording-across-branches, Close Recording vs. Reset Poll) is unchanged.
 
 ## Phase 4 — builds on an active recording
 

@@ -6,17 +6,21 @@ import { logAction, resolveActor } from './auditLogService.js';
 import { BadRequestError, ConflictError } from '../utils/httpError.js';
 import type { ElectionRun, ElectionType } from '../types/election.js';
 
-// "Start Recording" (ELECTION-INTEGRITY-AND-TRUST.md item 11): one button,
-// atomically --
+// "Start the Election Process" (ELECTION-INTEGRITY-AND-TRUST.md item 11):
+// one action, atomically --
 //   1. brings Poll Controls' election type into step with the run (reusing
 //      the same outgoing-type archive/clear safety net routes/poll.ts's own
 //      /set-type already applies, for the edge case of stray unarchived
 //      votes sitting in the *other* type when this run starts),
-//   2. resets votes and officer codes to zero for this run's type, across
-//      both branches (a safety net -- guarantees a genuinely fresh start
-//      even if the previous run of this type was ended via the older Reset
-//      Poll button instead of Close Recording, which also resets),
-//   3. creates the run record and begins the action log window.
+//   2. resets votes to zero for this run's type, across both branches (a
+//      safety net -- guarantees a genuinely fresh start even if the
+//      previous run of this type was ended via the older Reset Poll button
+//      instead of Close Recording, which also resets),
+//   3. carries forward any officer codes already generated for this type
+//      as prep work (they are NOT wiped here -- see officerCodes.ts, code
+//      generation no longer requires an active run), tagging them with the
+//      new run,
+//   4. creates the run record and begins the action log window.
 // Deliberately NOT branch-scoped -- one run always covers both branches
 // together, matching the already-locked decision that Open Poll itself is
 // shared. Only one run may be 'running' at a time.
@@ -54,16 +58,21 @@ export const startRecording = async (
   }));
 
   const votesCleared = dataStore.getVotes().filter((vote) => vote.electionType === electionType).length;
-  const codesCleared = dataStore.getOfficerCodes().filter((entry) => entry.electionType === electionType).length;
   dataStore.resetVotesByType(electionType);
-  dataStore.resetOfficerCodesByType(electionType);
+  // Officer codes are deliberately left alone here -- any codes of this
+  // type already in storage are, by construction, exactly the prep batch
+  // for this run: a closed run's codes are fully wiped at Close Recording
+  // (see below), so nothing stale from an older run can still be sitting
+  // here.
+  const codesCarriedOver = dataStore.getOfficerCodes().filter((entry) => entry.electionType === electionType).length;
 
   const actor = resolveActor(clientId);
   const run = await dataStore.startRun(electionType, trimmedName, actor);
+  dataStore.stampOfficerCodesRunId(electionType, run.id);
   // Logged after startRun so this entry (and everything after it) is
   // correctly tagged with the run that was just created -- logAction reads
   // whatever dataStore.getCurrentRun() returns at the moment it's called.
-  await logAction(clientId, 'run.start', { electionType, name: trimmedName, votesCleared, codesCleared });
+  await logAction(clientId, 'run.start', { electionType, name: trimmedName, votesCleared, codesCarriedOver });
   return run;
 };
 

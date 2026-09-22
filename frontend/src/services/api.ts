@@ -46,6 +46,51 @@ const getAdminClientId = (): string => {
 
 api.defaults.headers.common['x-admin-client-id'] = getAdminClientId();
 
+// A short, automatically-derived "what kind of device is this" tag (e.g.
+// "Chrome / Windows") sent as the admin session's label -- see
+// verifyAdminSecret below. There's deliberately no UI to type a name here
+// (removed 2026-09-23: asking for one on the login screen added friction
+// for no real benefit); this keeps the Activity Log and takeover messages
+// readable without asking anyone to fill anything in. The trailing id
+// fragment disambiguates two sessions that happen to share the same
+// browser/OS combination.
+const ADMIN_DEVICE_TAG_KEY = 'adminDeviceTag';
+
+const describeUserAgent = (ua: string): string => {
+  const browser = /Edg\//.test(ua)
+    ? 'Edge'
+    : /OPR\//.test(ua)
+      ? 'Opera'
+      : /Firefox\//.test(ua)
+        ? 'Firefox'
+        : /Chrome\//.test(ua)
+          ? 'Chrome'
+          : /Safari\//.test(ua)
+            ? 'Safari'
+            : 'Browser';
+  const os = /Windows/.test(ua)
+    ? 'Windows'
+    : /Mac OS X/.test(ua)
+      ? 'Mac'
+      : /Android/.test(ua)
+        ? 'Android'
+        : /iPhone|iPad|iPod/.test(ua)
+          ? 'iOS'
+          : /Linux/.test(ua)
+            ? 'Linux'
+            : 'device';
+  return `${browser} / ${os}`;
+};
+
+const getDeviceTag = (): string => {
+  let tag = sessionStorage.getItem(ADMIN_DEVICE_TAG_KEY);
+  if (!tag) {
+    tag = `${describeUserAgent(navigator.userAgent)} · ${getAdminClientId().slice(0, 4)}`;
+    sessionStorage.setItem(ADMIN_DEVICE_TAG_KEY, tag);
+  }
+  return tag;
+};
+
 // Set by AdminLandingPage (and ReportPage) so the response interceptor
 // below can force a logout the moment any admin request comes back
 // rejected because this tab lost the single-admin-console slot -- i.e. it
@@ -120,11 +165,12 @@ export const getPollStatus = async (): Promise<PollResponse> => {
 // `force` deliberately evicts another terminal that currently holds the
 // single admin-console slot -- see ADMIN_SESSION_CONFLICT handling in
 // AdminLandingPage. Only pass it after the user has explicitly confirmed
-// a takeover. `label` is the optional human-entered "who/what device" text
-// (e.g. "Rajeev -- laptop") that lets the action log say a real name once a
-// recording is active -- see adminSessionService.ts.
-export const verifyAdminSecret = async (adminSecret: string, force = false, label?: string): Promise<void> => {
-  await api.post('/admin/verify', { label }, {
+// a takeover. The device tag (see getDeviceTag above) is sent automatically
+// as the session's label, so the Activity Log and takeover messages have
+// something more readable than a raw client id, with no login-screen field
+// to fill in.
+export const verifyAdminSecret = async (adminSecret: string, force = false): Promise<void> => {
+  await api.post('/admin/verify', { label: getDeviceTag() }, {
     headers: {
       'x-admin-secret': adminSecret,
       ...(force ? { 'x-admin-force': 'true' } : {})

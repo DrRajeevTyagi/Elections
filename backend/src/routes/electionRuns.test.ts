@@ -29,6 +29,7 @@ const mockedDataStore = {
   getOfficerCodes: vi.fn<[], OfficerCode[]>(() => []),
   resetVotesByType: vi.fn(),
   resetOfficerCodesByType: vi.fn(),
+  stampOfficerCodesRunId: vi.fn(),
   getArchives: vi.fn<[], ElectionArchive[]>(() => []),
   startRun: vi.fn(),
   closeRun: vi.fn(),
@@ -83,7 +84,7 @@ describe('POST /api/election-runs/start', () => {
     expect(mockedDataStore.startRun).not.toHaveBeenCalled();
   });
 
-  it('resets votes/codes for the run\'s type and logs run.start', async () => {
+  it('resets votes (but not officer codes) for the run\'s type, tags codes with the new run, and logs run.start', async () => {
     // First call is startRecording's "is one already active?" check (must
     // be undefined so this test's action proceeds); every call after that
     // is logAction's own "is a run active" check, which should now see the
@@ -97,8 +98,11 @@ describe('POST /api/election-runs/start', () => {
 
     expect(response.status).toBe(201);
     expect(mockedDataStore.resetVotesByType).toHaveBeenCalledWith('school');
-    expect(mockedDataStore.resetOfficerCodesByType).toHaveBeenCalledWith('school');
+    // Codes are prep work now -- generating them doesn't require a run, and
+    // starting one must not wipe out codes prepared ahead of time.
+    expect(mockedDataStore.resetOfficerCodesByType).not.toHaveBeenCalled();
     expect(mockedDataStore.startRun).toHaveBeenCalledWith('school', 'School Elections -- Term 1', expect.any(String));
+    expect(mockedDataStore.stampOfficerCodesRunId).toHaveBeenCalledWith('school', runningRun.id);
     expect(mockedDataStore.appendLogEntry).toHaveBeenCalledWith(
       expect.objectContaining({ runId: runningRun.id, action: 'run.start' })
     );

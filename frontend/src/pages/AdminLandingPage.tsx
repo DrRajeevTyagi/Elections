@@ -8,7 +8,6 @@ import {
   updateCandidate,
   deleteCandidate,
   addCandidate,
-  setElectionType,
   verifyAdminSecret,
   getOfficerCodes,
   generateOfficerCodes,
@@ -25,7 +24,6 @@ import {
   getCurrentRun,
   getRuns,
   searchRunLog,
-  startRecording,
   closeRecording
 } from '../services/api';
 import type {
@@ -41,6 +39,7 @@ import type {
 import type { PostId, ElectionType, HouseId, SchoolPostId, Branch } from '../types/election';
 import { AddCandidateForm } from '../components/AddCandidateForm';
 import { CandidateEditor } from '../components/CandidateEditor';
+import { StartElectionWizard } from '../components/StartElectionWizard';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
 import { POST_NAMES } from '../constants/posts';
 import { POST_COLORS } from '../constants/postColors';
@@ -134,19 +133,13 @@ export const AdminLandingPage = (): JSX.Element => {
   const [archiveNameDrafts, setArchiveNameDrafts] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'dashboard' | 'candidates' | 'results' | 'codes' | 'history' | 'log'>('dashboard');
   const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
-  // A short human-entered label ("Rajeev -- laptop") sent at login/takeover
-  // so the action log (once a recording is active) can say a real name --
-  // see adminSessionService.ts. Persisted alongside the secret so a page
-  // refresh's silent re-verify (below) resends the same label.
-  const [loginLabel, setLoginLabel] = useState(() => sessionStorage.getItem('adminLoginLabel') ?? '');
-  // "Start Recording" / "Close Recording" (ROADMAP.md Phase 3) -- the
-  // currently active election run, if any. Officer-code generation is
-  // gated on this; the Dashboard tab shows a prominent banner either way.
+  // "Start the Election Process" / "End the Election Process" -- the
+  // currently active election run, if any. The Dashboard tab shows a
+  // prominent banner while one is active; officer-code generation is no
+  // longer tied to it (codes are prep work, like candidates).
   const [currentRun, setCurrentRun] = useState<ElectionRun | null>(null);
   const [runLoading, setRunLoading] = useState(false);
-  const [showStartRecordingForm, setShowStartRecordingForm] = useState(false);
-  const [startRunName, setStartRunName] = useState('');
-  const [startRunElectionType, setStartRunElectionType] = useState<ElectionType>('school');
+  const [showWizard, setShowWizard] = useState(false);
   // Activity Log tab ("Ask your data") -- a filter, not a fixed picker: Run
   // defaults to the current run if one is active, otherwise "All Runs".
   // Every other field narrows the search further (see LogSearchFilter).
@@ -309,25 +302,12 @@ export const AdminLandingPage = (): JSX.Element => {
     }
   }, []);
 
-  const handleStartRecording = async () => {
-    if (!startRunName.trim()) {
-      setError('Enter a name for this election run, e.g. "School Elections -- Term 1 2026".');
-      return;
-    }
-    try {
-      setRunLoading(true);
-      setError(null);
-      const run = await startRecording(startRunElectionType, startRunName.trim(), adminSecret);
-      setCurrentRun(run);
-      setShowStartRecordingForm(false);
-      setStartRunName('');
-      setMessage(`Recording started: "${run.name}". Votes and officer codes for ${run.electionType === 'house' ? 'House' : 'School'} Elections have been reset to zero.`);
-      await Promise.all([loadDashboard(), loadOfficerCodes()]);
-    } catch (startError) {
-      setError(startError instanceof Error ? startError.message : 'Failed to start recording');
-    } finally {
-      setRunLoading(false);
-    }
+  // Called by StartElectionWizard once it has started the run AND opened
+  // the poll -- one continuous action, not "arm then separately open".
+  const handleWizardStarted = async (wizardMessage: string) => {
+    setShowWizard(false);
+    setMessage(wizardMessage);
+    await Promise.all([loadDashboard(), loadOfficerCodes(), loadCurrentRun()]);
   };
 
   const handleCloseRecording = async () => {
@@ -335,7 +315,7 @@ export const AdminLandingPage = (): JSX.Element => {
       return;
     }
     const confirmed = window.confirm(
-      `Close the recording "${currentRun.name}"?\n\nThis saves the final results to Election History, resets votes and officer codes to zero, and closes the poll. This cannot be undone.`
+      `End the election process for "${currentRun.name}"?\n\nThis saves the final results to Election History, resets votes and officer codes to zero, and closes the poll. This cannot be undone.`
     );
     if (!confirmed) {
       return;
@@ -345,10 +325,10 @@ export const AdminLandingPage = (): JSX.Element => {
       setError(null);
       const run = await closeRecording(adminSecret);
       setCurrentRun(null);
-      setMessage(`Recording "${run.name}" closed and saved to Election History.`);
+      setMessage(`"${run.name}" closed and saved to Election History.`);
       await Promise.all([loadDashboard(), loadOfficerCodes(), loadArchives()]);
     } catch (closeError) {
-      setError(closeError instanceof Error ? closeError.message : 'Failed to close recording');
+      setError(closeError instanceof Error ? closeError.message : 'Failed to close the election');
     } finally {
       setRunLoading(false);
     }
@@ -363,7 +343,7 @@ export const AdminLandingPage = (): JSX.Element => {
       const response = await getRuns(secret);
       setPastRuns(response.runs);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Failed to load past recordings');
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load past elections');
     }
   }, []);
 
@@ -586,10 +566,9 @@ export const AdminLandingPage = (): JSX.Element => {
       setCheckingAuth(false);
       return;
     }
-    const storedLabel = sessionStorage.getItem('adminLoginLabel') ?? undefined;
     void (async () => {
       try {
-        await verifyAdminSecret(stored, false, storedLabel);
+        await verifyAdminSecret(stored);
         setAdminSecret(stored);
         setAuthenticated(true);
       } catch {
@@ -610,11 +589,8 @@ export const AdminLandingPage = (): JSX.Element => {
       setUnlocking(true);
       setAuthError(null);
       setSessionConflict(null);
-      await verifyAdminSecret(adminSecret.trim(), false, loginLabel.trim() || undefined);
+      await verifyAdminSecret(adminSecret.trim());
       sessionStorage.setItem('adminSecret', adminSecret.trim());
-      if (loginLabel.trim()) {
-        sessionStorage.setItem('adminLoginLabel', loginLabel.trim());
-      }
       setAuthenticated(true);
     } catch (verifyError) {
       const code = (verifyError as { errorCode?: string })?.errorCode;
@@ -636,11 +612,8 @@ export const AdminLandingPage = (): JSX.Element => {
     try {
       setUnlocking(true);
       setAuthError(null);
-      await verifyAdminSecret(adminSecret.trim(), true, loginLabel.trim() || undefined);
+      await verifyAdminSecret(adminSecret.trim(), true);
       sessionStorage.setItem('adminSecret', adminSecret.trim());
-      if (loginLabel.trim()) {
-        sessionStorage.setItem('adminLoginLabel', loginLabel.trim());
-      }
       setSessionConflict(null);
       setAuthenticated(true);
     } catch (verifyError) {
@@ -1008,56 +981,6 @@ export const AdminLandingPage = (): JSX.Element => {
     return groupOfficerCodesByHouse(branchFiltered);
   }, [officerCodes, selectedBranch]);
 
-  const handleSetElectionType = async (electionType: ElectionType) => {
-    if (!adminSecret.trim()) {
-      setError('Enter the admin secret to change election type.');
-      return;
-    }
-
-    if (pollStatus?.settings.isOpen) {
-      setError('Please close the poll before changing election type.');
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Switch to ${electionType === 'school' ? 'School' : 'House'} Elections?\n\nThis will:\n- Clear all active sessions\n- Close the poll\n\nYou can then configure candidates and open the poll.`
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    // Switching type only archives the OUTGOING type's votes (and only if
-    // there are any) -- see poll.ts. Only bother asking for a name when
-    // that's actually going to happen.
-    const outgoingVotesCast = results.reduce(
-      (sum, post) => sum + post.candidates.reduce((s, c) => s + c.total, 0),
-      0
-    );
-    const willArchive =
-      Boolean(pollStatus?.activeElectionType) && pollStatus?.activeElectionType !== electionType && outgoingVotesCast > 0;
-    const archiveName = willArchive
-      ? window.prompt(
-          'Name this election for the history record (e.g. "School Council -- Term 1 2026"). Leave blank to skip -- you can add a name later from Election History.',
-          `${pollStatus!.activeElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString('en-GB')}`
-        )?.trim() || undefined
-      : undefined;
-
-    try {
-      setLoading(true);
-      setError(null);
-      setMessage(null);
-      await setElectionType(electionType, adminSecret, archiveName);
-      setMessage(`Switched to ${electionType === 'school' ? 'School' : 'House'} Elections successfully.`);
-      await loadDashboard();
-      await loadArchives();
-    } catch (typeError) {
-      setError(typeError instanceof Error ? typeError.message : 'Failed to change election type');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (checkingAuth) {
     return (
       <section className="page-card admin">
@@ -1086,21 +1009,6 @@ export const AdminLandingPage = (): JSX.Element => {
             placeholder="Enter admin secret"
             autoFocus
           />
-          <label className="form-label" htmlFor="admin-label" style={{ marginTop: '0.75rem' }}>
-            Your name &amp; device (optional)
-          </label>
-          <input
-            id="admin-label"
-            className="form-input"
-            type="text"
-            value={loginLabel}
-            onChange={(event) => setLoginLabel(event.target.value)}
-            placeholder="e.g. Rajeev -- laptop"
-          />
-          <p style={{ fontSize: '0.8rem', color: '#9ca3af', margin: '0.25rem 0 0 0' }}>
-            Shown if this session ever needs to be identified later -- e.g. in the Activity Log once a recording is
-            active, or to whoever you take the console over from.
-          </p>
           {authError && <p style={{ color: '#dc2626', fontWeight: 600 }}>{authError}</p>}
           {sessionConflict && (
             <div
@@ -1179,7 +1087,7 @@ export const AdminLandingPage = (): JSX.Element => {
             { key: 'results', label: 'Live Results' },
             { key: 'codes', label: `Polling Officer Codes${officerCodes.length > 0 ? ` (${officerCodes.length})` : ''}` },
             { key: 'history', label: 'Election History' },
-            { key: 'log', label: currentRun ? '🔴 Activity Log' : 'Activity Log' }
+            { key: 'log', label: currentRun ? '🗳️ Activity Log' : 'Activity Log' }
           ] as const
         ).map((tab) => (
           <button
@@ -1205,26 +1113,26 @@ export const AdminLandingPage = (): JSX.Element => {
           </div>
 
           <section className="dashboard-section">
-            <h3 className="dashboard-section-title">Recording</h3>
+            <h3 className="dashboard-section-title">Election</h3>
             {currentRun ? (
               <div
                 style={{
                   padding: '1rem',
-                  backgroundColor: '#fef2f2',
-                  border: '2px solid #dc2626',
+                  backgroundColor: '#ecfdf5',
+                  border: '2px solid #059669',
                   borderRadius: '8px'
                 }}
               >
-                <p style={{ margin: 0, fontWeight: 700, color: '#991b1b' }}>
-                  🔴 RECORDING: {currentRun.name}
+                <p style={{ margin: 0, fontWeight: 700, color: '#065f46' }}>
+                  🗳️ ELECTION IN PROGRESS: {currentRun.name}
                 </p>
-                <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.85rem', color: '#7f1d1d' }}>
+                <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.85rem', color: '#065f46' }}>
                   {currentRun.electionType === 'house' ? 'House Elections' : 'School Elections'} &middot; started{' '}
                   {formatTimestamp(currentRun.startedAt)} by {currentRun.startedBy}
                 </p>
-                <p style={{ margin: '0.5rem 0 0.75rem 0', fontSize: '0.8rem', color: '#7f1d1d' }}>
-                  Every action from here on is permanently logged (see the Activity Log tab) until this recording is
-                  closed.
+                <p style={{ margin: '0.5rem 0 0.75rem 0', fontSize: '0.8rem', color: '#065f46' }}>
+                  Every action from here on is permanently logged (see the Activity Log tab) until this election is
+                  closed. Use Voting below to pause/resume; use the button below to end the election entirely.
                 </p>
                 <button
                   className="button"
@@ -1232,145 +1140,48 @@ export const AdminLandingPage = (): JSX.Element => {
                   disabled={runLoading}
                   style={{ backgroundColor: '#991b1b' }}
                 >
-                  {runLoading ? 'Closing...' : '⏹ Close Recording'}
+                  {runLoading ? 'Closing...' : '⏹ End the Election Process'}
                 </button>
               </div>
+            ) : showWizard ? (
+              <StartElectionWizard
+                adminSecret={adminSecret}
+                activeElectionType={pollStatus?.activeElectionType ?? null}
+                officerCodes={officerCodes}
+                onClose={() => setShowWizard(false)}
+                onStarted={handleWizardStarted}
+              />
             ) : (
               <div style={{ padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
                 <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', color: '#4b5563' }}>
-                  No recording is active. Setup work (adding candidates, testing) is free and unlogged until you
-                  start one -- generating polling officer codes requires an active recording.
+                  No election is in progress. Setup work (adding candidates, generating officer codes) is free and
+                  unlogged until you start one.
                 </p>
-                {showStartRecordingForm ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxWidth: '360px' }}>
-                    <div>
-                      <label className="form-label" htmlFor="start-run-type">Election type</label>
-                      <select
-                        id="start-run-type"
-                        className="form-input"
-                        value={startRunElectionType}
-                        onChange={(event) => setStartRunElectionType(event.target.value as ElectionType)}
-                      >
-                        <option value="school">🏫 School Elections</option>
-                        <option value="house">🏠 House Elections</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="form-label" htmlFor="start-run-name">Name this recording</label>
-                      <input
-                        id="start-run-name"
-                        className="form-input"
-                        type="text"
-                        value={startRunName}
-                        onChange={(event) => setStartRunName(event.target.value)}
-                        placeholder="e.g. School Elections -- Term 1 2026"
-                      />
-                    </div>
-                    <p style={{ fontSize: '0.8rem', color: '#9ca3af', margin: 0 }}>
-                      This resets votes and officer codes to zero for {startRunElectionType === 'house' ? 'House' : 'School'} Elections,
-                      across both branches. Candidates are not affected.
-                    </p>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button className="button" onClick={handleStartRecording} disabled={runLoading || !startRunName.trim()}>
-                        {runLoading ? 'Starting...' : '▶ Start Recording'}
-                      </button>
-                      <button
-                        className="button"
-                        style={{ backgroundColor: '#6b7280' }}
-                        onClick={() => {
-                          setShowStartRecordingForm(false);
-                          setStartRunName('');
-                        }}
-                        disabled={runLoading}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    className="button"
-                    onClick={() => {
-                      setStartRunElectionType(pollStatus?.activeElectionType ?? 'school');
-                      setShowStartRecordingForm(true);
-                    }}
-                  >
-                    ▶ Start Recording
-                  </button>
-                )}
+                <button className="button" onClick={() => setShowWizard(true)}>
+                  🗳️ Start the Election Process (School / House)
+                </button>
               </div>
             )}
           </section>
 
           <section className="dashboard-section">
-            <h3 className="dashboard-section-title">Election Type</h3>
-            <div style={{ padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                <button
-                  className="button"
-                  onClick={() => handleSetElectionType('school')}
-                  disabled={loading || pollStatus?.settings.isOpen === true || pollStatus?.activeElectionType === 'school' || !!currentRun}
-                  style={{
-                    backgroundColor: pollStatus?.activeElectionType === 'school' ? '#16a34a' : '#6b7280',
-                    flex: 1,
-                    opacity: pollStatus?.settings.isOpen || currentRun ? 0.5 : 1
-                  }}
-                  title={
-                    currentRun
-                      ? 'Close the active recording before changing election type'
-                      : pollStatus?.settings.isOpen
-                      ? 'Close poll before changing election type'
-                      : 'Switch to School Elections'
-                  }
-                >
-                  🏫 School
-                </button>
-                <button
-                  className="button"
-                  onClick={() => handleSetElectionType('house')}
-                  disabled={loading || pollStatus?.settings.isOpen === true || pollStatus?.activeElectionType === 'house' || !!currentRun}
-                  style={{
-                    backgroundColor: pollStatus?.activeElectionType === 'house' ? '#16a34a' : '#6b7280',
-                    flex: 1,
-                    opacity: pollStatus?.settings.isOpen || currentRun ? 0.5 : 1
-                  }}
-                  title={
-                    currentRun
-                      ? 'Close the active recording before changing election type'
-                      : pollStatus?.settings.isOpen
-                      ? 'Close poll before changing election type'
-                      : 'Switch to House Elections'
-                  }
-                >
-                  🏠 House
-                </button>
-              </div>
-              {pollStatus?.activeElectionType ? (
-                <p className="status" style={{ margin: 0, fontSize: '0.875rem' }}>
-                  Active: <strong>{pollStatus.activeElectionType === 'school' ? 'School Elections' : 'House Elections'}</strong>
-                </p>
-              ) : (
-                <p className="status" style={{ margin: 0, fontSize: '0.875rem', color: '#dc2626' }}>
-                  No election type selected
-                </p>
-              )}
-            </div>
-          </section>
-
-          <section className="dashboard-section">
             <h3 className="dashboard-section-title">Voting</h3>
+            <p style={{ fontSize: '0.8rem', color: '#9ca3af', marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
+              For pausing/resuming voting within the election currently in progress -- opening the very first poll
+              of a new election happens through "Start the Election Process" above.
+            </p>
             <div className="admin-actions">
               <button
                 className="button"
                 onClick={() => mutatePoll('open')}
-                disabled={loading || !pollStatus?.activeElectionType || pollStatus?.settings.isOpen === true}
+                disabled={loading || !currentRun || pollStatus?.settings.isOpen === true}
                 style={{ opacity: pollStatus?.settings.isOpen === true ? 0.5 : 1 }}
                 title={
                   pollStatus?.settings.isOpen === true
                     ? 'Poll is already open'
-                    : !pollStatus?.activeElectionType
-                    ? 'Please select an election type first'
-                    : 'Open the poll for voting'
+                    : !currentRun
+                    ? 'Start the election process first'
+                    : 'Resume voting'
                 }
               >
                 Open Poll
@@ -1689,31 +1500,10 @@ export const AdminLandingPage = (): JSX.Element => {
         </div>
         <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '0.5rem', marginBottom: '1rem' }}>
           Generate codes here, hand them out, then come back and type each officer's name against their code so
-          you know who has which one. Generating adds new codes to the list below &mdash; it never replaces or
-          removes existing ones.
+          you know who has which one. This is prep work, same as adding candidates -- do it any time, before or
+          after starting the election process. Generating adds new codes to the list below &mdash; it never
+          replaces or removes existing ones.
         </p>
-
-        {!currentRun && (
-          <p
-            style={{
-              fontSize: '0.85rem',
-              color: '#92400e',
-              backgroundColor: '#fffbeb',
-              border: '1px solid #f59e0b',
-              borderRadius: '8px',
-              padding: '0.5rem 0.75rem',
-              marginBottom: '1rem'
-            }}
-          >
-            ⚠ No recording is active, so code generation is disabled. Start a recording on the Dashboard tab first.
-          </p>
-        )}
-        {currentRun && (
-          <p style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '1rem' }}>
-            Recording active for <strong>{currentRun.electionType === 'house' ? 'House' : 'School'} Elections</strong> ("
-            {currentRun.name}") -- only that type's codes can be generated right now.
-          </p>
-        )}
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', marginBottom: '1.5rem' }}>
           <div style={{ flex: '1 1 340px', padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
@@ -1740,8 +1530,7 @@ export const AdminLandingPage = (): JSX.Element => {
               <button
                 className="button"
                 onClick={handleGenerateHouseCodesForAll}
-                disabled={officerCodesLoading || currentRun?.electionType !== 'house'}
-                title={currentRun?.electionType !== 'house' ? 'Start a House Elections recording first' : undefined}
+                disabled={officerCodesLoading}
               >
                 Generate for All 8 Houses
               </button>
@@ -1766,16 +1555,10 @@ export const AdminLandingPage = (): JSX.Element => {
               </div>
               <button
                 className="button"
-                style={{ backgroundColor: '#6b7280', opacity: officerCodesLoading || !generateHouse || currentRun?.electionType !== 'house' ? 0.5 : 1 }}
+                style={{ backgroundColor: '#6b7280', opacity: officerCodesLoading || !generateHouse ? 0.5 : 1 }}
                 onClick={handleGenerateSingleHouseCodes}
-                disabled={officerCodesLoading || !generateHouse || currentRun?.electionType !== 'house'}
-                title={
-                  currentRun?.electionType !== 'house'
-                    ? 'Start a House Elections recording first'
-                    : !generateHouse
-                    ? 'Choose a house first'
-                    : 'Add more codes to just this one house, e.g. to replace a lost code'
-                }
+                disabled={officerCodesLoading || !generateHouse}
+                title={!generateHouse ? 'Choose a house first' : 'Add more codes to just this one house, e.g. to replace a lost code'}
               >
                 Add to This House
               </button>
@@ -1806,8 +1589,7 @@ export const AdminLandingPage = (): JSX.Element => {
               <button
                 className="button"
                 onClick={handleGenerateSchoolCodes}
-                disabled={officerCodesLoading || currentRun?.electionType !== 'school'}
-                title={currentRun?.electionType !== 'school' ? 'Start a School Elections recording first' : undefined}
+                disabled={officerCodesLoading}
               >
                 Generate School Codes
               </button>
@@ -1995,14 +1777,14 @@ export const AdminLandingPage = (): JSX.Element => {
       <div className="admin-panel">
         <h2>Activity Log</h2>
         <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
-          Every action taken while a recording is active, permanent and unmutable -- nothing here can be edited or
-          deleted, by anyone. Setup work done before a recording starts is not logged at all (see the Dashboard
-          tab's Recording section). Search below instead of reading straight through -- e.g. paste a code to see
-          everything that happened to it, or filter by branch/election type/actor.
+          Every action taken while an election is in progress, permanent and unmutable -- nothing here can be
+          edited or deleted, by anyone. Setup work done before an election starts is not logged at all (see the
+          Dashboard tab's Election section). Search below instead of reading straight through -- e.g. paste a code
+          to see everything that happened to it, or filter by branch/election type/actor.
         </p>
 
         {pastRuns.length === 0 ? (
-          <p>No recordings yet. Start one from the Dashboard tab.</p>
+          <p>No elections started yet. Start one from the Dashboard tab.</p>
         ) : (
           <>
             <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -2032,7 +1814,7 @@ export const AdminLandingPage = (): JSX.Element => {
               }}
             >
               <div>
-                <label className="form-label" htmlFor="log-filter-run">Recording</label>
+                <label className="form-label" htmlFor="log-filter-run">Election</label>
                 <select
                   id="log-filter-run"
                   className="form-input"

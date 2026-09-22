@@ -684,6 +684,16 @@ export class DataStore {
     this.queuePersist();
   }
 
+  // Called by runService.ts startRecording once a new run exists, to tag
+  // any codes of that type generated ahead of time (as prep work, before
+  // this run started) with the run they're now part of.
+  stampOfficerCodesRunId(electionType: ElectionType, runId: string): void {
+    this.data.officerCodes = this.data.officerCodes.map((entry) =>
+      entry.electionType === electionType ? { ...entry, runId } : entry
+    );
+    this.queuePersist();
+  }
+
   closeOfficerCode(code: string): OfficerCode | undefined {
     const entry = this.data.officerCodes.find((item) => codesMatch(item.code, code));
     if (!entry) {

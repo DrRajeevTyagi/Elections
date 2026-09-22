@@ -401,4 +401,18 @@ describe('DataStore -- election runs and the append-only action log (ROADMAP.md 
     const [code] = store.generateOfficerCodes(1, 'school', undefined, 'dwarka', run.id);
     expect(code.runId).toBe(run.id);
   });
+
+  it('stampOfficerCodesRunId tags existing codes of one type with a run, without touching the other type', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    store.generateOfficerCodes(1, 'school'); // prep work, generated before any run exists
+    store.generateOfficerCodes(1, 'house', 'Anand');
+
+    store.stampOfficerCodesRunId('school', 'run-123');
+
+    const [schoolCode] = store.getOfficerCodes().filter((c) => c.electionType === 'school');
+    const [houseCode] = store.getOfficerCodes().filter((c) => c.electionType === 'house');
+    expect(schoolCode.runId).toBe('run-123');
+    expect(houseCode.runId).toBeUndefined();
+  });
 });

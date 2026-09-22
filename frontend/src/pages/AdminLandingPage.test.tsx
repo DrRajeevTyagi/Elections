@@ -170,7 +170,7 @@ describe('AdminLandingPage tabs', () => {
     expect(backgroundColors.size).toBe(5);
   });
 
-  it('gates officer-code generation on an active recording matching that election type', async () => {
+  it('shows the election-in-progress banner, and leaves officer-code generation ungated regardless of the active election type', async () => {
     mockApi.verifyAdminSecret.mockResolvedValue(undefined);
     mockApi.getPollStatus.mockResolvedValue({
       poll: { activeElectionType: 'house', settings: { isOpen: false, allowRevote: false } }
@@ -191,15 +191,15 @@ describe('AdminLandingPage tabs', () => {
 
     await unlockAsAdmin();
 
-    // Dashboard shows the active-recording banner.
-    await screen.findByText(/RECORDING: Test Run/);
+    // Dashboard shows the election-in-progress banner.
+    await screen.findByText(/ELECTION IN PROGRESS: Test Run/);
 
-    // Officer Codes tab: House generation is disabled because the active
-    // recording is for School Elections, not House -- generation is gated
-    // per-type on a matching active run (ROADMAP.md Phase 3).
+    // Officer Codes tab: generation is prep work now, not tied to the
+    // active run's election type -- both House and School generation stay
+    // enabled no matter which type is currently running.
     fireEvent.click(screen.getByRole('button', { name: /Polling Officer Codes/ }));
     await screen.findByText('Generate codes for House Elections');
-    expect(screen.getByRole('button', { name: 'Generate for All 8 Houses' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Generate for All 8 Houses' })).not.toBeDisabled();
     expect(screen.getByRole('button', { name: 'Generate School Codes' })).not.toBeDisabled();
   });
 
@@ -242,5 +242,64 @@ describe('AdminLandingPage tabs', () => {
       expect.objectContaining({ action: 'officerCode.name' }),
       expect.any(String)
     );
+  });
+
+  it('"Start the Election Process" wizard walks through every step and opens the poll in one flow', async () => {
+    mockApi.verifyAdminSecret.mockResolvedValue(undefined);
+    mockApi.getPollStatus.mockResolvedValue({
+      poll: { activeElectionType: 'school', settings: { isOpen: false, allowRevote: false } }
+    });
+    mockApi.getResults.mockResolvedValue({ results: [], totalVotes: 0 });
+    mockApi.getOfficerCodes.mockResolvedValue({ codes: [] });
+    mockApi.getArchivesList.mockResolvedValue({ archives: [] });
+    mockApi.getCurrentRun.mockResolvedValue({ run: null });
+    const startedRun = {
+      id: 'run-1',
+      electionType: 'school',
+      name: 'Term 1 2026',
+      status: 'running',
+      startedAt: Date.now(),
+      startedBy: 'Rajeev -- laptop'
+    };
+    mockApi.startRecording.mockResolvedValue(startedRun);
+    mockApi.openPoll.mockResolvedValue({ poll: { activeElectionType: 'school', settings: { isOpen: true, allowRevote: false } } });
+
+    await unlockAsAdmin();
+    fireEvent.click(screen.getByRole('button', { name: /Start the Election Process/ }));
+
+    // a. Name it
+    await screen.findByLabelText('Election name');
+    fireEvent.change(screen.getByLabelText('Election name'), { target: { value: 'Term 1 2026' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    // b. Confirm election type (already 'school', matching pollStatus) -- no API call expected.
+    await screen.findByText(/currently set for/);
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, proceed' }));
+    expect(mockApi.setElectionType).not.toHaveBeenCalled();
+
+    // c. Vote counts reset notice
+    await screen.findByText(/Starting this election resets/i);
+    fireEvent.click(screen.getByRole('button', { name: 'Proceed' }));
+
+    // d. Codes generated? (none exist -- still allowed to proceed)
+    await screen.findByText(/No School codes have been generated yet/);
+    fireEvent.click(screen.getByRole('button', { name: 'Proceed' }));
+
+    // e. Codes distributed?
+    await screen.findByText(/received their code/);
+    fireEvent.click(screen.getByRole('button', { name: /Yes, distributed/ }));
+
+    // f. Candidates lock notice
+    await screen.findByText(/Candidates cannot be changed/);
+    fireEvent.click(screen.getByRole('button', { name: 'Proceed' }));
+
+    // g. Open the poll -- the one continuous commit.
+    await screen.findByRole('button', { name: /Open the Poll/ });
+    mockApi.getCurrentRun.mockResolvedValue({ run: startedRun });
+    fireEvent.click(screen.getByRole('button', { name: /Open the Poll/ }));
+
+    await screen.findByText(/Voting is now open for School Elections/);
+    expect(mockApi.startRecording).toHaveBeenCalledWith('school', 'Term 1 2026', expect.any(String));
+    expect(mockApi.openPoll).toHaveBeenCalled();
   });
 });

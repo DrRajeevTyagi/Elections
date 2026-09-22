@@ -69,11 +69,12 @@ export interface OfficerCode {
   // has been allotted to a real officer, it becomes permanent regardless
   // of whether it was ever used to vote.
   everNamed?: boolean;
-  // Which election run this code was generated under (see ElectionRun
-  // below). Undefined for codes generated before this feature existed, or
-  // (in principle) any code generated outside an active run -- generation
-  // is gated on an active run matching this code's electionType, so in
-  // practice every code generated after this feature ships always has one.
+  // Which election run this code is currently part of (see ElectionRun
+  // below). Generation no longer requires an active run -- codes can be
+  // prepared ahead of time, like candidates -- so this starts undefined and
+  // gets stamped in once a matching run starts (see runService.ts
+  // startRecording / storage/datastore.ts stampOfficerCodesRunId). Also
+  // undefined for codes generated before this feature existed.
   runId?: string;
 }
 

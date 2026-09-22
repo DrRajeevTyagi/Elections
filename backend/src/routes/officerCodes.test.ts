@@ -8,8 +8,10 @@ import type { ElectionRun, OfficerCode } from '../types/election.js';
 // 2. A code can only be deleted if it has NEVER been named AND has never
 //    cast a vote -- once named, it's permanent regardless of vote count
 //    (ELECTION-INTEGRITY-AND-TRUST.md item 3's stricter rule).
-// Plus (2026-09-23): generation is gated on an active run matching the
-// code's election type (ROADMAP.md Phase 3).
+// Plus (2026-09-23, superseded 2026-09-23 later the same day): generation
+// is no longer gated on an active run -- codes are prep work, like
+// candidates, generated any time and carried into whichever matching run
+// starts next (see runService.ts startRecording).
 
 const baseCode: OfficerCode = {
   code: 'ABC123',
@@ -117,26 +119,26 @@ describe('POST /api/officer-codes/generate', () => {
     vi.clearAllMocks();
   });
 
-  it('refuses to generate codes when no recording is active', async () => {
+  it('generates codes with no run tagged when no recording is active', async () => {
     mockedDataStore.getCurrentRun.mockReturnValue(undefined);
+    mockedDataStore.generateOfficerCodes.mockReturnValue([{ ...baseCode }]);
 
     const { createApp } = await import('../app.js');
     const response = await request(createApp()).post('/api/officer-codes/generate').send({ count: 5 });
 
-    expect(response.status).toBe(400);
-    expect(response.body.error).toContain('Start a recording');
-    expect(mockedDataStore.generateOfficerCodes).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(mockedDataStore.generateOfficerCodes).toHaveBeenCalledWith(5, 'school', undefined, undefined, undefined);
   });
 
-  it('refuses to generate House codes while the active recording is for School Elections', async () => {
+  it('generates House codes with no run tagged while the active recording is for School Elections', async () => {
     mockedDataStore.getCurrentRun.mockReturnValue(runningSchoolRun);
+    mockedDataStore.generateOfficerCodes.mockReturnValue([{ ...baseCode, electionType: 'house' }]);
 
     const { createApp } = await import('../app.js');
     const response = await request(createApp()).post('/api/officer-codes/generate').send({ count: 5, house: 'Anand' });
 
-    expect(response.status).toBe(400);
-    expect(response.body.error).toContain('not House Elections');
-    expect(mockedDataStore.generateOfficerCodes).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(mockedDataStore.generateOfficerCodes).toHaveBeenCalledWith(5, 'house', 'Anand', undefined, undefined);
   });
 
   it('generates codes tagged with the active matching run, and logs the action', async () => {

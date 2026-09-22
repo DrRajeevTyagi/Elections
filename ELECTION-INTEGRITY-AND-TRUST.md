@@ -101,13 +101,19 @@ has no concept of "device" at all today, so it can't say "Shikha's phone" vs.
 - A full second-person **approval** requirement for taking over the session was
   considered and **not** adopted for now — see the "Decision" section after item 7.
 
-**Status:** Designed; one small piece pulled forward and built (2026-09-23) as
-part of Phase 3's audit log (item 5): login now optionally captures a short
-human-entered label ("Rajeev -- laptop"), stored on the session and used to
-attribute action-log entries to a real name instead of an anonymous client
-id. The rest of this item -- an active eviction banner, "last active from a
-different session at HH:MM" on the login screen, and distinguishing a
-harmless second tab from a genuinely different device -- is still not built.
+**Status:** Designed; one small piece pulled forward, built, then revised
+same-day (2026-09-23) as part of Phase 3's audit log (item 5): login
+originally captured a short human-entered label ("Rajeev -- laptop"), but
+that field was removed a few hours later after direct feedback that it was
+an unwanted addition to the login screen. In its place, an automatically-
+derived, silent device tag (e.g. "Chrome / Windows", from the browser's own
+user-agent string, no prompt) is sent and stored on the session the same
+way the human-entered label was, so action-log entries and takeover
+messages still say something more readable than a raw client id -- just
+without asking anyone to type it. The rest of this item -- an active
+eviction banner, "last active from a different session at HH:MM" on the
+login screen, and distinguishing a harmless second tab from a genuinely
+different device -- is still not built.
 
 ---
 
@@ -768,6 +774,43 @@ with no active run and correctly gated to the matching election type once
 one starts; the Activity Log tab shows `run.start`/`officerCode.generate`
 entries with the actor label attached; closing seals the run and produces a
 correctly-named Election History entry.
+
+**Addendum (2026-09-23, later the same day): "Start Recording" redesigned,
+and the officer-code generation gate above removed**, both in direct
+response to the Election Commissioner's feedback that the flow had become
+stressful and unnecessarily complicated rather than a "joy to use":
+- **Officer-code generation gate removed.** The gating described above
+  ("only after this point allows officer-code generation") is superseded —
+  codes are now prep work, generated any time, the same way candidates are.
+  This required a real fix, not just removing a check: `startRecording` used
+  to reset officer codes to zero at the *start* boundary as a safety net;
+  since codes can now exist before a run starts, that reset was removed from
+  *start* (kept at *close*, which still fully clears a finished run's codes
+  — so by construction nothing stale from an old run can be present when a
+  new one begins). Pre-generated codes are instead carried forward and
+  stamped with the new run's id. Verified with a real browser run: a code
+  generated and named before starting an election survives the start and is
+  correctly attached to the new run.
+- **"Start Recording" replaced by a guided wizard** (name the election,
+  confirm/change election type, a vote-reset notice, a codes-readiness
+  checklist showing real counts, a codes-distributed confirmation, a
+  candidates-lock notice, then one final action that starts the run *and*
+  opens the poll together). Abortable with no effect at any point before
+  that final step. The separate standalone "Election Type" control is gone,
+  folded into the wizard. User-facing wording changed throughout
+  ("RECORDING" → "ELECTION IN PROGRESS", "Close Recording" → "End the
+  Election Process"); the underlying run/log data model, the append-only
+  guarantee, and Close Recording's own behavior (still resets votes/codes
+  for that run's type, still archives, still seals the log) are unchanged.
+- Open Poll's gating did change in one respect not covered above: the
+  Dashboard's Open Poll button (for pausing/resuming voting) is now
+  disabled unless a run is currently active, since opening the very first
+  poll of a new election always goes through the wizard now — otherwise a
+  stale `activeElectionType` left over from a previously-closed run could
+  let voting reopen with un-reset vote counts, bypassing the run entirely.
+
+See item 1's status below for the related login-label addendum, and
+ROADMAP.md's "Current status" for the full account.
 
 ---
 
