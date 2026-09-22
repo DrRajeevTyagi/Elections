@@ -23,5 +23,5 @@ export const HOUSE_COLORS: Record<HouseId, HouseColor> = {
   Nishtha: { text: '#6b0f28', accent: '#932145', stripText: '#ffffff' }, // burgundy
   Prem: { text: '#dc2626', accent: '#ef4444', stripText: '#ffffff' }, // scarlet red
   Satya: { text: '#047857', accent: '#10b981', stripText: '#ffffff' }, // emerald green
-  Shanti: { text: '#0e7490', accent: '#06b6d4', stripText: '#ffffff' } // cerulean blue
+  Shanti: { text: '#0369a1', accent: '#0ea5e9', stripText: '#ffffff' } // cerulean blue
 };
