@@ -145,12 +145,17 @@ export interface ArchivedCandidateResult {
   post: PostId;
   house?: HouseId;
   total: number;
+  // Which branch this candidate belonged to. Undefined only for results
+  // saved before this field existed -- treat those the same way the rest
+  // of the codebase defaults a missing branch, as 'dwarka'.
+  branch?: Branch;
 }
 
 export interface ArchivedOfficerCode {
   code: string;
   officerName: string;
   voteCount: number;
+  branch?: Branch;
 }
 
 export interface ElectionArchive {
@@ -161,5 +166,9 @@ export interface ElectionArchive {
   results: ArchivedCandidateResult[];
   officerCodes: ArchivedOfficerCode[];
   name?: string; // Admin-given label, e.g. "School Council -- Term 1 2026"
+  // Set on the archive itself only when a report was narrowed to one
+  // branch at read time (see resultsService.ts filterArchiveByBranch) --
+  // a stored archive always covers both branches together; this field is
+  // never persisted, only present on a filtered response.
   branch?: Branch;
 }

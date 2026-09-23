@@ -149,4 +149,38 @@ describe('resultsService', () => {
       expect(mockedDataStore.renameArchive).not.toHaveBeenCalled();
     });
   });
+
+  describe('filterArchiveByBranch', () => {
+    const archive: ElectionArchive = {
+      id: 'archive-1',
+      archivedAt: 100,
+      electionType: 'school',
+      totalVotes: 5,
+      results: [
+        { candidateId: 'hb-1', name: 'Head Boy A', post: 'HB', total: 3, branch: 'dwarka' },
+        { candidateId: 'hb-2', name: 'Head Boy B', post: 'HB', total: 2, branch: 'AN' },
+        { candidateId: 'hg-1', name: 'Head Girl A', post: 'HG', total: 0 } // no branch -- defaults to dwarka
+      ],
+      officerCodes: [
+        { code: 'abc123', officerName: 'Jane', voteCount: 3, branch: 'dwarka' },
+        { code: 'xyz789', officerName: 'Priya', voteCount: 2, branch: 'AN' }
+      ]
+    };
+
+    it('keeps only the given branch\'s results and officer codes, and recomputes totalVotes', async () => {
+      const { filterArchiveByBranch } = await import('./resultsService.js');
+      const filtered = filterArchiveByBranch(archive, 'AN');
+      expect(filtered.results).toEqual([{ candidateId: 'hb-2', name: 'Head Boy B', post: 'HB', total: 2, branch: 'AN' }]);
+      expect(filtered.officerCodes).toEqual([{ code: 'xyz789', officerName: 'Priya', voteCount: 2, branch: 'AN' }]);
+      expect(filtered.totalVotes).toBe(2);
+      expect(filtered.branch).toBe('AN');
+    });
+
+    it('treats a result with no branch set as dwarka', async () => {
+      const { filterArchiveByBranch } = await import('./resultsService.js');
+      const filtered = filterArchiveByBranch(archive, 'dwarka');
+      expect(filtered.results.map((r) => r.candidateId)).toEqual(['hb-1', 'hg-1']);
+      expect(filtered.totalVotes).toBe(3);
+    });
+  });
 });

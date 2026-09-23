@@ -141,12 +141,14 @@ export interface ArchivedCandidateResult {
   post: PostId;
   house?: HouseId;
   total: number;
+  branch?: Branch;
 }
 
 export interface ArchivedOfficerCode {
   code: string;
   officerName: string;
   voteCount: number;
+  branch?: Branch;
 }
 
 export interface ElectionReport {
@@ -157,6 +159,9 @@ export interface ElectionReport {
   results: ArchivedCandidateResult[];
   officerCodes: ArchivedOfficerCode[];
   name?: string;
+  // Set only when the report was narrowed to one branch at read time --
+  // see api.ts getCurrentReport/getArchive.
+  branch?: Branch;
 }
 
 export interface ArchiveSummary {

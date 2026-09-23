@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { getArchive, getCurrentReport } from '../services/api';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
 import { POST_NAMES, SCHOOL_POST_IDS } from '../constants/posts';
 import type { ArchivedCandidateResult, ArchivedOfficerCode, ElectionReport } from '../types/api';
-import type { HouseId, PostId } from '../types/election';
+import type { Branch, HouseId, PostId } from '../types/election';
 import './ReportPage.css';
+
+const isValidBranch = (value: string | null): value is Branch => value === 'dwarka' || value === 'AN';
 
 // en-GB gives dd/mm/yyyy (and a 24-hour clock) instead of the US
 // month/day/year ordering the browser's default locale would otherwise use.
@@ -91,6 +93,9 @@ const PostResultsTable = ({ group }: { group: GroupedPost }): JSX.Element => (
 
 export const ReportPage = (): JSX.Element => {
   const { archiveId } = useParams<{ archiveId?: string }>();
+  const [searchParams] = useSearchParams();
+  const branchParam = searchParams.get('branch');
+  const branch = isValidBranch(branchParam) ? branchParam : undefined;
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [adminSecret, setAdminSecret] = useState<string | null>(null);
   const [report, setReport] = useState<ElectionReport | null | undefined>(undefined);
@@ -109,17 +114,17 @@ export const ReportPage = (): JSX.Element => {
     void (async () => {
       try {
         if (archiveId) {
-          const response = await getArchive(archiveId, adminSecret);
+          const response = await getArchive(archiveId, adminSecret, branch);
           setReport(response.report);
         } else {
-          const response = await getCurrentReport(adminSecret);
+          const response = await getCurrentReport(adminSecret, branch);
           setReport(response.report);
         }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'Failed to load report');
       }
     })();
-  }, [adminSecret, archiveId]);
+  }, [adminSecret, archiveId, branch]);
 
   const grouped = useMemo(() => {
     if (!report) {
@@ -170,7 +175,7 @@ export const ReportPage = (): JSX.Element => {
         </button>
       </div>
 
-      <p className="report-school-name">Mount Carmel School</p>
+      <p className="report-school-name">Mount Carmel School{report.branch ? ` — ${report.branch === 'AN' ? 'AN' : 'Dwarka'}` : ''}</p>
       <h1>{report.electionType === 'school' ? 'School Elections' : 'House Elections'} — Results Report</h1>
       {report.name && <p className="report-meta" style={{ fontWeight: 700 }}>{report.name}</p>}
       <p className="report-meta">

@@ -112,7 +112,8 @@ export const buildElectionSnapshot = (name?: string): ElectionArchive | null => 
     name: candidate.name,
     post: candidate.post,
     house: candidate.house,
-    total: tally.get(candidate.post + ':' + candidate.id) ?? 0
+    total: tally.get(candidate.post + ':' + candidate.id) ?? 0,
+    branch: candidate.branch
   }));
 
   // Only this election's own codes -- previously every code (including the
@@ -125,7 +126,8 @@ export const buildElectionSnapshot = (name?: string): ElectionArchive | null => 
     .map((entry) => ({
       code: entry.code,
       officerName: entry.officerName,
-      voteCount: dataStore.countVotesByOfficerCode(entry.code)
+      voteCount: dataStore.countVotesByOfficerCode(entry.code),
+      branch: entry.branch
     }));
 
   const totalVotes = getTotalVotes();
@@ -138,6 +140,25 @@ export const buildElectionSnapshot = (name?: string): ElectionArchive | null => 
     results,
     officerCodes,
     name: name?.trim() || undefined
+  };
+};
+
+// Narrows a full (both-branches) snapshot/archive down to one branch, for
+// the "Download Report" / Election History "view" flows -- the stored
+// archive always covers both branches together (archiving itself is
+// unchanged), this only affects what a given report *read* returns.
+// `totalVotes` is recomputed from the filtered results (summing per-post
+// totals) rather than re-querying live votes, so this works identically for
+// a live snapshot and a long-closed archive whose votes are long gone.
+export const filterArchiveByBranch = (archive: ElectionArchive, branch: Branch): ElectionArchive => {
+  const results = archive.results.filter((entry) => (entry.branch ?? 'dwarka') === branch);
+  const officerCodes = archive.officerCodes.filter((entry) => (entry.branch ?? 'dwarka') === branch);
+  return {
+    ...archive,
+    results,
+    officerCodes,
+    totalVotes: results.reduce((sum, entry) => sum + entry.total, 0),
+    branch
   };
 };
 

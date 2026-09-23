@@ -1,22 +1,42 @@
 import { Router } from 'express';
 import { requireAdminSession } from '../middleware/adminAuth.js';
-import { buildElectionSnapshot } from '../services/resultsService.js';
+import { buildElectionSnapshot, filterArchiveByBranch } from '../services/resultsService.js';
 import { logAction } from '../services/auditLogService.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError, NotFoundError } from '../utils/httpError.js';
+import { isValidBranch } from '../config/posts.js';
+import type { Branch } from '../types/election.js';
 
 export const reportRouter = Router();
 
 reportRouter.use(requireAdminSession);
 
+// Shared by both report-reading routes below -- validates the optional
+// `?branch=` query param used to narrow a combined (both-branches) report
+// down to just Dwarka or just AN. Download Report and Election History's
+// "view" used to always show both branches merged together, with no way
+// to print one branch's results on their own.
+const parseBranchParam = (req: { query: unknown }): Branch | undefined => {
+  const { branch } = req.query as { branch?: string };
+  if (branch === undefined) {
+    return undefined;
+  }
+  if (!isValidBranch(branch)) {
+    throw new BadRequestError('Invalid branch');
+  }
+  return branch;
+};
+
 // Live snapshot of the currently active election -- not persisted. Powers
 // "Download Report" at any time, independent of Reset Poll.
 reportRouter.get(
   '/current',
-  asyncHandler((_req, res) => {
+  asyncHandler((req, res) => {
+    const branch = parseBranchParam(req);
     const snapshot = buildElectionSnapshot();
-    res.json({ report: snapshot });
+    const report = snapshot && branch ? filterArchiveByBranch(snapshot, branch) : snapshot;
+    res.json({ report });
   })
 );
 
@@ -58,11 +78,12 @@ reportRouter.get(
 reportRouter.get(
   '/archives/:id',
   asyncHandler((req, res) => {
+    const branch = parseBranchParam(req);
     const archive = dataStore.getArchive(req.params.id);
     if (!archive) {
       throw new NotFoundError('Archived report not found');
     }
-    res.json({ report: archive });
+    res.json({ report: branch ? filterArchiveByBranch(archive, branch) : archive });
   })
 );
 

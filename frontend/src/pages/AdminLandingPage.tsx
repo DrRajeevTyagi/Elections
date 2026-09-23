@@ -1221,15 +1221,26 @@ export const AdminLandingPage = (): JSX.Element => {
               >
                 📋 Save to Election History
               </button>
-              <button
-                className="button"
-                onClick={() => window.open('/admin/report', '_blank')}
-                disabled={!pollStatus?.activeElectionType}
-                style={{ backgroundColor: '#4338ca', width: '100%', opacity: !pollStatus?.activeElectionType ? 0.5 : 1 }}
-                title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable results report in a new tab'}
-              >
-                🖨️ Download Report (current results)
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+                <button
+                  className="button"
+                  onClick={() => window.open('/admin/report?branch=dwarka', '_blank')}
+                  disabled={!pollStatus?.activeElectionType}
+                  style={{ backgroundColor: '#4338ca', flex: 1, opacity: !pollStatus?.activeElectionType ? 0.5 : 1 }}
+                  title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable Dwarka results report in a new tab'}
+                >
+                  🖨️ Download Dwarka Report
+                </button>
+                <button
+                  className="button"
+                  onClick={() => window.open('/admin/report?branch=AN', '_blank')}
+                  disabled={!pollStatus?.activeElectionType}
+                  style={{ backgroundColor: '#4338ca', flex: 1, opacity: !pollStatus?.activeElectionType ? 0.5 : 1 }}
+                  title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable AN results report in a new tab'}
+                >
+                  🖨️ Download AN Report
+                </button>
+              </div>
               <button
                 className="button"
                 onClick={handleReset}
@@ -1756,13 +1767,22 @@ export const AdminLandingPage = (): JSX.Element => {
                             ever needed again (e.g. clearing test data) --
                             re-add the button rather than reintroducing a new
                             deletion path. */}
-                        <button
-                          className="button"
-                          style={{ backgroundColor: '#4338ca' }}
-                          onClick={() => window.open(`/admin/report/${archive.id}`, '_blank')}
-                        >
-                          View / Print
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            className="button"
+                            style={{ backgroundColor: '#4338ca' }}
+                            onClick={() => window.open(`/admin/report/${archive.id}?branch=dwarka`, '_blank')}
+                          >
+                            View/Print Dwarka
+                          </button>
+                          <button
+                            className="button"
+                            style={{ backgroundColor: '#4338ca' }}
+                            onClick={() => window.open(`/admin/report/${archive.id}?branch=AN`, '_blank')}
+                          >
+                            View/Print AN
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

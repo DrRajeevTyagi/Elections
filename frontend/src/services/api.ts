@@ -318,8 +318,9 @@ export const deleteCandidate = async (
   });
 };
 
-export const getCurrentReport = async (adminSecret: string): Promise<CurrentReportResponse> => {
+export const getCurrentReport = async (adminSecret: string, branch?: Branch): Promise<CurrentReportResponse> => {
   const response = await api.get<CurrentReportResponse>('/report/current', {
+    params: branch ? { branch } : undefined,
     headers: { 'x-admin-secret': adminSecret }
   });
   return response.data;
@@ -341,8 +342,9 @@ export const getArchivesList = async (adminSecret: string): Promise<ArchivesList
   return response.data;
 };
 
-export const getArchive = async (id: string, adminSecret: string): Promise<ArchiveReportResponse> => {
+export const getArchive = async (id: string, adminSecret: string, branch?: Branch): Promise<ArchiveReportResponse> => {
   const response = await api.get<ArchiveReportResponse>(`/report/archives/${id}`, {
+    params: branch ? { branch } : undefined,
     headers: { 'x-admin-secret': adminSecret }
   });
   return response.data;

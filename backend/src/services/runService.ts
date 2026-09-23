@@ -98,8 +98,13 @@ export const closeRecording = async (clientId: string | undefined): Promise<Elec
   kioskService.clearSessions();
   dataStore.resetVotesByType(run.electionType);
   dataStore.resetOfficerCodesByType(run.electionType);
+  // Also clears activeElectionType back to null -- without this it stays
+  // set to whatever type just closed, indefinitely, so the admin/kiosk
+  // "Election for X Posts" banner (AppLayout.tsx) would keep announcing a
+  // type that's no longer selected until the next election is started.
   dataStore.updatePollState((state) => ({
     ...state,
+    activeElectionType: null,
     settings: { ...state.settings, isOpen: false }
   }));
 
