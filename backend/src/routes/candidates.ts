@@ -12,11 +12,19 @@ export const candidatesRouter = Router();
 // Editing candidates while voters are actively casting ballots can change or
 // remove a candidate ID an in-flight ballot references -- that vote then
 // fails validation after the one-time token is already spent (see votes.ts).
-// Require the poll to be closed first.
-const ensurePollIsClosed = (): void => {
-  if (getPollState().settings.isOpen) {
+// Candidates are locked for the whole election, not just while polling is
+// literally open right now: "Pause Polling" stops new votes but does NOT end
+// the election (see the Dashboard's "ELECTION IN PROGRESS" banner, which
+// stays up through a pause) -- checking isOpen alone left a window where
+// pausing to take a lunch break would silently unlock candidate edits mid
+// election, contradicting the wizard's own "Candidates will be locked" step
+// and risking exactly the stranded-ballot problem this guard exists to
+// prevent, for any post someone had already voted on before the pause. Same
+// reasoning as poll.ts's /reset guard.
+const ensureNoElectionInProgress = (): void => {
+  if (getPollState().settings.isOpen || dataStore.getCurrentRun()) {
     throw new ForbiddenError(
-      'Close the poll before adding, editing, or deleting candidates -- changing candidates while voting is open can strand an in-progress ballot.'
+      'Candidates cannot be added, edited, or deleted while an election is in progress (this includes a Pause Polling break) -- changing candidates mid-election can strand an in-progress or already-cast ballot. End the Election Process first.'
     );
   }
 };
@@ -42,7 +50,7 @@ candidatesRouter.put(
   '/:candidateId',
   requireAdminSession,
   asyncHandler((req, res) => {
-    ensurePollIsClosed();
+    ensureNoElectionInProgress();
     const { candidateId } = req.params;
     const { name, imageUrl } = req.body as Partial<Candidate>;
 
@@ -83,7 +91,7 @@ candidatesRouter.post(
   '/',
   requireAdminSession,
   asyncHandler((req, res) => {
-    ensurePollIsClosed();
+    ensureNoElectionInProgress();
     const { id, name, post, electionType, house, imageUrl, branch } = req.body as Partial<Candidate>;
 
     if (!id || !name || !post) {
@@ -157,7 +165,7 @@ candidatesRouter.delete(
   '/:candidateId',
   requireAdminSession,
   asyncHandler((req, res) => {
-    ensurePollIsClosed();
+    ensureNoElectionInProgress();
     const { candidateId } = req.params;
 
     if (!candidateId) {
