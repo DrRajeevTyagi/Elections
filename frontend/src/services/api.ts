@@ -294,6 +294,16 @@ export const reopenOfficerCode = async (code: string, adminSecret: string): Prom
   });
 };
 
+// The admin-side equivalent of the kiosk's own self-service "Close Polling
+// at This Booth" (closeBooth above, called from a kiosk tab with the raw
+// code) -- lets the admin close a booth directly from the Officer Codes tab
+// instead.
+export const closeOfficerCode = async (code: string, adminSecret: string): Promise<void> => {
+  await api.post(`/officer-codes/${code}/close`, undefined, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+};
+
 export const updateOfficerCode = async (
   code: string,
   updates: { officerName?: string; label?: string },

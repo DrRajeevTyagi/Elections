@@ -5,9 +5,11 @@ import type { ElectionRun, OfficerCode } from '../types/election.js';
 // Regression tests for two integrity rules decided 2026-09-22:
 // 1. A code cannot activate a ballot until it has been allotted to a named
 //    polling officer (see kiosk.test.ts for that half).
-// 2. A code can only be deleted if it has NEVER been named AND has never
-//    cast a vote -- once named, it's permanent regardless of vote count
-//    (ELECTION-INTEGRITY-AND-TRUST.md item 3's stricter rule).
+// 2. A code can only be deleted if it has never cast a vote (revised
+//    2026-09-25 -- the original rule also blocked a named-but-unvoted code
+//    permanently, ELECTION-INTEGRITY-AND-TRUST.md item 3's stricter rule,
+//    which no longer fits how codes are actually allotted: a whole staff
+//    roster gets a code each, and it's routine for some not to be used).
 // Plus (2026-09-23, superseded 2026-09-23 later the same day): generation
 // is no longer gated on an active run -- codes are prep work, like
 // candidates, generated any time and carried into whichever matching run
@@ -27,6 +29,7 @@ const mockedDataStore = {
   deleteOfficerCode: vi.fn(),
   updateOfficerCode: vi.fn(),
   reopenOfficerCode: vi.fn(),
+  closeOfficerCode: vi.fn<[string], OfficerCode | undefined>(),
   generateOfficerCodes: vi.fn<unknown[], OfficerCode[]>(() => []),
   bulkAllotOfficerCodes: vi.fn<unknown[], OfficerCode[]>(() => []),
   getOfficerCodes: vi.fn<[], OfficerCode[]>(() => []),
@@ -71,27 +74,31 @@ describe('DELETE /api/officer-codes/:code', () => {
     expect(mockedDataStore.deleteOfficerCode).not.toHaveBeenCalled();
   });
 
-  it('refuses to delete a code that was named but has zero votes', async () => {
+  // Revised 2026-09-25: a named-but-unvoted code is now deletable, matching
+  // the real workflow -- a whole staff roster gets a code each, sent by
+  // WhatsApp, and it's routine for some teachers not to report for duty.
+  it('allows deleting a code that was named but has zero votes', async () => {
     mockedDataStore.findOfficerCode.mockReturnValue({ ...baseCode, officerName: 'Jane', everNamed: true });
 
     const { createApp } = await import('../app.js');
     const response = await request(createApp()).delete('/api/officer-codes/ABC123');
 
-    expect(response.status).toBe(409);
-    expect(response.body.error).toContain('allotted to a polling officer');
-    expect(mockedDataStore.deleteOfficerCode).not.toHaveBeenCalled();
+    expect(response.status).toBe(204);
+    expect(mockedDataStore.deleteOfficerCode).toHaveBeenCalledWith('ABC123');
   });
 
-  it('refuses to delete a code that was named, then cleared back to blank', async () => {
+  it('allows deleting a code that was named, then cleared back to blank', async () => {
     // everNamed stays true even after officerName is edited back to '' --
-    // that distinction is the whole point of the flag.
+    // no longer relevant to deletion (see above), but the flag itself is
+    // still tracked for other purposes, so this exercises it wasn't a
+    // silent trigger for a 409 either.
     mockedDataStore.findOfficerCode.mockReturnValue({ ...baseCode, officerName: '', everNamed: true });
 
     const { createApp } = await import('../app.js');
     const response = await request(createApp()).delete('/api/officer-codes/ABC123');
 
-    expect(response.status).toBe(409);
-    expect(mockedDataStore.deleteOfficerCode).not.toHaveBeenCalled();
+    expect(response.status).toBe(204);
+    expect(mockedDataStore.deleteOfficerCode).toHaveBeenCalledWith('ABC123');
   });
 
   it('allows deleting a never-named code with zero votes', async () => {
@@ -104,6 +111,22 @@ describe('DELETE /api/officer-codes/:code', () => {
     expect(mockedDataStore.deleteOfficerCode).toHaveBeenCalledWith('ABC123');
   });
 
+  // The one and only remaining condition: a vote was actually cast. Covered
+  // above by 'refuses to delete a code that has already cast votes', with a
+  // NAMED code too, since that's the realistic case (an unnamed code can't
+  // vote at all -- see kiosk.ts activate).
+  it('refuses to delete a named code that has already cast votes', async () => {
+    mockedDataStore.findOfficerCode.mockReturnValue({ ...baseCode, officerName: 'Jane', everNamed: true });
+    mockedDataStore.countVotesByOfficerCode.mockReturnValue(1);
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).delete('/api/officer-codes/ABC123');
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toContain('cannot be deleted');
+    expect(mockedDataStore.deleteOfficerCode).not.toHaveBeenCalled();
+  });
+
   it('returns 400 for a code that does not exist', async () => {
     mockedDataStore.findOfficerCode.mockReturnValue(undefined);
 
@@ -112,6 +135,42 @@ describe('DELETE /api/officer-codes/:code', () => {
 
     expect(response.status).toBe(400);
     expect(mockedDataStore.deleteOfficerCode).not.toHaveBeenCalled();
+  });
+});
+
+// The admin-side equivalent of the kiosk's own self-service "Close Polling
+// at This Booth" (kiosk.ts /close-booth) -- same underlying
+// dataStore.closeOfficerCode, reachable without opening a kiosk tab.
+describe('POST /api/officer-codes/:code/close', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('closes a code and logs it under the admin actor', async () => {
+    // logAction no-ops with no run active (see its own comment) -- a run
+    // must be active for this assertion on appendLogEntry to mean anything.
+    mockedDataStore.getCurrentRun.mockReturnValue(runningSchoolRun);
+    mockedDataStore.closeOfficerCode.mockReturnValue({ ...baseCode, officerName: 'Jane', everNamed: true, closedAt: Date.now() });
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/ABC123/close');
+
+    expect(response.status).toBe(200);
+    expect(mockedDataStore.closeOfficerCode).toHaveBeenCalledWith('ABC123');
+    expect(response.body.code.closedAt).toBeDefined();
+    expect(mockedDataStore.appendLogEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'officerCode.close', details: { code: 'ABC123' } })
+    );
+  });
+
+  it('returns 400 for a code that does not exist', async () => {
+    mockedDataStore.closeOfficerCode.mockReturnValue(undefined);
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/NOPE00/close');
+
+    expect(response.status).toBe(400);
+    expect(mockedDataStore.appendLogEntry).not.toHaveBeenCalled();
   });
 });
 

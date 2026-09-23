@@ -215,6 +215,25 @@ also unused. This is deliberately stricter than "just check the vote count" —
 it closes the gap where an admin names a code, decides not to use it, then quietly
 deletes it before anyone reviews the officer list.
 
+**Revised (2026-09-25): the stricter half of that rule (a) was dropped, by
+direct request.** A named-but-unvoted code can now be deleted; the only
+remaining condition is (b), zero votes. This is a deliberate loosening, not
+an oversight, because how codes are actually allotted changed: a full staff
+roster is loaded into the app at once, a code is generated and named for
+every teacher on it, and each is sent their code over WhatsApp. It's routine
+for some teachers not to report for duty — under the original rule, every one
+of those codes stayed in the list forever, named and unused, indistinguishable
+from the abuse case rule (a) existed to catch. The abuse case rule (a) was
+guarding against ("generate a code, use it while unnamed, delete it before
+anyone reviews the roster") is still fully covered by rule (b) alone, since
+a code cannot cast a vote at all until it's named (see the kiosk-activation
+rule above) -- a code that was ever used necessarily has a name attached and
+a nonzero vote count, and stays permanent either way. What rule (a) alone
+additionally caught was a named, unused code being deleted -- and every
+naming and every deletion is still permanently logged regardless (item 5's
+audit log, built since this section was first written), so that history is
+never actually lost, only no longer forced to clutter the live list.
+
 **Handling — implemented 2026-09-22, remaining items still open:**
 - ✅ **Require a name before a code can activate a ballot.** Kiosk activation
   now rejects any code with a blank `officerName`, not just closed ones. This
@@ -223,11 +242,13 @@ deletes it before anyone reviews the officer list.
   requires the admin to name every code first, which is a normal workflow
   step anyway (see [ROLLOUT-CHECKLIST.md](ROLLOUT-CHECKLIST.md) — "record
   which teacher holds which code").
-- ✅ **Deletion rule (revised).** `DELETE /:code` now refuses unless the code
-  has *never* had a name attached (tracked via the new `everNamed` field,
-  which distinguishes "never named" from "named, then cleared back to
-  blank" — `officerName` alone couldn't) **and**
-  `countVotesByOfficerCode(code) === 0`.
+- ✅ **Deletion rule (revised, then revised again 2026-09-25).** `DELETE
+  /:code` originally refused unless the code had *never* had a name attached
+  (tracked via the `everNamed` field, which distinguishes "never named" from
+  "named, then cleared back to blank" — `officerName` alone couldn't) **and**
+  `countVotesByOfficerCode(code) === 0`. Now refuses only on the vote-count
+  half — see the addendum above for why. `everNamed` is still tracked, just
+  no longer checked by this route.
 - ⬜ Codes scoped to a specific, explicitly started election — see item 11 —
   rather than generatable "anytime, for any election," which is still
   today's behavior.

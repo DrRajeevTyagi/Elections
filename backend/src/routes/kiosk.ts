@@ -27,8 +27,12 @@ kioskRouter.post(
     }
 
     if (officerCode.closedAt) {
+      // Doesn't say WHO closed it -- could be the officer's own "Close
+      // Polling at This Booth," or an admin closing it directly from the
+      // Officer Codes tab (added 2026-09-25) -- the instruction is the same
+      // either way.
       throw new ForbiddenError(
-        'This code has been closed by the polling officer and can no longer be used. Ask the election administrator to reopen it if this was a mistake.'
+        'This code has been closed and can no longer be used. Ask the election administrator to reopen it if this was a mistake.'
       );
     }
 

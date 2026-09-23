@@ -13,6 +13,7 @@ import {
   updateOfficerCode,
   deleteOfficerCode,
   reopenOfficerCode,
+  closeOfficerCode,
   getArchivesList,
   getStorageHealth,
   renameArchive,
@@ -514,6 +515,28 @@ export const AdminLandingPage = (): JSX.Element => {
       await loadOfficerCodes();
     } catch (reopenError) {
       setError(reopenError instanceof Error ? reopenError.message : 'Failed to reopen code');
+    } finally {
+      setOfficerCodesLoading(false);
+    }
+  };
+
+  // Admin-side equivalent of the polling officer's own "Close Polling at
+  // This Booth" (previously only reachable by opening a kiosk tab and
+  // entering the code there) -- same effect, reached directly from here
+  // instead.
+  const handleCloseOfficerCode = async (code: string) => {
+    const confirmed = window.confirm(`Close code ${code}? It will no longer be able to activate a ballot until reopened.`);
+    if (!confirmed) {
+      return;
+    }
+    try {
+      setOfficerCodesLoading(true);
+      setError(null);
+      await closeOfficerCode(code, adminSecret);
+      setMessage(`Closed code ${code}.`);
+      await loadOfficerCodes();
+    } catch (closeError) {
+      setError(closeError instanceof Error ? closeError.message : 'Failed to close code');
     } finally {
       setOfficerCodesLoading(false);
     }
@@ -1727,7 +1750,7 @@ export const AdminLandingPage = (): JSX.Element => {
                         </td>
                         <td style={{ padding: '0.5rem' }}>
                           <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            {isClosed && (
+                            {isClosed ? (
                               <button
                                 className="button"
                                 style={{ backgroundColor: '#16a34a', opacity: officerCodesLoading ? 0.5 : 1 }}
@@ -1735,6 +1758,16 @@ export const AdminLandingPage = (): JSX.Element => {
                                 onClick={() => handleReopenOfficerCode(entry.code)}
                               >
                                 Reopen
+                              </button>
+                            ) : (
+                              <button
+                                className="button"
+                                style={{ backgroundColor: '#ea580c', opacity: officerCodesLoading ? 0.5 : 1 }}
+                                disabled={officerCodesLoading}
+                                onClick={() => handleCloseOfficerCode(entry.code)}
+                                title="Close this booth without needing to open a kiosk tab and enter the code there"
+                              >
+                                Close
                               </button>
                             )}
                             <button

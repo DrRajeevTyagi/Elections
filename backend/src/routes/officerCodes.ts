@@ -173,6 +173,26 @@ officerCodesRouter.post(
   })
 );
 
+// The admin-side equivalent of the kiosk's own "Close Polling at This Booth"
+// (kiosk.ts /close-booth) -- same effect (dataStore.closeOfficerCode), same
+// logged action name so both show up together in the Activity Log, just
+// reached without needing to open a kiosk tab and type the code in there to
+// close it on the officer's behalf. Logged under the admin's own resolved
+// actor, unlike the kiosk route's self-service `officer:${name}` actor, so
+// the log itself shows which one happened.
+officerCodesRouter.post(
+  '/:code/close',
+  asyncHandler(async (req, res) => {
+    const { code } = req.params;
+    const updated = dataStore.closeOfficerCode(code);
+    if (!updated) {
+      throw new BadRequestError('Code not found');
+    }
+    await logAction(req.header('x-admin-client-id'), 'officerCode.close', { code: updated.code }, updated.branch);
+    res.json({ code: updated });
+  })
+);
+
 officerCodesRouter.delete(
   '/:code',
   asyncHandler(async (req, res) => {
@@ -181,19 +201,20 @@ officerCodesRouter.delete(
     if (!entry) {
       throw new BadRequestError('Code not found');
     }
-    // Deletion is only allowed for a code that has never been allotted to a
-    // named officer AND has never cast a vote (ELECTION-INTEGRITY-AND-TRUST.md
-    // item 3). Once a code has been named it's permanent regardless of
-    // whether it was used -- this is deliberately stricter than checking the
-    // vote count alone, closing the gap where an admin names a code, decides
-    // not to use it, then quietly deletes it before anyone reviews the
-    // officer list. Closing the code (see /reopen) is the correct way to
-    // retire a code that's no longer needed.
-    if (entry.everNamed) {
-      throw new ConflictError(
-        `Code ${entry.code} has been allotted to a polling officer and cannot be deleted, even though it has zero votes. Close the booth instead to stop it from being used further.`
-      );
-    }
+    // Deletion is only ever blocked by one thing: a vote actually cast under
+    // this code (ELECTION-INTEGRITY-AND-TRUST.md item 3, revised 2026-09-25).
+    // The original rule was stricter -- a code that had ever been named was
+    // permanent regardless of vote count, to close the gap where an admin
+    // names a code, decides not to use it, then quietly deletes it before
+    // anyone reviews the officer list. That gap mattered when codes were
+    // handed out one at a time. It no longer fits how codes are actually
+    // allotted: a full staff roster is loaded in at once, a code generated
+    // and sent by WhatsApp to every name on it, and it's routine for some
+    // teachers not to report for duty -- their codes were always going to be
+    // named and unused, not evidence of anything. Every naming and every
+    // deletion is still permanently logged either way (see the Activity Log
+    // tab), so a named-then-deleted code is never actually untraceable, only
+    // no longer cluttering the live list.
     // Use the resolved entry's own code (not the raw, possibly
     // differently-cased path param) so this always matches the exact string
     // stored on votes -- see kiosk.ts activate, which records votes under

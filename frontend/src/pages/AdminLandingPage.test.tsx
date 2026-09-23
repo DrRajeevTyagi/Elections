@@ -18,6 +18,7 @@ const mockApi = vi.hoisted(() => ({
   updateOfficerCode: vi.fn(),
   deleteOfficerCode: vi.fn(),
   reopenOfficerCode: vi.fn(),
+  closeOfficerCode: vi.fn(),
   getArchivesList: vi.fn(),
   getStorageHealth: vi.fn().mockResolvedValue({ ok: true, lastSuccessAt: null, lastErrorAt: null }),
   logoutAdmin: vi.fn(),
@@ -131,6 +132,46 @@ describe('AdminLandingPage tabs', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Dashboard' }));
     await screen.findByText('Poll Controls');
     expect(screen.queryByText('No past elections have been archived yet.')).not.toBeInTheDocument();
+  });
+
+  it('Officer Codes tab: an open code shows Close (not Reopen); a closed one shows Reopen (not Close)', async () => {
+    mockApi.verifyAdminSecret.mockResolvedValue(undefined);
+    mockApi.getPollStatus.mockResolvedValue({
+      poll: { activeElectionType: 'school', settings: { isOpen: false, allowRevote: false } }
+    });
+    mockApi.getResults.mockResolvedValue({ results: [], totalVotes: 0 });
+    mockApi.getOfficerCodes.mockResolvedValue({
+      codes: [
+        { code: 'OPEN01', officerName: 'Mrs. Sharma', createdAt: 1, voteCount: 0 },
+        { code: 'SHUT01', officerName: 'Mr. Rao', createdAt: 2, voteCount: 0, closedAt: Date.now() }
+      ]
+    });
+    mockApi.getArchivesList.mockResolvedValue({ archives: [] });
+
+    await unlockAsAdmin();
+    fireEvent.click(screen.getByRole('button', { name: /Polling Officer Codes/ }));
+    await screen.findByText('OPEN01');
+    screen.getByText('SHUT01');
+
+    // Admin can close the still-open code directly from here, without
+    // opening a kiosk tab and entering the code there.
+    const closeButtons = screen.getAllByRole('button', { name: 'Close' });
+    expect(closeButtons).toHaveLength(1);
+    const reopenButtons = screen.getAllByRole('button', { name: 'Reopen' });
+    expect(reopenButtons).toHaveLength(1);
+
+    mockApi.closeOfficerCode.mockResolvedValue(undefined);
+    mockApi.getOfficerCodes.mockResolvedValue({
+      codes: [
+        { code: 'OPEN01', officerName: 'Mrs. Sharma', createdAt: 1, voteCount: 0, closedAt: Date.now() },
+        { code: 'SHUT01', officerName: 'Mr. Rao', createdAt: 2, voteCount: 0, closedAt: Date.now() }
+      ]
+    });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(closeButtons[0]);
+
+    await waitFor(() => expect(mockApi.closeOfficerCode).toHaveBeenCalledWith('OPEN01', 'testadmin'));
+    confirmSpy.mockRestore();
   });
 
   it('shows all 5 School Elections posts together in one live results grid', async () => {
