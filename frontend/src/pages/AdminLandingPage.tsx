@@ -4,7 +4,6 @@ import {
   getPollStatus,
   getResults,
   openPoll,
-  resetPoll,
   updateCandidate,
   deleteCandidate,
   addCandidate,
@@ -802,62 +801,14 @@ export const AdminLandingPage = (): JSX.Element => {
     }
   };
 
-  const handleReset = async () => {
-    if (!adminSecret.trim()) {
-      setError('Enter the admin secret to clear test votes.');
-      return;
-    }
-
-    if (pollStatus?.settings.isOpen) {
-      setError('Please close the poll before clearing test votes.');
-      return;
-    }
-
-    // Mirrors the backend guard in poll.ts's /reset route. This button is
-    // only ever rendered in the "no election in progress" empty state (see
-    // its JSX above), so currentRun should already be null here -- this is
-    // just defense-in-depth for the moment right after End the Election
-    // Process resolves, before this component has re-rendered without the
-    // button.
-    if (currentRun) {
-      setError('An election is currently in progress. Use "End the Election Process" to finish it instead.');
-      return;
-    }
-
-    const confirmed = window.confirm(
-      'Clear all test votes?\n\nThis will:\n- Save a copy of the current results to Election History (skipped if you already saved this exact data with "Save to Election History")\n- Delete ALL votes for both election types\n- Reset all results to zero\n\nUse this only for stray votes cast while testing/training -- a real election\'s votes are cleared automatically by "End the Election Process" instead. This cannot be undone, but the saved copy will remain available in Election History.'
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    // Reset always archives a snapshot when an election type is set, even
-    // with zero votes -- ask for a name so Election History reads as
-    // something more useful than just a timestamp. Cancelling this prompt
-    // only skips the name (it can be added later from Election History), it
-    // does not cancel the reset the admin already confirmed above.
-    const archiveName = pollStatus?.activeElectionType
-      ? window.prompt(
-          'Name this election for the history record (e.g. "School Council -- Term 1 2026"). Leave blank to skip -- you can add a name later from Election History.',
-          `${pollStatus.activeElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString('en-GB')}`
-        )?.trim() || undefined
-      : undefined;
-
-    try {
-      setLoading(true);
-      setError(null);
-      setMessage(null);
-      await resetPoll(adminSecret, archiveName);
-      setMessage('Test votes cleared. A copy was saved to Election History.');
-      await loadDashboard();
-      await loadArchives();
-    } catch (resetError) {
-      setError(resetError instanceof Error ? resetError.message : 'Failed to clear test votes');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // handleReset / the old "Reset Poll" (later "Clear Test Votes") button was
+  // removed 2026-09-24: it existed for votes cast with no election running,
+  // but the poll can only ever be opened through StartElectionWizard's own
+  // final step (which starts the election in that same click) or "Re-start
+  // Polling" (which requires a run to already be active) -- so that state is
+  // unreachable through this app. POST /api/poll/reset still exists
+  // server-side as a maintenance-only escape hatch for anyone who reaches
+  // that state by calling the API directly; see poll.ts.
 
   const handleUpdateCandidate = async (candidateId: string, name: string, imageUrl: string) => {
     if (!adminSecret.trim()) {
@@ -1232,37 +1183,20 @@ export const AdminLandingPage = (): JSX.Element => {
                 <button className="button" onClick={() => setShowWizard(true)}>
                   🗳️ Start the Election Process (School / House)
                 </button>
-                {/* Only ever relevant here, in the gap between elections --
-                    "Start the Election Process" already wipes whatever votes
-                    exist for the type it starts, on its own, with no need for
-                    this. The one thing this does that Start doesn't is keep a
-                    named copy in Election History first, for stray votes cast
-                    while testing/training (Dashboard → "Start the Election
-                    Process" was never used) that are worth a record before
-                    clearing. Deliberately small and separated from Start,
-                    rather than another full-width button, since this is a
-                    once-in-a-while cleanup action, not something to reach for
-                    day to day. */}
-                <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid #d1d5db' }}>
-                  <button
-                    className="button"
-                    onClick={handleReset}
-                    disabled={loading || pollStatus?.settings.isOpen === true}
-                    style={{
-                      backgroundColor: '#e5e7eb',
-                      color: '#374151',
-                      fontSize: '0.85rem',
-                      opacity: pollStatus?.settings.isOpen ? 0.5 : 1
-                    }}
-                    title={
-                      pollStatus?.settings.isOpen
-                        ? 'Close the poll before clearing test votes'
-                        : 'For test/training votes cast without ever using "Start the Election Process" -- saves a copy to Election History, then clears them to zero'
-                    }
-                  >
-                    🧹 Clear Test Votes{pollStatus?.settings.isOpen && ' (Close poll first)'}
-                  </button>
-                </div>
+                {/* No "clear stray votes" button here (there was briefly one,
+                    removed 2026-09-24): the poll can only ever be opened
+                    through this wizard's own final step, or through
+                    "Re-start Polling" below, which itself only works while a
+                    run is active -- so there is no path through this app that
+                    produces votes with no election recorded against them.
+                    Every vote that can exist here was cast during a run, and
+                    every run's own Close clears its votes. If leftover votes
+                    are ever found with no run active (only reachable by
+                    calling the API directly, bypassing this app), POST
+                    /api/poll/reset still exists server-side as a maintenance
+                    escape hatch -- it's just deliberately not surfaced as a
+                    button here, since it protects against a state a normal
+                    admin can't reach by using the app. */}
               </div>
             )}
           </section>
