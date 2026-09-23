@@ -339,7 +339,7 @@ export const AdminLandingPage = (): JSX.Element => {
       return;
     }
     const confirmed = window.confirm(
-      `End the election process for "${currentRun.name}"?\n\nThis saves the final results to Election History, resets votes and officer codes to zero, and closes the poll. This cannot be undone.`
+      `End the election process for "${currentRun.name}"?\n\nThis saves the final results to Election History, resets votes to zero, and closes the poll. Officer codes and their allotments are kept for the next election. This cannot be undone.`
     );
     if (!confirmed) {
       return;

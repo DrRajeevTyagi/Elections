@@ -703,14 +703,15 @@ export class DataStore {
     return entries;
   }
 
-  // Used by "Start Recording"/"Close Recording" (ROADMAP.md Phase 3) to
-  // clear out officer codes down to zero for one election type, across both
-  // branches, at a run boundary -- deliberately bypassing item 3's
-  // never-named-and-zero-votes deletion rule, because this is a disclosed,
-  // well-logged, whole-run reset rather than a targeted single-code delete
-  // that could quietly hide misuse. Only ever called from runService.ts.
-  resetOfficerCodesByType(electionType: ElectionType): void {
-    this.data.officerCodes = this.data.officerCodes.filter((entry) => entry.electionType !== electionType);
+  // Called by runService.ts startRecording so a booth closed during the
+  // PREVIOUS election (see closeOfficerCode) isn't still showing as closed,
+  // and therefore unusable, for the new one -- the code and its officer
+  // allotment carry forward, only the "this booth is done for the day" flag
+  // resets, same as votes reset to zero for a new run.
+  reopenOfficerCodesByType(electionType: ElectionType): void {
+    this.data.officerCodes = this.data.officerCodes.map((entry) =>
+      entry.electionType === electionType ? { ...entry, closedAt: undefined } : entry
+    );
     this.queuePersist();
   }
 

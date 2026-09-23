@@ -382,16 +382,22 @@ describe('DataStore -- election runs and the append-only action log (ROADMAP.md 
     }
   });
 
-  it('resetOfficerCodesByType clears codes of one type without touching the other', async () => {
+  it('reopenOfficerCodesByType clears closedAt for one type without touching the other or officerName', async () => {
     const store = await importFreshDataStore();
     await store.init();
-    store.generateOfficerCodes(2, 'school');
-    store.generateOfficerCodes(2, 'house', 'Anand');
+    const [schoolCode] = store.generateOfficerCodes(1, 'school');
+    const [houseCode] = store.generateOfficerCodes(1, 'house', 'Anand');
+    store.updateOfficerCode(schoolCode.code, { officerName: 'Mrs. Iyer' });
+    store.closeOfficerCode(schoolCode.code);
+    store.closeOfficerCode(houseCode.code);
 
-    store.resetOfficerCodesByType('school');
+    store.reopenOfficerCodesByType('school');
 
-    expect(store.getOfficerCodes().filter((c) => c.electionType === 'school')).toHaveLength(0);
-    expect(store.getOfficerCodes().filter((c) => c.electionType === 'house')).toHaveLength(2);
+    const reopenedSchool = store.getOfficerCodes().find((c) => c.code === schoolCode.code)!;
+    const stillClosedHouse = store.getOfficerCodes().find((c) => c.code === houseCode.code)!;
+    expect(reopenedSchool.closedAt).toBeUndefined();
+    expect(reopenedSchool.officerName).toBe('Mrs. Iyer');
+    expect(stillClosedHouse.closedAt).toBeDefined();
   });
 
   it('generateOfficerCodes tags codes with the given runId', async () => {

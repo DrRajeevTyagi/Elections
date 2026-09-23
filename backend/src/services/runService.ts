@@ -17,9 +17,10 @@ import type { ElectionRun, ElectionType } from '../types/election.js';
 //      previous run of this type was ended via the older Reset Poll button
 //      instead of Close Recording, which also resets),
 //   3. carries forward any officer codes already generated for this type
-//      as prep work (they are NOT wiped here -- see officerCodes.ts, code
-//      generation no longer requires an active run), tagging them with the
-//      new run,
+//      as prep work (they are NOT wiped here or at Close -- see
+//      officerCodes.ts, code generation no longer requires an active run),
+//      tagging them with the new run and reopening any booth left closed
+//      from the previous election of this type,
 //   4. creates the run record and begins the action log window.
 // Deliberately NOT branch-scoped -- one run always covers both branches
 // together, matching the already-locked decision that Open Poll itself is
@@ -60,12 +61,13 @@ export const startRecording = async (
 
   const votesCleared = dataStore.getVotes().filter((vote) => vote.electionType === electionType).length;
   dataStore.resetVotesByType(electionType);
-  // Officer codes are deliberately left alone here -- any codes of this
-  // type already in storage are, by construction, exactly the prep batch
-  // for this run: a closed run's codes are fully wiped at Close Recording
-  // (see below), so nothing stale from an older run can still be sitting
-  // here.
+  // Officer codes (and their officer-name allotments) are prep work that
+  // carries forward from election to election, same as candidates -- never
+  // wiped here or at Close. The only thing reset is "this booth is closed,"
+  // so a code left closed at the end of the previous election of this type
+  // isn't still unusable for this new one.
   const codesCarriedOver = dataStore.getOfficerCodes().filter((entry) => entry.electionType === electionType).length;
+  dataStore.reopenOfficerCodesByType(electionType);
 
   const actor = resolveActor(clientId);
   const run = await dataStore.startRun(electionType, trimmedName, actor);
@@ -80,8 +82,16 @@ export const startRecording = async (
 // "Close Recording" -- a new, separate action from the older Reset Poll
 // button (decided 2026-09-23: Reset Poll stays exactly as-is, zero behavior
 // change, for ad-hoc corrections with no run active). Archives the final
-// results under the run's own name, resets votes/codes for this run's type
-// back to zero, closes the poll, and seals the run + its action log.
+// results under the run's own name, resets votes for this run's type back to
+// zero, closes the poll, and seals the run + its action log. Deliberately
+// does NOT wipe officer codes any more (reversed 2026-09-23, same day as the
+// original "wipe at close" decision -- it turned out to erase a real
+// election's worth of code-to-teacher allotments the moment it closed,
+// contradicting "codes are prep work, same as candidates": a candidate
+// isn't deleted just because the election closed, and a code's allotment
+// shouldn't be either). See startRecording's reopenOfficerCodesByType call
+// for how a booth closed in the previous election becomes usable again for
+// the next one, without needing to regenerate or re-allot anything.
 export const closeRecording = async (clientId: string | undefined): Promise<ElectionRun> => {
   const run = dataStore.getCurrentRun();
   if (!run) {
@@ -98,7 +108,6 @@ export const closeRecording = async (clientId: string | undefined): Promise<Elec
 
   kioskService.clearSessions();
   dataStore.resetVotesByType(run.electionType);
-  dataStore.resetOfficerCodesByType(run.electionType);
   // Also clears activeElectionType back to null -- without this it stays
   // set to whatever type just closed, indefinitely, so the admin/kiosk
   // "Election for X Posts" banner (AppLayout.tsx) would keep announcing a
