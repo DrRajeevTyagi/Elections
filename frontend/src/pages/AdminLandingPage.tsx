@@ -804,29 +804,28 @@ export const AdminLandingPage = (): JSX.Element => {
 
   const handleReset = async () => {
     if (!adminSecret.trim()) {
-      setError('Enter the admin secret to reset the poll.');
+      setError('Enter the admin secret to clear test votes.');
       return;
     }
 
     if (pollStatus?.settings.isOpen) {
-      setError('Please close the poll before resetting.');
+      setError('Please close the poll before clearing test votes.');
       return;
     }
 
-    // Mirrors the backend guard in poll.ts's /reset route -- Pause Polling
-    // does not end the election (see the green "ELECTION IN PROGRESS" box),
-    // so this must also be blocked during a pause, not just while polling is
-    // actually open. Caught here purely to fail fast with a clear message;
-    // the button itself is already disabled in this state (see its `disabled`
-    // prop below), so reaching this branch would mean the button state and
-    // this check disagreed.
+    // Mirrors the backend guard in poll.ts's /reset route. This button is
+    // only ever rendered in the "no election in progress" empty state (see
+    // its JSX above), so currentRun should already be null here -- this is
+    // just defense-in-depth for the moment right after End the Election
+    // Process resolves, before this component has re-rendered without the
+    // button.
     if (currentRun) {
       setError('An election is currently in progress. Use "End the Election Process" to finish it instead.');
       return;
     }
 
     const confirmed = window.confirm(
-      'Are you sure you want to RESET the poll?\n\nThis will:\n- Save a snapshot of the current results to Election History (skipped if you already saved this exact election with "Save to Election History")\n- Delete ALL votes for both election types\n- Reset all results to zero\n\nVotes cannot be recovered after this, but the snapshot will remain available in Election History.'
+      'Clear all test votes?\n\nThis will:\n- Save a copy of the current results to Election History (skipped if you already saved this exact data with "Save to Election History")\n- Delete ALL votes for both election types\n- Reset all results to zero\n\nUse this only for stray votes cast while testing/training -- a real election\'s votes are cleared automatically by "End the Election Process" instead. This cannot be undone, but the saved copy will remain available in Election History.'
     );
 
     if (!confirmed) {
@@ -850,11 +849,11 @@ export const AdminLandingPage = (): JSX.Element => {
       setError(null);
       setMessage(null);
       await resetPoll(adminSecret, archiveName);
-      setMessage('Poll reset successfully. A snapshot was saved to Election History and all votes have been cleared.');
+      setMessage('Test votes cleared. A copy was saved to Election History.');
       await loadDashboard();
       await loadArchives();
     } catch (resetError) {
-      setError(resetError instanceof Error ? resetError.message : 'Reset failed');
+      setError(resetError instanceof Error ? resetError.message : 'Failed to clear test votes');
     } finally {
       setLoading(false);
     }
@@ -1233,6 +1232,37 @@ export const AdminLandingPage = (): JSX.Element => {
                 <button className="button" onClick={() => setShowWizard(true)}>
                   🗳️ Start the Election Process (School / House)
                 </button>
+                {/* Only ever relevant here, in the gap between elections --
+                    "Start the Election Process" already wipes whatever votes
+                    exist for the type it starts, on its own, with no need for
+                    this. The one thing this does that Start doesn't is keep a
+                    named copy in Election History first, for stray votes cast
+                    while testing/training (Dashboard → "Start the Election
+                    Process" was never used) that are worth a record before
+                    clearing. Deliberately small and separated from Start,
+                    rather than another full-width button, since this is a
+                    once-in-a-while cleanup action, not something to reach for
+                    day to day. */}
+                <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid #d1d5db' }}>
+                  <button
+                    className="button"
+                    onClick={handleReset}
+                    disabled={loading || pollStatus?.settings.isOpen === true}
+                    style={{
+                      backgroundColor: '#e5e7eb',
+                      color: '#374151',
+                      fontSize: '0.85rem',
+                      opacity: pollStatus?.settings.isOpen ? 0.5 : 1
+                    }}
+                    title={
+                      pollStatus?.settings.isOpen
+                        ? 'Close the poll before clearing test votes'
+                        : 'For test/training votes cast without ever using "Start the Election Process" -- saves a copy to Election History, then clears them to zero'
+                    }
+                  >
+                    🧹 Clear Test Votes{pollStatus?.settings.isOpen && ' (Close poll first)'}
+                  </button>
+                </div>
               </div>
             )}
           </section>
@@ -1322,27 +1352,6 @@ export const AdminLandingPage = (): JSX.Element => {
                   🖨️ Download AN Report
                 </button>
               </div>
-              <button
-                className="button"
-                onClick={handleReset}
-                disabled={loading || pollStatus?.settings.isOpen === true || Boolean(currentRun)}
-                style={{
-                  backgroundColor: pollStatus?.settings.isOpen || currentRun ? '#9ca3af' : '#ea580c',
-                  width: '100%',
-                  opacity: pollStatus?.settings.isOpen || currentRun ? 0.5 : 1
-                }}
-                title={
-                  pollStatus?.settings.isOpen
-                    ? 'Close the poll before resetting'
-                    : currentRun
-                    ? 'An election is in progress -- use "End the Election Process" instead'
-                    : 'Delete all votes and reset the poll'
-                }
-              >
-                🗑️ Reset Poll (Clear All Votes)
-                {pollStatus?.settings.isOpen && ' (Close poll first)'}
-                {!pollStatus?.settings.isOpen && currentRun && ' (End the election first)'}
-              </button>
             </div>
           </section>
 
