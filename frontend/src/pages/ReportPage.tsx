@@ -100,6 +100,12 @@ export const ReportPage = (): JSX.Element => {
   const [adminSecret, setAdminSecret] = useState<string | null>(null);
   const [report, setReport] = useState<ElectionReport | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  // Archived reports include officer turnout by default (the permanent
+  // record), but an admin downloading an already-closed election's results
+  // to hand out or file away often wants just the candidate totals, without
+  // any polling-officer code data -- this lets them drop it before printing/
+  // saving, without needing a separate results-only button or route.
+  const [showOfficerTurnout, setShowOfficerTurnout] = useState(true);
 
   useEffect(() => {
     const stored = sessionStorage.getItem('adminSecret');
@@ -170,6 +176,16 @@ export const ReportPage = (): JSX.Element => {
     <div className="report-page">
       <div className="report-toolbar no-print">
         <Link to="/admin">&larr; Back to Admin Dashboard</Link>
+        {archiveId && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
+            <input
+              type="checkbox"
+              checked={showOfficerTurnout}
+              onChange={(event) => setShowOfficerTurnout(event.target.checked)}
+            />
+            Include polling officer turnout
+          </label>
+        )}
         <button className="button" onClick={() => window.print()}>
           🖨️ Print / Save as PDF
         </button>
@@ -202,8 +218,10 @@ export const ReportPage = (): JSX.Element => {
           since that's what people actually want when they hit "Download
           Report." Turnout has its own separate, always-available report at
           /admin/report/turnout, reachable from the Polling Officer Codes
-          tab, for whoever specifically wants that. */}
-      {archiveId && (
+          tab, for whoever specifically wants that. The checkbox above lets
+          an archived view drop it too, for a results-only copy of an
+          already-closed election. */}
+      {archiveId && showOfficerTurnout && (
         <>
           <h2>Polling Officer Turnout</h2>
           <OfficerTurnoutTable officerCodes={report.officerCodes} />
