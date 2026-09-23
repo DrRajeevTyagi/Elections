@@ -386,7 +386,12 @@ What's built, matching the design recap from before implementation:
   run's type, closes the poll, and seals the run — while the existing Reset
   Poll button keeps its exact prior behavior, zero change, for ad-hoc
   corrections with no run active. Reset Poll is still logged if used while a
-  run happens to be active, specifically to catch that bypass.
+  run happens to be active, specifically to catch that bypass. **Superseded
+  (2026-09-24): Close Recording no longer resets votes** (codes were already
+  carved out the same day, 2026-09-23, below) -- a School/House election runs
+  once a year, so the live vote count now stays frozen at its final value
+  through Close, and only resets when `POST /election-runs/start` begins the
+  next election of that type. See ELECTION-INTEGRITY-AND-TRUST.md's addendum.
 - **(2026-09-23) Candidate-change logging deferred as a fast-follow**, not
   included in this pass.
 - **One addition beyond the original design:** login now optionally captures

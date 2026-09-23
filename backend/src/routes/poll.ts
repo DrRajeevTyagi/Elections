@@ -189,11 +189,14 @@ pollRouter.post(
     // break) while it's still under way. Reset Poll must only ever run with
     // no election in progress at all -- for clearing stray test votes cast
     // before Start the Voting Process was ever used. Ending the election
-    // properly is what closeRecording (electionRuns.ts /close) is for, and
-    // it already archives + clears votes + closes the poll together.
+    // properly is what closeRecording (electionRuns.ts /close) is for; note
+    // it does NOT itself clear votes (2026-09-24 -- the final tally is left
+    // in place on purpose until the next election of that type starts), so
+    // "use End of Voting instead" here is only ever about archiving the
+    // result and closing the poll, not about clearing anything.
     if (dataStore.getCurrentRun()) {
       throw new ForbiddenError(
-        'An election is currently in progress. Use "End of Voting" to finish it -- that saves the final result and clears the votes together. Reset Poll is only for clearing stray votes before an election has been started.'
+        'An election is currently in progress. Use "End of Voting" to finish it -- that saves the final result and closes the poll. Reset Poll is only for clearing stray votes before an election has been started.'
       );
     }
 

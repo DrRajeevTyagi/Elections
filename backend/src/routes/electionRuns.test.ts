@@ -126,7 +126,7 @@ describe('POST /api/election-runs/close', () => {
     expect(mockedArchiveCurrentElection).not.toHaveBeenCalled();
   });
 
-  it('archives, resets, closes the poll, and seals the run', async () => {
+  it('archives, closes the poll, and seals the run -- WITHOUT resetting votes', async () => {
     mockedDataStore.getCurrentRun.mockReturnValue(runningRun);
     mockedDataStore.getArchives.mockReturnValue([
       { id: 'archive-1', archivedAt: Date.now(), electionType: 'school', totalVotes: 5, results: [], officerCodes: [] }
@@ -138,7 +138,12 @@ describe('POST /api/election-runs/close', () => {
 
     expect(response.status).toBe(200);
     expect(mockedArchiveCurrentElection).toHaveBeenCalledWith(runningRun.name);
-    expect(mockedDataStore.resetVotesByType).toHaveBeenCalledWith('school');
+    // Reversed 2026-09-24, by direct request: the live vote count is left in
+    // place at close (Live Results, the Dashboard total, each officer code's
+    // turnout all keep showing the final tally) -- it only resets once a new
+    // election of that type is deliberately started (see the "start" tests
+    // below, where resetVotesByType is very much still asserted).
+    expect(mockedDataStore.resetVotesByType).not.toHaveBeenCalled();
     // Officer codes (and their officer-name allotments) are prep work that
     // survives Close Recording, same as candidates -- closing must not wipe
     // them out.

@@ -12,10 +12,12 @@ import type { ElectionRun, ElectionType } from '../types/election.js';
 //      the same outgoing-type archive/clear safety net routes/poll.ts's own
 //      /set-type already applies, for the edge case of stray unarchived
 //      votes sitting in the *other* type when this run starts),
-//   2. resets votes to zero for this run's type, across both branches (a
-//      safety net -- guarantees a genuinely fresh start even if the
-//      previous run of this type was ended via the older Reset Poll button
-//      instead of Close Recording, which also resets),
+//   2. resets votes to zero for this run's type, across both branches --
+//      this is now the ONLY place votes reset (reversed 2026-09-24, see
+//      closeRecording below), so it doubles as the safety net that
+//      guarantees a genuinely fresh start regardless of how the previous
+//      election of this type ended: a proper End of Voting (which leaves the
+//      final tally in place, on purpose) or the ad-hoc Reset Poll button,
 //   3. carries forward any officer codes already generated for this type
 //      as prep work (they are NOT wiped here or at Close -- see
 //      officerCodes.ts, code generation no longer requires an active run),
@@ -82,16 +84,29 @@ export const startRecording = async (
 // "Close Recording" -- a new, separate action from the older Reset Poll
 // button (decided 2026-09-23: Reset Poll stays exactly as-is, zero behavior
 // change, for ad-hoc corrections with no run active). Archives the final
-// results under the run's own name, resets votes for this run's type back to
-// zero, closes the poll, and seals the run + its action log. Deliberately
-// does NOT wipe officer codes any more (reversed 2026-09-23, same day as the
-// original "wipe at close" decision -- it turned out to erase a real
-// election's worth of code-to-teacher allotments the moment it closed,
-// contradicting "codes are prep work, same as candidates": a candidate
-// isn't deleted just because the election closed, and a code's allotment
-// shouldn't be either). See startRecording's reopenOfficerCodesByType call
-// for how a booth closed in the previous election becomes usable again for
-// the next one, without needing to regenerate or re-allot anything.
+// results under the run's own name, closes the poll, and seals the run +
+// its action log.
+//
+// Deliberately does NOT reset votes any more (reversed 2026-09-24, by direct
+// request -- a school's House/School election runs once a year; there is no
+// reason the live vote count needs to go blank the moment voting ends, and
+// every reason it shouldn't: the final tally is genuinely useful to leave on
+// screen -- Live Results, the Dashboard's own total, each officer code's
+// turnout -- for as long as nobody has started a new election of that type.
+// It only needs to reset once a *new* election of that type is genuinely
+// under way, which startRecording's own reset already guarantees on its own
+// (see above) -- so removing the reset here costs nothing and matches how
+// candidates and officer codes already work: nothing about this election's
+// data is cleared just because the election ended, only when a fresh one is
+// deliberately started. Also does NOT wipe officer codes (reversed
+// 2026-09-23, same day as the original "wipe at close" decision -- it turned
+// out to erase a real election's worth of code-to-teacher allotments the
+// moment it closed, contradicting "codes are prep work, same as
+// candidates": a candidate isn't deleted just because the election closed,
+// and a code's allotment shouldn't be either). See startRecording's
+// reopenOfficerCodesByType call for how a booth closed in the previous
+// election becomes usable again for the next one, without needing to
+// regenerate or re-allot anything.
 export const closeRecording = async (clientId: string | undefined): Promise<ElectionRun> => {
   const run = dataStore.getCurrentRun();
   if (!run) {
@@ -107,11 +122,14 @@ export const closeRecording = async (clientId: string | undefined): Promise<Elec
     .sort((a, b) => b.archivedAt - a.archivedAt)[0];
 
   kioskService.clearSessions();
-  dataStore.resetVotesByType(run.electionType);
-  // Also clears activeElectionType back to null -- without this it stays
-  // set to whatever type just closed, indefinitely, so the admin/kiosk
-  // "Election for X Posts" banner (AppLayout.tsx) would keep announcing a
-  // type that's no longer selected until the next election is started.
+  // Clears activeElectionType back to null -- without this it stays set to
+  // whatever type just closed, indefinitely, so the admin/kiosk "Election
+  // for X Posts" banner (AppLayout.tsx) would keep announcing a type that's
+  // no longer selected until the next election is started. This alone is
+  // enough to make Download Report and buildElectionSnapshot correctly
+  // treat this as "no live election" and fall back to the archive just
+  // saved above -- it does NOT depend on the votes themselves being wiped
+  // (they aren't, see this function's own comment above).
   dataStore.updatePollState((state) => ({
     ...state,
     activeElectionType: null,

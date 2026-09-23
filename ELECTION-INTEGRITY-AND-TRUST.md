@@ -812,6 +812,20 @@ stressful and unnecessarily complicated rather than a "joy to use":
 See item 1's status below for the related login-label addendum, and
 ROADMAP.md's "Current status" for the full account.
 
+**Addendum (2026-09-24): Close Recording ("End of Voting") no longer resets
+votes.** Line 803 above ("still resets votes/codes for that run's type") is
+now only half true -- the codes half was already reversed same-day
+2026-09-23 (see ROADMAP.md), and the votes half was reversed 2026-09-24, by
+direct request: a School/House election runs once a year, so there is no
+reason the live vote count needs to go blank the moment voting ends. It now
+stays frozen everywhere (Live Results, the Dashboard total, each officer
+code's turnout) until a fresh election of that type is deliberately started
+via Start the Voting Process, whose own reset (unchanged, still the safety
+net described above) is now the only place votes reset. Votes live in their
+own Firestore subcollection, not the size-limited main document, so
+retaining a year's worth costs nothing. See TESTING-DEMO-SCRIPT.md's change
+log for the verification.
+
 ---
 
 ## Suggested build order
