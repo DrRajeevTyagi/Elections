@@ -7,7 +7,7 @@ import { findMissingCandidateCoverage } from '../services/candidateService.js';
 import { logAction } from '../services/auditLogService.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { BadRequestError, ConflictError } from '../utils/httpError.js';
+import { BadRequestError, ConflictError, ForbiddenError } from '../utils/httpError.js';
 import type { PollState, ElectionType } from '../types/election.js';
 
 // hasActiveRun tells the admin dashboard whether a run is genuinely in
@@ -170,6 +170,17 @@ pollRouter.post(
   requireAdminSession,
   asyncHandler(async (req, res) => {
     const { name } = req.body as { name?: string };
+    // A voter could be mid-ballot right now if the poll is still open --
+    // wiping votes out from under them (and silently closing the poll as a
+    // side effect, which used to happen) risks losing an in-progress vote
+    // with no warning. Same reasoning as candidates.ts's ensurePollIsClosed:
+    // require the admin to close the poll first, as its own deliberate step.
+    if (getPollState().settings.isOpen) {
+      throw new ForbiddenError(
+        'Close the poll before resetting -- resetting while voting could still be in progress risks losing an in-progress vote.'
+      );
+    }
+
     // Snapshot the current election's results before wiping votes, so a
     // record survives the reset -- see GET /api/report/archives. Skips
     // creating a duplicate if this exact data was already saved (e.g. via
@@ -185,6 +196,9 @@ pollRouter.post(
     // used, since that's exactly the "old button used during a recording,
     // bypassing Close Recording" scenario worth having a record of.
     await logAction(req.header('x-admin-client-id'), 'poll.reset', {});
+    // isOpen is already false here (guarded above), and stays false --
+    // Reset Poll no longer closes the poll itself, that's now a distinct,
+    // deliberate prior step.
     const poll = dataStore.updatePollState((state) => ({
       ...state,
       activeElectionType: state.activeElectionType, // Preserve
@@ -196,7 +210,7 @@ pollRouter.post(
 
     res.json({
       poll: sanitizePoll(poll),
-      message: 'All votes cleared and poll closed'
+      message: 'All votes cleared'
     });
   })
 );

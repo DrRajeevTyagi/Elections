@@ -50,7 +50,7 @@ Grouped by what they exercise; continue the numbering from Part 1 if you fold th
 
 ### Poll lifecycle
 30. With votes already cast, use "Save to Election History," then immediately Reset Poll — confirm this does NOT create a second, duplicate history entry for the same election.
-31. **Corrected 2026-09-24 — this used to claim Reset Poll is blocked while the poll is open; verified it is NOT.** Try Reset Poll while the poll is still open — it succeeds and closes the poll as part of resetting (no separate "close it first" step is required). If you actually want Reset blocked while open, that's a real product decision to make, not something the current code does — flag it rather than assume either way.
+31. Try Reset Poll while the poll is still open — confirm it's blocked (403, "Close the poll before resetting") until you close the poll first. (Fixed 2026-09-24: this was previously only enforced by the admin UI disabling the button, with no server-side guard — a direct API call could reset live votes out from under a voter mid-ballot. Now blocked server-side too, matching what the button already implied.)
 32. Close the poll mid-voting (i.e. with a code already activated but not yet voted) — confirm no *new* ballot can be activated afterward, and any votes already fully cast beforehand are unaffected. **Note (verified 2026-09-24):** the in-progress (activated-but-not-yet-submitted) session itself is invalidated the moment the poll closes — that voter's half-finished ballot cannot be submitted afterward (fails with "Invalid kiosk session token"), so plan for that if a real voter is ever mid-ballot when Close Poll is clicked.
 
 ### Reports & history
@@ -66,5 +66,4 @@ Grouped by what they exercise; continue the numbering from Part 1 if you fold th
 ## Suggestions for you to decide on
 
 - Whether to formally split Part 2 into its own "regression tests" section that gets re-run every time before a real polling day, versus a one-time "have we ever tried this" list.
-- Whether Reset Poll should actually be blocked while the poll is open (see item 31) — flagged, not decided.
 - This script still doesn't exercise the Dwarka/AN branch dimension at all (every step above implicitly runs against Dwarka, the only branch with real candidates set up so far) — matches this year's live rollout plan of Dwarka-only before AN has real data (see ROADMAP.md), but once AN's real candidate list is entered, this script should be re-run once per branch, plus one pass specifically checking that a Dwarka code never surfaces AN candidates (or votes) and vice versa.

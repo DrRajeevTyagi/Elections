@@ -13,11 +13,27 @@ import type { ElectionRun, PollState } from '../types/election.js';
 const mockedDataStore = {
   getPollState: vi.fn<[], PollState>(),
   getCurrentRun: vi.fn<[], ElectionRun | undefined>(),
-  updatePollState: vi.fn<[(state: PollState) => PollState], PollState>()
+  updatePollState: vi.fn<[(state: PollState) => PollState], PollState>(),
+  resetVotes: vi.fn()
 };
 
 vi.mock('../storage/datastore.js', () => ({
   dataStore: mockedDataStore
+}));
+
+const mockedArchiveCurrentElection = vi.fn();
+vi.mock('../services/resultsService.js', () => ({
+  archiveCurrentElection: mockedArchiveCurrentElection
+}));
+
+const mockedKioskService = { clearSessions: vi.fn() };
+vi.mock('../services/kioskService.js', () => ({
+  kioskService: mockedKioskService
+}));
+
+vi.mock('../middleware/adminAuth.js', () => ({
+  requireAdminSession: [(_req: unknown, _res: unknown, next: () => void) => next()],
+  requireAdminSecret: [(_req: unknown, _res: unknown, next: () => void) => next()]
 }));
 
 const runningRun: ElectionRun = {
@@ -82,5 +98,54 @@ describe('GET /api/poll', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.poll.hasActiveRun).toBe(true);
+  });
+});
+
+// Regression test: Reset Poll used to silently close the poll as a side
+// effect with no guard at all -- a voter could be mid-ballot right now if
+// the poll is still open, and wiping votes out from under them risks losing
+// an in-progress vote with no warning. The admin UI already disabled the
+// button while open, but the route itself had no server-side check.
+describe('POST /api/poll/reset', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDataStore.updatePollState.mockImplementation((updater) =>
+      updater(mockedDataStore.getPollState())
+    );
+    // clearAllMocks() clears call history but not a previously-set
+    // mockReturnValue -- pin this explicitly so it doesn't inherit
+    // `runningRun` left behind by an earlier describe block's test.
+    mockedDataStore.getCurrentRun.mockReturnValue(undefined);
+  });
+
+  it('is blocked while the poll is open', async () => {
+    mockedDataStore.getPollState.mockReturnValue({
+      activeElectionType: 'school',
+      activeElectionTypeSetAt: Date.now(),
+      settings: { isOpen: true, allowRevote: false }
+    });
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/poll/reset').send({});
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toContain('Close the poll');
+    expect(mockedDataStore.resetVotes).not.toHaveBeenCalled();
+    expect(mockedArchiveCurrentElection).not.toHaveBeenCalled();
+  });
+
+  it('succeeds while the poll is closed', async () => {
+    mockedDataStore.getPollState.mockReturnValue({
+      activeElectionType: 'school',
+      activeElectionTypeSetAt: Date.now(),
+      settings: { isOpen: false, allowRevote: false }
+    });
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/poll/reset').send({});
+
+    expect(response.status).toBe(200);
+    expect(mockedDataStore.resetVotes).toHaveBeenCalled();
+    expect(mockedArchiveCurrentElection).toHaveBeenCalled();
   });
 });
