@@ -1412,8 +1412,16 @@ export const AdminLandingPage = (): JSX.Element => {
               ))}
             </div>
           ) : (
-            // School elections: Group by post only
-            <div className="results-grid">
+            // School elections: one post per full-width row, same as House
+            // above -- was previously a narrow multi-column grid
+            // (.results-grid, minmax(200px, 1fr)), which left each card too
+            // narrow for CandidateEditor's edit-mode row (photo + input +
+            // Save + Cancel, all in one line with no wrap): the Save/Cancel
+            // buttons ran off the edge of the card and became unreachable.
+            // House posts never had this problem because they were already
+            // laid out full-width, one post at a time -- this now matches
+            // that.
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {results.map((postResult) => (
                 <div key={postResult.post} className="result-card">
                   <h3>{postResult.post}</h3>
