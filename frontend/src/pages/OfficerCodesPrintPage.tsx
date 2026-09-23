@@ -115,8 +115,8 @@ export const OfficerCodesPrintPage = (): JSX.Element => {
         )}
       </p>
       <p className="report-meta">
-        For the {BRANCH_LABEL[branch]} branch Election Head/Principal: please distribute each code below to the
-        named teacher only. A code cannot be used to vote until it has been allotted to a name.
+        For the {BRANCH_LABEL[branch]} branch Election Head/Principal: Please distribute each code below to the
+        named teacher only.
       </p>
 
       {groups.length === 0 ? (
