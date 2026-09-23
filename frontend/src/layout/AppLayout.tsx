@@ -15,6 +15,11 @@ const POLL_STATUS_REFRESH_MS = 5000;
 
 export const AppLayout = ({ children }: PropsWithChildren): JSX.Element => {
   const [electionType, setElectionType] = useState<ElectionType | null>(null);
+  // The banner announces an election that can actually be voted in right
+  // now -- not just a type picked mid-setup, and not one left over from an
+  // aborted or already-closed attempt. Both would be misleading, since
+  // voting can't happen in either case. See PollStatus.settings.isOpen.
+  const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const { stationVoteCount, house } = useKiosk();
 
@@ -26,6 +31,7 @@ export const AppLayout = ({ children }: PropsWithChildren): JSX.Element => {
         const { poll } = await getPollStatus();
         if (!cancelled) {
           setElectionType(poll.activeElectionType);
+          setIsOpen(poll.settings.isOpen);
         }
       } catch {
         // Non-fatal -- the banner just stays hidden until the next poll.
@@ -43,7 +49,7 @@ export const AppLayout = ({ children }: PropsWithChildren): JSX.Element => {
   const showStationCount = location.pathname.startsWith('/kiosk') && typeof stationVoteCount === 'number';
   const isKioskRoute = location.pathname.startsWith('/kiosk');
   const bannerText =
-    !electionType
+    !isOpen || !electionType
       ? null
       : electionType === 'house' && house && isKioskRoute
       ? `Election for House Posts — ${house} House`

@@ -123,6 +123,13 @@ export const StartElectionWizard = ({
       <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.8rem', color: '#6b7280', fontWeight: 600 }}>
         Step {stepIndex + 1} of {STEPS.length}
       </p>
+      {/* Nothing outside this box shows the choice until the poll actually
+          opens (the top banner only announces an election that can be
+          voted in right now) -- so while this wizard is still in progress,
+          this is the only place that says which type has been picked. */}
+      <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 700, color: '#1f2937' }}>
+        {electionType === 'house' ? '🏠 House Election chosen' : '🏫 School Election chosen'}
+      </p>
       <h3 style={{ margin: '0 0 0.75rem 0' }}>{STEP_TITLES[step]}</h3>
 
       {step === 'type' && (
