@@ -148,6 +148,26 @@ export const buildElectionSnapshot = (name?: string): ElectionArchive | null => 
   };
 };
 
+// Backs "Download Report" (routes/report.ts GET /current): the current
+// status at any time -- while an election is live, that's a fresh snapshot;
+// once it's closed, activeElectionType goes back to null and the live votes
+// are reset to zero, so the current status becomes whatever was last
+// recorded, i.e. the most recently archived election, of either type. Falls
+// back across a Close Recording/Reset/Switch boundary without the caller
+// needing to know or care whether an election happens to be running right
+// now.
+export const buildCurrentOrLastResultsSnapshot = (): ElectionArchive | null => {
+  const live = buildElectionSnapshot();
+  if (live) {
+    return live;
+  }
+  const archives = dataStore.getArchives();
+  if (archives.length === 0) {
+    return null;
+  }
+  return [...archives].sort((a, b) => b.archivedAt - a.archivedAt)[0];
+};
+
 // Narrows a full (both-branches) snapshot/archive down to one branch, for
 // the "Download Report" / Election History "view" flows -- the stored
 // archive always covers both branches together (archiving itself is

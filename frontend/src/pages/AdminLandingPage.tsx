@@ -1034,6 +1034,13 @@ export const AdminLandingPage = (): JSX.Element => {
     return groupOfficerCodesByHouse(branchFiltered);
   }, [officerCodes, selectedBranch]);
 
+  // "Download Dwarka/AN Report" mirrors GET /report/current: the live
+  // results while an election is running, or the final result of whichever
+  // election most recently closed once activeElectionType goes back to
+  // null -- so these stay usable right up until an admin's first-ever
+  // election, not just while one happens to be active.
+  const canDownloadCurrentReport = Boolean(pollStatus?.activeElectionType) || archives.length > 0;
+
   if (checkingAuth) {
     return (
       <section className="page-card admin">
@@ -1279,18 +1286,26 @@ export const AdminLandingPage = (): JSX.Element => {
                 <button
                   className="button"
                   onClick={() => window.open('/admin/report?branch=dwarka', '_blank')}
-                  disabled={!pollStatus?.activeElectionType}
-                  style={{ backgroundColor: '#4338ca', flex: 1, opacity: !pollStatus?.activeElectionType ? 0.5 : 1 }}
-                  title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable Dwarka results report in a new tab'}
+                  disabled={!canDownloadCurrentReport}
+                  style={{ backgroundColor: '#4338ca', flex: 1, opacity: !canDownloadCurrentReport ? 0.5 : 1 }}
+                  title={
+                    !canDownloadCurrentReport
+                      ? 'No election has ever been set up yet'
+                      : 'Open a printable Dwarka results report in a new tab -- the live results while an election is running, or the final result once it has closed'
+                  }
                 >
                   🖨️ Download Dwarka Report
                 </button>
                 <button
                   className="button"
                   onClick={() => window.open('/admin/report?branch=AN', '_blank')}
-                  disabled={!pollStatus?.activeElectionType}
-                  style={{ backgroundColor: '#4338ca', flex: 1, opacity: !pollStatus?.activeElectionType ? 0.5 : 1 }}
-                  title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable AN results report in a new tab'}
+                  disabled={!canDownloadCurrentReport}
+                  style={{ backgroundColor: '#4338ca', flex: 1, opacity: !canDownloadCurrentReport ? 0.5 : 1 }}
+                  title={
+                    !canDownloadCurrentReport
+                      ? 'No election has ever been set up yet'
+                      : 'Open a printable AN results report in a new tab -- the live results while an election is running, or the final result once it has closed'
+                  }
                 >
                   🖨️ Download AN Report
                 </button>

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAdminSession } from '../middleware/adminAuth.js';
-import { buildElectionSnapshot, filterArchiveByBranch } from '../services/resultsService.js';
+import { buildElectionSnapshot, buildCurrentOrLastResultsSnapshot, filterArchiveByBranch } from '../services/resultsService.js';
 import { logAction } from '../services/auditLogService.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -28,13 +28,16 @@ const parseBranchParam = (req: { query: unknown }): Branch | undefined => {
   return branch;
 };
 
-// Live snapshot of the currently active election -- not persisted. Powers
-// "Download Report" at any time, independent of Reset Poll.
+// The current status at any time: a live, unpersisted snapshot while an
+// election is running, or the most recently archived election once it's
+// closed (activeElectionType/live votes are gone by then -- see
+// buildCurrentOrLastResultsSnapshot). Powers "Download Report" both during
+// and after an election, independent of Reset Poll.
 reportRouter.get(
   '/current',
   asyncHandler((req, res) => {
     const branch = parseBranchParam(req);
-    const snapshot = buildElectionSnapshot();
+    const snapshot = buildCurrentOrLastResultsSnapshot();
     const report = snapshot && branch ? filterArchiveByBranch(snapshot, branch) : snapshot;
     res.json({ report });
   })

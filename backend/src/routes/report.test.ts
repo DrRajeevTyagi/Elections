@@ -74,6 +74,57 @@ describe('GET /api/report/current', () => {
     const response = await request(createApp()).get('/api/report/current?branch=nonsense');
     expect(response.status).toBe(400);
   });
+
+  // "Download Report" is meant to keep working once an election closes --
+  // activeElectionType goes back to null and live votes are reset to zero
+  // at that point, so without this fallback there would be nothing left to
+  // show even though the final result is sitting right there in Election
+  // History.
+  it('falls back to the most recently archived election once none is active', async () => {
+    mockedDataStore.getPollState.mockReturnValue({
+      activeElectionType: null,
+      settings: { isOpen: false, allowRevote: false }
+    });
+    mockedDataStore.getArchives.mockReturnValue([
+      {
+        id: 'older',
+        archivedAt: 100,
+        electionType: 'house',
+        totalVotes: 1,
+        results: [{ candidateId: 'x', name: 'Old', post: 'HC', total: 1, branch: 'dwarka' }],
+        officerCodes: []
+      },
+      {
+        id: 'newest',
+        archivedAt: 200,
+        electionType: 'school',
+        totalVotes: 5,
+        results: [{ candidateId: 'hb-1', name: 'Dwarka Head Boy', post: 'HB', total: 5, branch: 'dwarka' }],
+        officerCodes: []
+      }
+    ]);
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).get('/api/report/current');
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.id).toBe('newest');
+    expect(response.body.report.totalVotes).toBe(5);
+  });
+
+  it('returns null when no election has ever been set up', async () => {
+    mockedDataStore.getPollState.mockReturnValue({
+      activeElectionType: null,
+      settings: { isOpen: false, allowRevote: false }
+    });
+    mockedDataStore.getArchives.mockReturnValue([]);
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).get('/api/report/current');
+
+    expect(response.status).toBe(200);
+    expect(response.body.report).toBeNull();
+  });
 });
 
 describe('GET /api/report/archives/:id', () => {
