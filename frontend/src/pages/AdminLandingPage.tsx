@@ -1881,12 +1881,8 @@ export const AdminLandingPage = (): JSX.Element => {
       <div className="admin-panel">
         <h2>Activity Log</h2>
         <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
-          Every action taken while an election is in progress, permanent and unmutable -- nothing here can be
-          edited or deleted, by anyone. Recording runs for the whole span of an election, from Start the Voting
-          Process to End of Voting -- a Pause Polling break in between does not stop it. Setup work done before an
-          election starts is not logged at all (see the Dashboard tab's Election section). Click an election's name
-          below to see everything that happened during it, or use the search form to combine filters -- e.g. paste
-          a code to see everything that happened to it, or filter by branch/election type/actor.
+          A permanent record of everything done during an election -- nothing here can be edited or deleted, by
+          anyone. Click an election's name to see its log, or search below to filter further.
         </p>
 
         {pastRuns.length === 0 ? (
