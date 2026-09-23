@@ -1203,6 +1203,7 @@ export const AdminLandingPage = (): JSX.Element => {
                 officerCodes={officerCodes}
                 onClose={() => setShowWizard(false)}
                 onStarted={handleWizardStarted}
+                onTypeChanged={() => void loadDashboard()}
               />
             ) : (
               <div style={{ padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>

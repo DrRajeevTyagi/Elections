@@ -40,9 +40,23 @@ export const AppLayout = ({ children }: PropsWithChildren): JSX.Element => {
 
     void refreshElectionType();
     const interval = setInterval(refreshElectionType, POLL_STATUS_REFRESH_MS);
+    // Browsers throttle (or fully pause) timers in a backgrounded/inactive
+    // tab, so the 5-second interval alone can silently stall for as long as
+    // the tab sits unfocused -- exactly the "only updates on a manual
+    // refresh" symptom reported. Re-fetching the moment the tab becomes
+    // visible/focused again closes that gap without needing a reload.
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshElectionType();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisible);
+    window.addEventListener('focus', handleVisible);
     return () => {
       cancelled = true;
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisible);
+      window.removeEventListener('focus', handleVisible);
     };
   }, []);
 

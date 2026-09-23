@@ -11,6 +11,12 @@ interface StartElectionWizardProps {
   // Called once the run has started AND the poll has actually opened --
   // the wizard is one continuous action, not "arm then separately open".
   onStarted: (message: string) => void;
+  // Called right after a real, successful election-type change on the
+  // 'type' step (see handleSelectType) -- this hits the backend immediately,
+  // long before the wizard finishes, so the parent's own pollStatus (which
+  // gates things like the Dashboard's "Download Report" buttons) needs to
+  // know about it now, not only once the whole wizard completes.
+  onTypeChanged?: () => void;
 }
 
 // "Name this election" is deliberately the last checklist step, not the
@@ -41,7 +47,8 @@ export const StartElectionWizard = ({
   activeElectionType,
   officerCodes,
   onClose,
-  onStarted
+  onStarted,
+  onTypeChanged
 }: StartElectionWizardProps): JSX.Element => {
   const [stepIndex, setStepIndex] = useState(0);
   const [name, setName] = useState('');
@@ -86,6 +93,7 @@ export const StartElectionWizard = ({
       setWizError(null);
       await setElectionType(chosen, adminSecret);
       setLocalElectionType(chosen);
+      onTypeChanged?.();
       goNext();
     } catch (typeError) {
       setWizError(typeError instanceof Error ? typeError.message : 'Failed to change election type');
