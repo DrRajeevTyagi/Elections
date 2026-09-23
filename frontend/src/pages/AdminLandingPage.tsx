@@ -165,6 +165,14 @@ export const AdminLandingPage = (): JSX.Element => {
   // CANDIDATE-COLLECTION-PLAN.md and ROADMAP.md Phase 2 -- so this is
   // deliberately a simple shared toggle, not per-tab independent state.
   const [selectedBranch, setSelectedBranch] = useState<Branch>('dwarka');
+  // Which election type Manage Candidates/Live Results are scoped to --
+  // independent of pollStatus.activeElectionType, so an admin can check or
+  // edit School candidates while House is the one actually running (or vice
+  // versa) without needing to run the Start Election wizard just to look.
+  // Starts in sync with whatever's actually active; once the admin
+  // explicitly starts a different election, the effect below re-syncs it
+  // (see the useEffect keyed on pollStatus?.activeElectionType).
+  const [selectedElectionType, setSelectedElectionType] = useState<ElectionType>('school');
   const liveResultsRef = useRef<HTMLDivElement | null>(null);
 
   // A message/error left over from an action on a different tab (e.g.
@@ -208,6 +216,17 @@ export const AdminLandingPage = (): JSX.Element => {
     return () => setAdminSessionLostHandler(null);
   }, []);
 
+  // Keeps the Manage Candidates/Live Results election-type toggle in sync
+  // with reality whenever the actually-active election type changes (e.g.
+  // the admin runs the Start Election wizard) -- but only then, not on every
+  // 5-second poll refresh, so a manual toggle in between two such changes
+  // isn't clobbered.
+  useEffect(() => {
+    if (pollStatus?.activeElectionType) {
+      setSelectedElectionType(pollStatus.activeElectionType);
+    }
+  }, [pollStatus?.activeElectionType]);
+
   const handlePresentFullScreen = () => {
     liveResultsRef.current?.requestFullscreen?.().catch(() => {
       // Fullscreen can be denied by the browser/OS -- the tab still works
@@ -219,7 +238,10 @@ export const AdminLandingPage = (): JSX.Element => {
     try {
       setLoading(true);
       setError(null);
-      const [pollResponse, resultsResponse] = await Promise.all([getPollStatus(), getResults(undefined, selectedBranch)]);
+      const [pollResponse, resultsResponse] = await Promise.all([
+        getPollStatus(),
+        getResults(undefined, selectedBranch, selectedElectionType)
+      ]);
       setPollStatus(pollResponse.poll);
       setResults(resultsResponse.results);
       setTotalVotes(resultsResponse.totalVotes);
@@ -229,7 +251,7 @@ export const AdminLandingPage = (): JSX.Element => {
     } finally {
       setLoading(false);
     }
-  }, [selectedBranch]);
+  }, [selectedBranch, selectedElectionType]);
 
   // syncDrafts is false for the background 3-second poll, so it can refresh
   // vote counts without clobbering officer names the admin is mid-typing.
@@ -259,7 +281,7 @@ export const AdminLandingPage = (): JSX.Element => {
   // generate/save/delete) reloads its own state explicitly after acting.
   const refreshVoteCounts = useCallback(async () => {
     try {
-      const resultsResponse = await getResults(undefined, selectedBranch);
+      const resultsResponse = await getResults(undefined, selectedBranch, selectedElectionType);
       setResults(resultsResponse.results);
       setTotalVotes(resultsResponse.totalVotes);
       setLastUpdated(Date.now());
@@ -268,7 +290,7 @@ export const AdminLandingPage = (): JSX.Element => {
       // error banner for; the next tick retries automatically.
     }
     await loadOfficerCodes(false);
-  }, [loadOfficerCodes, selectedBranch]);
+  }, [loadOfficerCodes, selectedBranch, selectedElectionType]);
 
   // Backs the Storage status indicator -- checked on a slower, steady
   // cadence regardless of whether the poll is open, so an admin can confirm
@@ -916,6 +938,35 @@ export const AdminLandingPage = (): JSX.Element => {
     </>
   );
 
+  // Shared by Manage Candidates and Live Results -- lets an admin check or
+  // edit the OTHER election type's candidates/results without starting an
+  // election of that type first. Not shared with Polling Officer Codes,
+  // which already shows school and house codes together in one list.
+  const renderElectionTypeToggle = () => (
+    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }} role="tablist" aria-label="Election type">
+      {(['school', 'house'] as const).map((type) => (
+        <button
+          key={type}
+          role="tab"
+          aria-selected={selectedElectionType === type}
+          onClick={() => setSelectedElectionType(type)}
+          disabled={loading}
+          style={{
+            padding: '0.5rem 1.25rem',
+            borderRadius: '8px',
+            border: selectedElectionType === type ? '2px solid #16a34a' : '1px solid #d1d5db',
+            backgroundColor: selectedElectionType === type ? '#f0fdf4' : '#ffffff',
+            color: selectedElectionType === type ? '#15803d' : '#374151',
+            fontWeight: selectedElectionType === type ? 700 : 500,
+            cursor: loading ? 'default' : 'pointer'
+          }}
+        >
+          {type === 'house' ? '🏠 House Posts' : '🏫 School Posts'}
+        </button>
+      ))}
+    </div>
+  );
+
   // Every ballot fills exactly one selection per post (enforced server-side
   // -- see votes.ts validateVote), so summing a post's own candidate totals
   // is the count of ballots cast for it specifically -- not the combined
@@ -965,11 +1016,11 @@ export const AdminLandingPage = (): JSX.Element => {
 
   // Group results by house for house elections
   const houseGroupedResults = useMemo(() => {
-    if (pollStatus?.activeElectionType === 'house') {
+    if (selectedElectionType === 'house') {
       return groupResultsByHouse(results);
     }
     return null;
-  }, [results, pollStatus?.activeElectionType]);
+  }, [results, selectedElectionType]);
 
   // Groups the officer-code table by house (in a fixed house order), with
   // unbound/school codes in their own group at the end -- so it reads as
@@ -1303,14 +1354,15 @@ export const AdminLandingPage = (): JSX.Element => {
         <div className="admin-panel">
           <h2>Manage Candidates</h2>
           <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
-            {pollStatus?.activeElectionType === 'house'
+            {selectedElectionType === 'house'
               ? 'Edit, delete, or add candidates for each house and post'
               : 'Edit, delete, or add candidates for each post'}
           </p>
 
+          {renderElectionTypeToggle()}
           {renderBranchToggle('and adding candidates')}
 
-          {pollStatus?.activeElectionType === 'house' && houseGroupedResults ? (
+          {selectedElectionType === 'house' && houseGroupedResults ? (
             // House elections: Group by house, then by post
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
               {houseGroupedResults.map((houseGroup) => (
@@ -1394,15 +1446,16 @@ export const AdminLandingPage = (): JSX.Element => {
       {activeTab === 'results' && (
       <>
       {/* Deliberately outside the fullscreen ref below -- "Present Full
-          Screen" is meant for a clean projector view, and this toggle has
+          Screen" is meant for a clean projector view, and these toggles have
           no business being visible to the audience watching it. Set the
-          branch here first, then present. */}
+          election type/branch here first, then present. */}
+      {renderElectionTypeToggle()}
       {renderBranchToggle('results')}
       <div className="admin-panel" ref={liveResultsRef} style={{ backgroundColor: '#ffffff', padding: '0.6rem 0.75rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
           <div>
             <h2 style={{ fontSize: '1.05rem', margin: 0, lineHeight: 1.2 }}>
-              {pollStatus?.activeElectionType === 'house' ? 'House Elections' : 'School Elections'} &mdash; Live Results
+              {selectedElectionType === 'house' ? 'House Elections' : 'School Elections'} &mdash; Live Results
             </h2>
             <p style={{ color: '#6b7280', margin: '0.15rem 0 0 0', fontSize: '0.75rem' }}>
               {pollStatus?.settings.isOpen ? '🔄 Auto-refreshing every 3 seconds' : 'Click Refresh to update'}
@@ -1410,7 +1463,7 @@ export const AdminLandingPage = (): JSX.Element => {
             </p>
           </div>
           <p style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1f2937', margin: 0 }}>
-            {pollStatus?.activeElectionType === 'house'
+            {selectedElectionType === 'house'
               ? `Total Ballots (all 8 houses combined): ${totalVotes}`
               : `Total Votes: ${totalVotes}`}
           </p>
@@ -1434,7 +1487,7 @@ export const AdminLandingPage = (): JSX.Element => {
           </div>
         </div>
 
-        {pollStatus?.activeElectionType === 'house' && houseGroupedResults ? (
+        {selectedElectionType === 'house' && houseGroupedResults ? (
           <div className="live-house-grid">
             {houseGroupedResults.map((houseGroup) => (
               <div key={houseGroup.house} className="live-house-card">

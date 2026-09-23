@@ -43,27 +43,32 @@ const countVotes = (votes: StoredVote[], electionType: ElectionType, house?: Hou
 // votes is deleted, since a deleted candidate's selections drop out of the
 // sum entirely. This is what both the live dashboard and the archived/
 // report totals should use instead.
-export const getTotalVotes = (branch?: Branch): number => {
-  const pollState = getPollState();
-  if (!pollState.activeElectionType) {
+export const getTotalVotes = (branch?: Branch, electionType?: ElectionType): number => {
+  const resolvedType = electionType ?? getPollState().activeElectionType;
+  if (!resolvedType) {
     return 0;
   }
   return dataStore
     .getVotes()
-    .filter((vote) => vote.electionType === pollState.activeElectionType && (!branch || vote.branch === branch)).length;
+    .filter((vote) => vote.electionType === resolvedType && (!branch || vote.branch === branch)).length;
 };
 
-export const getResults = (house?: HouseId, branch?: Branch): PostResult[] => {
-  const pollState = getPollState();
-  if (!pollState.activeElectionType) {
-    return []; // No active election
+// electionType defaults to whatever's currently active, but callers that
+// need to look at the OTHER election type -- e.g. Manage Candidates/Live
+// Results letting an admin check House while School is the one actually
+// running -- can pass it explicitly instead of needing to switch the whole
+// app's active type just to look.
+export const getResults = (house?: HouseId, branch?: Branch, electionType?: ElectionType): PostResult[] => {
+  const resolvedType = electionType ?? getPollState().activeElectionType;
+  if (!resolvedType) {
+    return []; // No active election, and no explicit type asked for
   }
 
   const votes = dataStore.getVotes();
-  const tally = countVotes(votes, pollState.activeElectionType, house, branch);
+  const tally = countVotes(votes, resolvedType, house, branch);
 
   // Filter candidates by election type and optionally house/branch
-  let candidates = dataStore.getCandidates().filter((c) => c.electionType === pollState.activeElectionType);
+  let candidates = dataStore.getCandidates().filter((c) => c.electionType === resolvedType);
   if (house) {
     candidates = candidates.filter((c) => c.house === house);
   }
@@ -72,7 +77,7 @@ export const getResults = (house?: HouseId, branch?: Branch): PostResult[] => {
   }
 
   // Get post IDs based on election type
-  const postIds = pollState.activeElectionType === 'school' ? SCHOOL_POST_IDS : HOUSE_POST_IDS;
+  const postIds = resolvedType === 'school' ? SCHOOL_POST_IDS : HOUSE_POST_IDS;
 
   return postIds.map((post) => {
     const postCandidates = candidates.filter((candidate) => candidate.post === post);

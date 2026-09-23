@@ -133,6 +133,12 @@ export interface LogEntry {
 
 export interface PollState {
   activeElectionType: ElectionType | null;
+  // Stamped whenever activeElectionType is set through the current code path
+  // (poll/set-type, runService.startRecording) -- see routes/poll.ts's
+  // self-heal for why this, not hasActiveRun, is what tells a genuine
+  // "type picked, run not started yet" apart from a pre-existing leftover
+  // value from before this field existed.
+  activeElectionTypeSetAt?: number;
   settings: PollSettings;
 }
 

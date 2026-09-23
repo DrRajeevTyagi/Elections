@@ -237,8 +237,16 @@ export const setElectionType = async (
   return response.data;
 };
 
-export const getResults = async (house?: HouseId, branch?: Branch): Promise<ResultsResponse> => {
-  const params = { ...(house ? { house } : {}), ...(branch ? { branch } : {}) };
+export const getResults = async (
+  house?: HouseId,
+  branch?: Branch,
+  electionType?: ElectionType
+): Promise<ResultsResponse> => {
+  const params = {
+    ...(house ? { house } : {}),
+    ...(branch ? { branch } : {}),
+    ...(electionType ? { electionType } : {})
+  };
   const response = await api.get<ResultsResponse>('/results', { params });
   return response.data;
 };

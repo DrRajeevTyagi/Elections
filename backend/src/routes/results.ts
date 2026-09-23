@@ -17,10 +17,17 @@ resultsRouter.get(
     const houseId = house && isValidHouseId(house) ? house : undefined;
     const branchParam = req.query.branch as string | undefined;
     const branch = branchParam && isValidBranch(branchParam) ? branchParam : undefined;
+    // Optional override of which election type to look at -- lets Manage
+    // Candidates/Live Results check the OTHER type without switching the
+    // app's actual active election. Omitted, this defaults to whatever's
+    // currently active, same as before this parameter existed.
+    const electionTypeParam = req.query.electionType as string | undefined;
+    const electionType =
+      electionTypeParam === 'school' || electionTypeParam === 'house' ? electionTypeParam : undefined;
 
-    const results = getResults(houseId as HouseId | undefined, branch as Branch | undefined);
+    const results = getResults(houseId as HouseId | undefined, branch as Branch | undefined, electionType);
     // The authoritative ballot count for the whole active election,
     // regardless of the `house`/`branch` filters above -- see getTotalVotes.
-    res.json({ results, totalVotes: getTotalVotes(branch as Branch | undefined) });
+    res.json({ results, totalVotes: getTotalVotes(branch as Branch | undefined, electionType) });
   })
 );

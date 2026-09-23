@@ -54,6 +54,7 @@ export const startRecording = async (
   dataStore.updatePollState((state) => ({
     ...state,
     activeElectionType: electionType,
+    activeElectionTypeSetAt: Date.now(),
     settings: { ...state.settings, isOpen: false }
   }));
 
@@ -105,6 +106,7 @@ export const closeRecording = async (clientId: string | undefined): Promise<Elec
   dataStore.updatePollState((state) => ({
     ...state,
     activeElectionType: null,
+    activeElectionTypeSetAt: undefined,
     settings: { ...state.settings, isOpen: false }
   }));
 

@@ -10,25 +10,44 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError, ConflictError } from '../utils/httpError.js';
 import type { PollState, ElectionType } from '../types/election.js';
 
-// hasActiveRun lets the public banner (AppLayout.tsx, admin dashboard AND
-// kiosk) know whether activeElectionType currently means something real,
-// vs. a leftover value from a run that has since closed -- activeElectionType
-// itself is never reset to null on every path that ends an election (Reset
-// Poll doesn't touch it, and pre-existing stray values from before this
-// field existed will never self-correct), so the banner must not trust it
-// alone. See ROADMAP.md / this route's callers for the full account.
+// hasActiveRun tells the admin dashboard whether a run is genuinely in
+// progress right now (as opposed to just a type having been picked) --
+// separate from whether the banner should show, see below.
 const sanitizePoll = ({ activeElectionType, settings }: PollState) => ({
   activeElectionType,
   settings,
   hasActiveRun: Boolean(dataStore.getCurrentRun())
 });
 
+// The "Election for X Posts" banner (AppLayout.tsx, admin dashboard AND
+// kiosk) is meant to show as soon as an election type is picked -- even
+// before Open Poll, e.g. right after the wizard's first step -- and only go
+// away once that selection is genuinely superseded (closeRecording nulls it
+// out; poll/set-type overwrites it with a fresh value). The one case that
+// needs correcting is activeElectionType values left over from before this
+// field existed, which can never self-correct on their own: they carry no
+// activeElectionTypeSetAt timestamp, because nothing ever stamped one. Any
+// value stamped through the current set-type/startRecording code path always
+// has a timestamp, so this only ever fires once per already-stale record,
+// never for a real "just picked, not started yet" selection.
+const healStaleElectionType = (): PollState => {
+  const state = getPollState();
+  if (state.activeElectionType && state.activeElectionTypeSetAt === undefined && !dataStore.getCurrentRun()) {
+    return dataStore.updatePollState((s) => ({
+      ...s,
+      activeElectionType: null,
+      activeElectionTypeSetAt: undefined
+    }));
+  }
+  return state;
+};
+
 export const pollRouter = Router();
 
 pollRouter.get(
   '/',
   asyncHandler((_req, res) => {
-    res.json({ poll: sanitizePoll(getPollState()) });
+    res.json({ poll: sanitizePoll(healStaleElectionType()) });
   })
 );
 
@@ -77,6 +96,7 @@ pollRouter.post(
     const poll = dataStore.updatePollState((state) => ({
       ...state,
       activeElectionType: electionType as ElectionType,
+      activeElectionTypeSetAt: Date.now(),
       settings: {
         ...state.settings,
         isOpen: false // Close poll when switching election types

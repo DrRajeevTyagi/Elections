@@ -422,6 +422,9 @@ export class DataStore {
         activeElectionType: pollState.activeElectionType === 'school' || pollState.activeElectionType === 'house'
           ? pollState.activeElectionType
           : (basePollState.activeElectionType ?? null),
+        activeElectionTypeSetAt: typeof pollState.activeElectionTypeSetAt === 'number'
+          ? pollState.activeElectionTypeSetAt
+          : basePollState.activeElectionTypeSetAt,
         settings: {
           isOpen: pollState.settings?.isOpen ?? basePollState.settings.isOpen,
           allowRevote: pollState.settings?.allowRevote ?? basePollState.settings.allowRevote
@@ -579,6 +582,7 @@ export class DataStore {
   getPollState(): PollState {
     return {
       activeElectionType: this.data.pollState.activeElectionType ?? null,
+      activeElectionTypeSetAt: this.data.pollState.activeElectionTypeSetAt,
       settings: { ...this.data.pollState.settings }
     };
   }
