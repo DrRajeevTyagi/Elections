@@ -404,6 +404,19 @@ export const AdminLandingPage = (): JSX.Element => {
     setLogFilters((prev) => ({ ...prev, ...updates }));
   };
 
+  // Clicking a named election in the list below jumps straight to its own
+  // log, in one click -- the "Election" dropdown further down still exists
+  // for combining a specific election with other filters (branch, actor,
+  // code...), but picking just one election by name is the single most
+  // common thing to want from this tab, and shouldn't need opening a
+  // dropdown and pressing Search to get. runId: '' (the "All Elections"
+  // entry) clears back to the unfiltered log, same as Clear.
+  const handleSelectRunLog = (runId: string) => {
+    const next = { ...emptyLogFilters, runId };
+    setLogFilters(next);
+    void runLogSearch(next);
+  };
+
   const handleLogSearchSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     void runLogSearch(logFilters);
@@ -1836,15 +1849,53 @@ export const AdminLandingPage = (): JSX.Element => {
         <h2>Activity Log</h2>
         <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
           Every action taken while an election is in progress, permanent and unmutable -- nothing here can be
-          edited or deleted, by anyone. Setup work done before an election starts is not logged at all (see the
-          Dashboard tab's Election section). Search below instead of reading straight through -- e.g. paste a code
-          to see everything that happened to it, or filter by branch/election type/actor.
+          edited or deleted, by anyone. Recording runs for the whole span of an election, from Start the Voting
+          Process to End of Voting -- a Pause Polling break in between does not stop it. Setup work done before an
+          election starts is not logged at all (see the Dashboard tab's Election section). Click an election's name
+          below to see everything that happened during it, or use the search form to combine filters -- e.g. paste
+          a code to see everything that happened to it, or filter by branch/election type/actor.
         </p>
 
         {pastRuns.length === 0 ? (
           <p>No elections started yet. Start one from the Dashboard tab.</p>
         ) : (
           <>
+            {/* One click on an election's own name jumps straight to its
+                log -- logging runs for exactly the span of that election
+                (from Start the Voting Process to End of Voting; a Pause
+                Polling break in between does not stop it), so its name is
+                the natural way to ask "what happened during this one." */}
+            <div style={{ marginBottom: '1rem' }}>
+              <p className="form-label" style={{ marginBottom: '0.4rem' }}>Elections</p>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button
+                  className="button"
+                  onClick={() => handleSelectRunLog('')}
+                  style={{
+                    backgroundColor: logFilters.runId === '' ? '#1d4ed8' : '#e5e7eb',
+                    color: logFilters.runId === '' ? '#ffffff' : '#374151'
+                  }}
+                >
+                  All Elections
+                </button>
+                {pastRuns.map((run) => (
+                  <button
+                    key={run.id}
+                    className="button"
+                    onClick={() => handleSelectRunLog(run.id)}
+                    title={`${run.electionType === 'house' ? 'House' : 'School'} Elections · started ${formatTimestamp(run.startedAt)}`}
+                    style={{
+                      backgroundColor: logFilters.runId === run.id ? '#1d4ed8' : '#e5e7eb',
+                      color: logFilters.runId === run.id ? '#ffffff' : '#374151'
+                    }}
+                  >
+                    {run.status === 'running' && '🔴 '}
+                    {run.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button className="button" style={{ backgroundColor: '#0f766e' }} onClick={handleShowOfficerRoster}>
                 👥 Who were the polling officers?

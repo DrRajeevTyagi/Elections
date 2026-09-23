@@ -244,6 +244,58 @@ describe('AdminLandingPage tabs', () => {
     );
   });
 
+  it('Activity Log lists past elections by name; clicking one filters the log to just that election', async () => {
+    mockApi.verifyAdminSecret.mockResolvedValue(undefined);
+    mockApi.getPollStatus.mockResolvedValue({
+      poll: { activeElectionType: 'school', settings: { isOpen: false, allowRevote: false } }
+    });
+    mockApi.getResults.mockResolvedValue({ results: [], totalVotes: 0 });
+    mockApi.getOfficerCodes.mockResolvedValue({ codes: [] });
+    mockApi.getArchivesList.mockResolvedValue({ archives: [] });
+    mockApi.getCurrentRun.mockResolvedValue({ run: null });
+    mockApi.getRuns.mockResolvedValue({
+      runs: [
+        { id: 'run-2', electionType: 'house', name: 'House Elections -- Term 1', status: 'closed', startedAt: Date.now(), startedBy: 'Rajeev' },
+        { id: 'run-1', electionType: 'school', name: 'School Elections -- Term 1', status: 'closed', startedAt: Date.now() - 1000, startedBy: 'Rajeev' }
+      ]
+    });
+    mockApi.searchRunLog.mockResolvedValue({ entries: [] });
+
+    await unlockAsAdmin();
+    fireEvent.click(screen.getByRole('button', { name: /Activity Log/ }));
+
+    // Both elections show up as named, clickable entries, not just inside a
+    // dropdown -- this is the whole point of the feature.
+    await screen.findByRole('button', { name: /House Elections -- Term 1/ });
+    screen.getByRole('button', { name: /School Elections -- Term 1/ });
+
+    mockApi.searchRunLog.mockResolvedValue({
+      entries: [
+        {
+          id: 'log-1',
+          timestamp: Date.now(),
+          runId: 'run-2',
+          actor: 'Rajeev -- laptop',
+          action: 'run.start',
+          details: {},
+          electionType: 'house',
+          branch: 'dwarka'
+        }
+      ]
+    });
+    fireEvent.click(screen.getByRole('button', { name: /House Elections -- Term 1/ }));
+
+    // One click, no separate Search press, and no other filter set -- the
+    // whole point is this is a direct shortcut, not a form to fill in.
+    await waitFor(() =>
+      expect(mockApi.searchRunLog).toHaveBeenLastCalledWith(
+        expect.objectContaining({ runId: 'run-2', electionType: undefined, branch: undefined, actor: undefined, action: undefined, code: undefined }),
+        expect.any(String)
+      )
+    );
+    await screen.findByText('run.start', { exact: false });
+  });
+
   it('"Start the Voting Process" wizard walks through every step and opens the poll in one flow', async () => {
     mockApi.verifyAdminSecret.mockResolvedValue(undefined);
     mockApi.getPollStatus.mockResolvedValue({
