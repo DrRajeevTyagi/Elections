@@ -40,6 +40,7 @@ import type { PostId, ElectionType, HouseId, SchoolPostId, Branch } from '../typ
 import { AddCandidateForm } from '../components/AddCandidateForm';
 import { CandidateEditor } from '../components/CandidateEditor';
 import { StartElectionWizard } from '../components/StartElectionWizard';
+import { BulkAllotCodesModal } from '../components/BulkAllotCodesModal';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
 import { POST_NAMES } from '../constants/posts';
 import { POST_COLORS } from '../constants/postColors';
@@ -128,6 +129,7 @@ export const AdminLandingPage = (): JSX.Element => {
   const [schoolCodeCount, setSchoolCodeCount] = useState('1');
   const [generateHouse, setGenerateHouse] = useState<HouseId | ''>('');
   const [officerCodesLoading, setOfficerCodesLoading] = useState(false);
+  const [showBulkAllot, setShowBulkAllot] = useState(false);
   const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
   const [archives, setArchives] = useState<ArchiveSummary[]>([]);
   const [archiveNameDrafts, setArchiveNameDrafts] = useState<Record<string, string>>({});
@@ -1492,6 +1494,19 @@ export const AdminLandingPage = (): JSX.Element => {
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
             <button
               className="button"
+              onClick={() => setShowBulkAllot(true)}
+              disabled={showBulkAllot}
+              style={{ backgroundColor: '#7c3aed', opacity: showBulkAllot ? 0.5 : 1 }}
+              title={
+                showBulkAllot
+                  ? 'Already open below -- use its own Close button to dismiss'
+                  : 'Generate and name codes for a whole teacher list at once, from an Excel file'
+              }
+            >
+              📋 Bulk Allot from List
+            </button>
+            <button
+              className="button"
               onClick={() => window.open(`/admin/report/officer-codes/${selectedBranch}`, '_blank')}
               style={{ backgroundColor: '#0f766e' }}
               title={`Open a printable ${selectedBranch === 'AN' ? 'AN' : 'Dwarka'} code-allotment list -- hand this to that branch's Election Head/Principal`}
@@ -1509,6 +1524,16 @@ export const AdminLandingPage = (): JSX.Element => {
             </button>
           </div>
         </div>
+
+        {showBulkAllot && (
+          <BulkAllotCodesModal
+            adminSecret={adminSecret}
+            branch={selectedBranch}
+            onClose={() => setShowBulkAllot(false)}
+            onAllotted={() => void loadOfficerCodes()}
+          />
+        )}
+
         <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '0.5rem', marginBottom: '1rem' }}>
           Generate codes here, hand them out, then come back and type each officer's name against their code so
           you know who has which one. This is prep work, same as adding candidates -- do it any time, before or

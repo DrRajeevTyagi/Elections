@@ -673,6 +673,32 @@ export class DataStore {
     return entries;
   }
 
+  // Used by the "Bulk Allot from List" import (Officer Codes tab) --
+  // generates and names many codes for a mix of election types/houses in
+  // one shot. Deliberately a single generateUniqueCodes call plus a single
+  // push/persist, not a loop of single-code generate+name calls, which
+  // would each trigger their own full-document persist (wasteful at the
+  // ~100-200 codes this is meant for).
+  bulkAllotOfficerCodes(
+    allotments: Array<{ officerName: string; electionType: ElectionType; house?: HouseId; branch: Branch; runId?: string }>
+  ): OfficerCode[] {
+    const newCodes = generateUniqueCodes(allotments.length, this.data.officerCodes.map((entry) => entry.code));
+    const createdAt = Date.now();
+    const entries: OfficerCode[] = allotments.map((allotment, index) => ({
+      code: newCodes[index],
+      officerName: allotment.officerName,
+      everNamed: true,
+      electionType: allotment.electionType,
+      house: allotment.house,
+      createdAt,
+      branch: allotment.branch,
+      runId: allotment.runId
+    }));
+    this.data.officerCodes.push(...entries);
+    this.queuePersist();
+    return entries;
+  }
+
   // Used by "Start Recording"/"Close Recording" (ROADMAP.md Phase 3) to
   // clear out officer codes down to zero for one election type, across both
   // branches, at a run boundary -- deliberately bypassing item 3's

@@ -415,4 +415,37 @@ describe('DataStore -- election runs and the append-only action log (ROADMAP.md 
     expect(schoolCode.runId).toBe('run-123');
     expect(houseCode.runId).toBeUndefined();
   });
+
+  describe('bulkAllotOfficerCodes', () => {
+    it('generates and names one code per allotment, tagged with each entry\'s own type/house/branch', async () => {
+      const store = await importFreshDataStore();
+      await store.init();
+
+      const created = store.bulkAllotOfficerCodes([
+        { officerName: 'Mrs. Sharma', electionType: 'school', branch: 'dwarka' },
+        { officerName: 'Mr. Rao', electionType: 'house', house: 'Anand', branch: 'AN' }
+      ]);
+
+      expect(created).toHaveLength(2);
+      expect(created[0]).toMatchObject({ officerName: 'Mrs. Sharma', electionType: 'school', branch: 'dwarka', everNamed: true, house: undefined });
+      expect(created[1]).toMatchObject({ officerName: 'Mr. Rao', electionType: 'house', house: 'Anand', branch: 'AN', everNamed: true });
+      // Codes are unique and persisted into the live list, same as generateOfficerCodes.
+      expect(created[0].code).not.toBe(created[1].code);
+      expect(store.getOfficerCodes()).toHaveLength(2);
+    });
+
+    it('never produces a duplicate code, even generating a large batch in one call', async () => {
+      const store = await importFreshDataStore();
+      await store.init();
+      const allotments = Array.from({ length: 50 }, (_, i) => ({
+        officerName: `Teacher ${i}`,
+        electionType: 'school' as const,
+        branch: 'dwarka' as const
+      }));
+
+      const created = store.bulkAllotOfficerCodes(allotments);
+
+      expect(new Set(created.map((entry) => entry.code)).size).toBe(50);
+    });
+  });
 });

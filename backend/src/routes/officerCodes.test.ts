@@ -28,6 +28,7 @@ const mockedDataStore = {
   updateOfficerCode: vi.fn(),
   reopenOfficerCode: vi.fn(),
   generateOfficerCodes: vi.fn<unknown[], OfficerCode[]>(() => []),
+  bulkAllotOfficerCodes: vi.fn<unknown[], OfficerCode[]>(() => []),
   getOfficerCodes: vi.fn<[], OfficerCode[]>(() => []),
   getCurrentRun: vi.fn<[], ElectionRun | undefined>(() => undefined),
   appendLogEntry: vi.fn()
@@ -152,6 +153,99 @@ describe('POST /api/officer-codes/generate', () => {
     expect(mockedDataStore.generateOfficerCodes).toHaveBeenCalledWith(1, 'school', undefined, undefined, runningSchoolRun.id);
     expect(mockedDataStore.appendLogEntry).toHaveBeenCalledWith(
       expect.objectContaining({ runId: runningSchoolRun.id, action: 'officerCode.generate' })
+    );
+  });
+});
+
+describe('POST /api/officer-codes/bulk-allot', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDataStore.getCurrentRun.mockReturnValue(undefined);
+  });
+
+  it('rejects an invalid branch', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp())
+      .post('/api/officer-codes/bulk-allot')
+      .send({ branch: 'nonsense', allotments: [{ officerName: 'A', electionType: 'school' }] });
+
+    expect(response.status).toBe(400);
+    expect(mockedDataStore.bulkAllotOfficerCodes).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty allotments list', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp())
+      .post('/api/officer-codes/bulk-allot')
+      .send({ branch: 'dwarka', allotments: [] });
+
+    expect(response.status).toBe(400);
+    expect(mockedDataStore.bulkAllotOfficerCodes).not.toHaveBeenCalled();
+  });
+
+  it('rejects an allotment with a blank officer name', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp())
+      .post('/api/officer-codes/bulk-allot')
+      .send({ branch: 'dwarka', allotments: [{ officerName: '   ', electionType: 'school' }] });
+
+    expect(response.status).toBe(400);
+    expect(mockedDataStore.bulkAllotOfficerCodes).not.toHaveBeenCalled();
+  });
+
+  it('rejects a house allotment with a missing or invalid house', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp())
+      .post('/api/officer-codes/bulk-allot')
+      .send({ branch: 'dwarka', allotments: [{ officerName: 'Jane', electionType: 'house' }] });
+
+    expect(response.status).toBe(400);
+    expect(mockedDataStore.bulkAllotOfficerCodes).not.toHaveBeenCalled();
+  });
+
+  it('allots a mixed batch, tagging each entry with the shared branch and its own type/house', async () => {
+    const created: OfficerCode[] = [
+      { code: 'aaa111', officerName: 'Jane', everNamed: true, electionType: 'school', createdAt: Date.now(), branch: 'dwarka' },
+      { code: 'bbb222', officerName: 'Priya', everNamed: true, electionType: 'house', house: 'Anand', createdAt: Date.now(), branch: 'dwarka' }
+    ];
+    mockedDataStore.bulkAllotOfficerCodes.mockReturnValue(created);
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp())
+      .post('/api/officer-codes/bulk-allot')
+      .send({
+        branch: 'dwarka',
+        allotments: [
+          { officerName: 'Jane', electionType: 'school' },
+          { officerName: 'Priya', electionType: 'house', house: 'Anand' }
+        ]
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedDataStore.bulkAllotOfficerCodes).toHaveBeenCalledWith([
+      { officerName: 'Jane', electionType: 'school', house: undefined, branch: 'dwarka', runId: undefined },
+      { officerName: 'Priya', electionType: 'house', house: 'Anand', branch: 'dwarka', runId: undefined }
+    ]);
+    expect(response.body.codes).toEqual(created);
+  });
+
+  it('logs one bulkAllot summary entry plus one officerCode.name entry per created code', async () => {
+    mockedDataStore.getCurrentRun.mockReturnValue(runningSchoolRun);
+    const created: OfficerCode[] = [
+      { code: 'aaa111', officerName: 'Jane', everNamed: true, electionType: 'school', createdAt: Date.now(), branch: 'dwarka' }
+    ];
+    mockedDataStore.bulkAllotOfficerCodes.mockReturnValue(created);
+
+    const { createApp } = await import('../app.js');
+    await request(createApp())
+      .post('/api/officer-codes/bulk-allot')
+      .send({ branch: 'dwarka', allotments: [{ officerName: 'Jane', electionType: 'school' }] });
+
+    expect(mockedDataStore.appendLogEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'officerCode.bulkAllot', details: expect.objectContaining({ count: 1, codes: ['aaa111'] }) })
+    );
+    expect(mockedDataStore.appendLogEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'officerCode.name', details: { code: 'aaa111', officerName: 'Jane' } })
     );
   });
 });

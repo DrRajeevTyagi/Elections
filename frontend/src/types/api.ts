@@ -82,6 +82,26 @@ export interface OfficerCode {
   runId?: string;
 }
 
+// "Bulk Allot from List" (Officer Codes tab) -- see utils/bulkAllot.ts for
+// how a teacher spreadsheet turns into an Allotment array.
+export interface BulkAllotment {
+  officerName: string;
+  electionType: ElectionType;
+  house?: HouseId;
+}
+
+export interface BulkAllotedCode {
+  code: string;
+  officerName: string;
+  electionType: ElectionType;
+  house?: HouseId;
+  branch?: Branch;
+}
+
+export interface BulkAllotResponse {
+  codes: BulkAllotedCode[];
+}
+
 export type RunStatus = 'running' | 'closed';
 
 export interface ElectionRun {

@@ -5,6 +5,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { logAction } from '../services/auditLogService.js';
 import { BadRequestError, ConflictError } from '../utils/httpError.js';
 import { isValidHouseId, isValidBranch } from '../config/posts.js';
+import type { ElectionType, HouseId } from '../types/election.js';
 
 export const officerCodesRouter = Router();
 
@@ -71,6 +72,68 @@ officerCodesRouter.post(
       branch ?? 'dwarka'
     );
     res.status(201).json({ codes });
+  })
+);
+
+// "Bulk Allot from List" (Officer Codes tab) -- takes a whole teacher list
+// in one request and generates+names a code for each entry. One upload is
+// always one branch (matching "one file for each branch" in how the admin
+// actually works), so branch is a single top-level field, not per-entry.
+// The frontend's preview step is responsible for only ever sending clean
+// rows -- this route validates strictly and rejects the whole batch on any
+// bad entry, rather than silently skipping rows an admin might not notice.
+officerCodesRouter.post(
+  '/bulk-allot',
+  asyncHandler(async (req, res) => {
+    const { branch, allotments } = req.body as {
+      branch?: string;
+      allotments?: Array<{ officerName?: string; electionType?: string; house?: string }>;
+    };
+    if (branch === undefined || !isValidBranch(branch)) {
+      throw new BadRequestError('Invalid branch');
+    }
+    if (!Array.isArray(allotments) || allotments.length === 0) {
+      throw new BadRequestError('No allotments given');
+    }
+    if (allotments.length > 500) {
+      throw new BadRequestError('Too many allotments at once -- split into smaller batches (max 500)');
+    }
+
+    const run = dataStore.getCurrentRun();
+    const validated: Array<{ officerName: string; electionType: ElectionType; house?: HouseId; branch: typeof branch; runId?: string }> = [];
+    for (const entry of allotments) {
+      const officerName = typeof entry.officerName === 'string' ? entry.officerName.trim() : '';
+      if (!officerName) {
+        throw new BadRequestError('Every allotment needs an officer name');
+      }
+      if (entry.electionType !== 'school' && entry.electionType !== 'house') {
+        throw new BadRequestError(`Invalid election type for ${officerName}`);
+      }
+      let house: HouseId | undefined;
+      if (entry.electionType === 'house') {
+        if (entry.house === undefined || !isValidHouseId(entry.house)) {
+          throw new BadRequestError(`Invalid or missing house for ${officerName}`);
+        }
+        house = entry.house;
+      }
+      validated.push({
+        officerName,
+        electionType: entry.electionType,
+        house,
+        branch,
+        runId: run?.electionType === entry.electionType ? run.id : undefined
+      });
+    }
+
+    const created = dataStore.bulkAllotOfficerCodes(validated);
+
+    const clientId = req.header('x-admin-client-id');
+    await logAction(clientId, 'officerCode.bulkAllot', { count: created.length, codes: created.map((entry) => entry.code) }, branch);
+    for (const entry of created) {
+      await logAction(clientId, 'officerCode.name', { code: entry.code, officerName: entry.officerName }, entry.branch);
+    }
+
+    res.status(201).json({ codes: created });
   })
 );
 

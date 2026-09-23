@@ -18,7 +18,9 @@ import type {
   VoteRequest,
   VoteResponse,
   SetElectionTypeRequest,
-  ElectionRun
+  ElectionRun,
+  BulkAllotment,
+  BulkAllotResponse
 } from '../types/api';
 import type { ElectionType } from '../types/election';
 import type { Branch, HouseId } from '../types/election';
@@ -257,6 +259,22 @@ export const generateOfficerCodes = async (
   const response = await api.post<OfficerCodesResponse>(
     '/officer-codes/generate',
     { count, ...(house ? { house } : {}), ...(branch ? { branch } : {}) },
+    { headers: { 'x-admin-secret': adminSecret } }
+  );
+  return response.data;
+};
+
+// "Bulk Allot from List" -- one call generates+names a code for every
+// allotment (up to 2 per teacher: School and/or House). See
+// utils/bulkAllot.ts for turning a spreadsheet into `allotments`.
+export const bulkAllotOfficerCodes = async (
+  branch: Branch,
+  allotments: BulkAllotment[],
+  adminSecret: string
+): Promise<BulkAllotResponse> => {
+  const response = await api.post<BulkAllotResponse>(
+    '/officer-codes/bulk-allot',
+    { branch, allotments },
     { headers: { 'x-admin-secret': adminSecret } }
   );
   return response.data;
