@@ -135,11 +135,6 @@ export interface LogEntry {
   branch?: Branch;
 }
 
-export interface RunLogResponse {
-  run: ElectionRun;
-  entries: LogEntry[];
-}
-
 // "Ask your data" search filters (all optional, combine with AND) -- see
 // backend/src/storage/datastore.ts's searchLogEntries for exact semantics.
 export interface LogSearchFilter {

@@ -19,7 +19,6 @@ const mockedDataStore = {
   getCurrentRun: vi.fn<[], ElectionRun | undefined>(),
   getRuns: vi.fn<[], ElectionRun[]>(() => []),
   getRun: vi.fn<[string], ElectionRun | undefined>(),
-  getLogEntries: vi.fn(() => []),
   searchLogEntries: vi.fn(() => []),
   getPollState: vi.fn<[], PollState>(),
   updatePollState: vi.fn((updater: (state: PollState) => PollState) =>

@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ElectionRun, PollState } from '../types/election.js';
+import type { Candidate, ElectionRun, PollState } from '../types/election.js';
 
 // Regression test: the "Election for X Posts" banner (AppLayout.tsx, shared
 // by the admin dashboard and the kiosk) is meant to show as soon as an
@@ -14,7 +14,8 @@ const mockedDataStore = {
   getPollState: vi.fn<[], PollState>(),
   getCurrentRun: vi.fn<[], ElectionRun | undefined>(),
   updatePollState: vi.fn<[(state: PollState) => PollState], PollState>(),
-  resetVotes: vi.fn()
+  getCandidates: vi.fn<[], Candidate[]>(() => []),
+  appendLogEntry: vi.fn()
 };
 
 vi.mock('../storage/datastore.js', () => ({
@@ -101,73 +102,57 @@ describe('GET /api/poll', () => {
   });
 });
 
-// Regression test: Reset Poll used to silently close the poll as a side
-// effect with no guard at all -- a voter could be mid-ballot right now if
-// the poll is still open, and wiping votes out from under them risks losing
-// an in-progress vote with no warning. The admin UI already disabled the
-// button while open, but the route itself had no server-side check.
-describe('POST /api/poll/reset', () => {
+const fullSchoolSlate: Candidate[] = (['HB', 'HG', 'SSC', 'SRC', 'SCC'] as const).map((post) => ({
+  id: `${post}-1`,
+  name: `${post} One`,
+  post,
+  electionType: 'school',
+  branch: 'dwarka'
+}));
+
+// The old standalone "Open Poll" button could open voting with no named
+// election behind it. Only the Start wizard and "Re-start Polling" open
+// voting now, both during an election -- the server must refuse the rest.
+describe('POST /api/poll/open', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedDataStore.updatePollState.mockImplementation((updater) =>
       updater(mockedDataStore.getPollState())
     );
-    // clearAllMocks() clears call history but not a previously-set
-    // mockReturnValue -- pin this explicitly so it doesn't inherit
-    // `runningRun` left behind by an earlier describe block's test.
-    mockedDataStore.getCurrentRun.mockReturnValue(undefined);
-  });
-
-  it('is blocked while the poll is open', async () => {
-    mockedDataStore.getPollState.mockReturnValue({
-      activeElectionType: 'school',
-      activeElectionTypeSetAt: Date.now(),
-      settings: { isOpen: true, allowRevote: false }
-    });
-
-    const { createApp } = await import('../app.js');
-    const response = await request(createApp()).post('/api/poll/reset').send({});
-
-    expect(response.status).toBe(403);
-    expect(response.body.error).toContain('Close the poll');
-    expect(mockedDataStore.resetVotes).not.toHaveBeenCalled();
-    expect(mockedArchiveCurrentElection).not.toHaveBeenCalled();
-  });
-
-  // Regression: Pause Polling closes the poll (isOpen: false) without ending
-  // the election -- the election stays "in progress" (see the Dashboard's
-  // green banner) until End of Voting. The isOpen guard above only protects
-  // a voter mid-ballot; on its own it left a window during any routine pause
-  // where Reset Poll would silently wipe an unfinished election's votes.
-  it('is blocked while an election is in progress, even with polling paused', async () => {
-    mockedDataStore.getPollState.mockReturnValue({
-      activeElectionType: 'school',
-      activeElectionTypeSetAt: Date.now(),
-      settings: { isOpen: false, allowRevote: false } // paused, not closed-out
-    });
-    mockedDataStore.getCurrentRun.mockReturnValue(runningRun);
-
-    const { createApp } = await import('../app.js');
-    const response = await request(createApp()).post('/api/poll/reset').send({});
-
-    expect(response.status).toBe(403);
-    expect(response.body.error).toContain('End of Voting');
-    expect(mockedDataStore.resetVotes).not.toHaveBeenCalled();
-    expect(mockedArchiveCurrentElection).not.toHaveBeenCalled();
-  });
-
-  it('succeeds while the poll is closed and no election is in progress', async () => {
     mockedDataStore.getPollState.mockReturnValue({
       activeElectionType: 'school',
       activeElectionTypeSetAt: Date.now(),
       settings: { isOpen: false, allowRevote: false }
     });
+    mockedDataStore.getCandidates.mockReturnValue(fullSchoolSlate);
+  });
+
+  it('is refused when no election has been started', async () => {
+    mockedDataStore.getCurrentRun.mockReturnValue(undefined);
 
     const { createApp } = await import('../app.js');
-    const response = await request(createApp()).post('/api/poll/reset').send({});
+    const response = await request(createApp()).post('/api/poll/open');
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toContain('Start the Voting Process');
+    expect(mockedDataStore.updatePollState).not.toHaveBeenCalled();
+  });
+
+  it('opens voting during an election (wizard last step / Re-start Polling)', async () => {
+    mockedDataStore.getCurrentRun.mockReturnValue({ ...runningRun, electionType: 'school' });
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/poll/open');
 
     expect(response.status).toBe(200);
-    expect(mockedDataStore.resetVotes).toHaveBeenCalled();
-    expect(mockedArchiveCurrentElection).toHaveBeenCalled();
+    expect(response.body.poll.settings.isOpen).toBe(true);
+  });
+});
+
+describe('POST /api/poll/reset', () => {
+  it('no longer exists', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/poll/reset').send({});
+    expect(response.status).toBe(404);
   });
 });

@@ -115,6 +115,16 @@ pollRouter.post(
   '/open',
   requireAdminSession,
   asyncHandler(async (req, res) => {
+    // Only the Start wizard's last step (straight after /election-runs/start)
+    // and "Re-start Polling" (shown only during an election) open voting.
+    // The old standalone "Open Poll" button, which could open voting with no
+    // named election behind it, is gone -- refuse that case here too, so
+    // votes can never be cast outside an election's History entry and
+    // Activity Log.
+    if (!dataStore.getCurrentRun()) {
+      throw new ForbiddenError('No election is in progress. Use "Start the Voting Process" on the Dashboard to open the poll.');
+    }
+
     const currentState = getPollState();
     if (!currentState.activeElectionType) {
       throw new BadRequestError('Please set an election type before opening the poll');
@@ -136,11 +146,6 @@ pollRouter.post(
       }
     }));
 
-    // Deliberately NOT gated on a run being active (decided 2026-09-23) --
-    // Open Poll keeps working exactly as before regardless of run state.
-    // logAction itself still no-ops if no run happens to be active, so this
-    // only actually writes an entry when Open Poll is used during a
-    // recording.
     await logAction(req.header('x-admin-client-id'), 'poll.open', { electionType: currentState.activeElectionType });
     res.json({ poll: sanitizePoll(poll) });
   })
@@ -165,71 +170,6 @@ pollRouter.post(
   })
 );
 
-pollRouter.post(
-  '/reset',
-  requireAdminSession,
-  asyncHandler(async (req, res) => {
-    const { name } = req.body as { name?: string };
-    // A voter could be mid-ballot right now if the poll is still open --
-    // wiping votes out from under them (and silently closing the poll as a
-    // side effect, which used to happen) risks losing an in-progress vote
-    // with no warning. Same reasoning as candidates.ts's ensurePollIsClosed:
-    // require the admin to close the poll first, as its own deliberate step.
-    if (getPollState().settings.isOpen) {
-      throw new ForbiddenError(
-        'Close the poll before resetting -- resetting while voting could still be in progress risks losing an in-progress vote.'
-      );
-    }
-
-    // Pausing polling ("Pause Polling") only stops new votes -- it does NOT
-    // end the election, which stays "in progress" (see the green banner on
-    // the Dashboard) until an explicit End of Voting. The isOpen check above
-    // only protects a voter mid-ballot; it does nothing to stop an admin
-    // from wiping an election's votes during a routine pause (e.g. a lunch
-    // break) while it's still under way. Reset Poll must only ever run with
-    // no election in progress at all -- for clearing stray test votes cast
-    // before Start the Voting Process was ever used. Ending the election
-    // properly is what closeRecording (electionRuns.ts /close) is for; note
-    // it does NOT itself clear votes (2026-09-24 -- the final tally is left
-    // in place on purpose until the next election of that type starts), so
-    // "use End of Voting instead" here is only ever about archiving the
-    // result and closing the poll, not about clearing anything.
-    if (dataStore.getCurrentRun()) {
-      throw new ForbiddenError(
-        'An election is currently in progress. Use "End of Voting" to finish it -- that saves the final result and closes the poll. Reset Poll is only for clearing stray votes before an election has been started.'
-      );
-    }
-
-    // Snapshot the current election's results before wiping votes, so a
-    // record survives the reset -- see GET /api/report/archives. Skips
-    // creating a duplicate if this exact data was already saved (e.g. via
-    // "Save to Election History" right after Close) -- see
-    // archiveCurrentElection.
-    archiveCurrentElection(name);
-
-    kioskService.clearSessions();
-    dataStore.resetVotes();
-    // Deliberately kept as-is (decided 2026-09-23: Close Recording is a new,
-    // separate action, not a replacement for Reset Poll -- zero behavior
-    // change here). Still logged if a run happens to be active when this is
-    // used, since that's exactly the "old button used during a recording,
-    // bypassing Close Recording" scenario worth having a record of.
-    await logAction(req.header('x-admin-client-id'), 'poll.reset', {});
-    // isOpen is already false here (guarded above), and stays false --
-    // Reset Poll no longer closes the poll itself, that's now a distinct,
-    // deliberate prior step.
-    const poll = dataStore.updatePollState((state) => ({
-      ...state,
-      activeElectionType: state.activeElectionType, // Preserve
-      settings: {
-        ...state.settings,
-        isOpen: false
-      }
-    }));
-
-    res.json({
-      poll: sanitizePoll(poll),
-      message: 'All votes cleared'
-    });
-  })
-);
+// POST /reset ("Reset Poll") was removed along with its dashboard button.
+// Votes reset only when Start the Voting Process begins a new election of
+// that type (see runService.startRecording).

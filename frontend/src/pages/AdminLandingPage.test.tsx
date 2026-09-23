@@ -7,7 +7,6 @@ const mockApi = vi.hoisted(() => ({
   getPollStatus: vi.fn(),
   getResults: vi.fn(),
   openPoll: vi.fn(),
-  resetPoll: vi.fn(),
   updateCandidate: vi.fn(),
   deleteCandidate: vi.fn(),
   addCandidate: vi.fn(),

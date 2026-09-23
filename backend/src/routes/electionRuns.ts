@@ -3,7 +3,7 @@ import { requireAdminSession } from '../middleware/adminAuth.js';
 import { dataStore } from '../storage/datastore.js';
 import type { LogSearchFilter } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { BadRequestError, NotFoundError } from '../utils/httpError.js';
+import { BadRequestError } from '../utils/httpError.js';
 import { startRecording, closeRecording } from '../services/runService.js';
 import { isValidBranch } from '../config/posts.js';
 
@@ -35,8 +35,9 @@ electionRunsRouter.get(
 // officerCode.name entries, branch=AN, electionType=house), "what happened
 // under code abc123" (code=abc123), "what did the admin account do for this
 // run" (runId=..., adminOnly=true). See datastore.ts's searchLogEntries for
-// the exact filter semantics. Placed before /:id/log so "search" is never
-// mistaken for a run id.
+// the exact filter semantics. Also serves the Activity Log tab's "click an
+// election's name" view (filtered by runId) -- the separate GET /:id/log
+// route that did the same was never called by the app and was removed.
 electionRunsRouter.get(
   '/log/search',
   asyncHandler((req, res) => {
@@ -60,17 +61,6 @@ electionRunsRouter.get(
     };
 
     res.json({ entries: dataStore.searchLogEntries(filter) });
-  })
-);
-
-electionRunsRouter.get(
-  '/:id/log',
-  asyncHandler((req, res) => {
-    const run = dataStore.getRun(req.params.id);
-    if (!run) {
-      throw new NotFoundError('Election run not found');
-    }
-    res.json({ run, entries: dataStore.getLogEntries(run.id) });
   })
 );
 

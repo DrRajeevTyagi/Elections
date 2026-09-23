@@ -641,12 +641,6 @@ export class DataStore {
     }));
   }
 
-  resetVotes(): void {
-    const removedIds = this.votes.map((vote) => vote.id);
-    this.votes = [];
-    this.queueVoteDeletion(removedIds);
-  }
-
   resetVotesByType(electionType: ElectionType): void {
     const removedIds = this.votes.filter((vote) => vote.electionType === electionType).map((vote) => vote.id);
     this.votes = this.votes.filter((vote) => vote.electionType !== electionType);

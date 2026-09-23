@@ -110,25 +110,6 @@ describe('DataStore (Firestore mode) -- votes subcollection', () => {
     expect(vote.branch).toBe('AN');
   });
 
-  it('resetVotes deletes every vote document, not just the in-memory list', async () => {
-    const store = await importFreshDataStore();
-    await store.init();
-    await store.addVote(sel({ HB: 'hb-1' }), 'school', undefined, 'CODE01');
-    await store.addVote(sel({ HB: 'hb-2' }), 'school', undefined, 'CODE02');
-    expect(store.getVotes()).toHaveLength(2);
-
-    store.resetVotes();
-    // resetVotes's Firestore delete is queued (fire-and-forget, same pattern
-    // as every other write here) -- flush it via a second write that awaits
-    // the shared queue.
-    await store.addVote(sel({ HB: 'hb-3' }), 'school', undefined, 'CODE03');
-
-    const votesInDb = [...sharedFakeFirestore.store.keys()].filter((k) =>
-      k.startsWith('school-election/state/votes/')
-    );
-    expect(votesInDb).toHaveLength(1); // only the post-reset vote remains
-  });
-
   it('resetVotesByType only deletes that election type\'s votes', async () => {
     const store = await importFreshDataStore();
     await store.init();

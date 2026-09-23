@@ -10,7 +10,6 @@ import type {
   PollResponse,
   PostsResponse,
   ResultsResponse,
-  RunLogResponse,
   RunsListResponse,
   LogSearchFilter,
   LogSearchResponse,
@@ -211,15 +210,6 @@ export const openPoll = (adminSecret: string): Promise<PollResponse> => updatePo
 
 export const closePoll = (adminSecret: string): Promise<PollResponse> => updatePoll('close', adminSecret);
 
-export const resetPoll = async (adminSecret: string, name?: string): Promise<PollResponse> => {
-  const response = await api.post<PollResponse>('/poll/reset', name ? { name } : undefined, {
-    headers: {
-      'x-admin-secret': adminSecret
-    }
-  });
-  return response.data;
-};
-
 export const setElectionType = async (
   electionType: 'school' | 'house',
   adminSecret: string,
@@ -409,13 +399,6 @@ export const getCurrentRun = async (adminSecret: string): Promise<CurrentRunResp
 
 export const getRuns = async (adminSecret: string): Promise<RunsListResponse> => {
   const response = await api.get<RunsListResponse>('/election-runs', {
-    headers: { 'x-admin-secret': adminSecret }
-  });
-  return response.data;
-};
-
-export const getRunLog = async (runId: string, adminSecret: string): Promise<RunLogResponse> => {
-  const response = await api.get<RunLogResponse>(`/election-runs/${runId}/log`, {
     headers: { 'x-admin-secret': adminSecret }
   });
   return response.data;
