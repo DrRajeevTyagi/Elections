@@ -134,7 +134,7 @@ export const AdminLandingPage = (): JSX.Element => {
   const [archiveNameDrafts, setArchiveNameDrafts] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'dashboard' | 'candidates' | 'results' | 'codes' | 'history' | 'log'>('dashboard');
   const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
-  // "Start the Election Process" / "End the Election Process" -- the
+  // "Start the Voting Process" / "End of Voting" -- the
   // currently active election run, if any. The Dashboard tab shows a
   // prominent banner while one is active; officer-code generation is no
   // longer tied to it (codes are prep work, like candidates).
@@ -338,7 +338,7 @@ export const AdminLandingPage = (): JSX.Element => {
       return;
     }
     const confirmed = window.confirm(
-      `End the election process for "${currentRun.name}"?\n\nThis saves the final results to Election History, resets votes to zero, and closes the poll. Officer codes and their allotments are kept for the next election. This cannot be undone.`
+      `End of Voting for "${currentRun.name}"?\n\nThis saves the final results to Election History, resets votes to zero, and closes the poll. Officer codes and their allotments are kept for the next election. This cannot be undone.`
     );
     if (!confirmed) {
       return;
@@ -730,12 +730,12 @@ export const AdminLandingPage = (): JSX.Element => {
     // Deliberately does NOT offer to save to Election History on pausing
     // (removed 2026-09-24) -- this action is Pause Polling now, not a
     // separate "Close Poll" that used to double as how an election ended
-    // before Start/End the Election Process existed. Prompting "save this
-    // election to history?" on every pause implied a pause was some kind of
-    // ending point, which it isn't -- the election is still fully in
+    // before Start the Voting Process/End of Voting existed. Prompting "save
+    // this election to history?" on every pause implied a pause was some
+    // kind of ending point, which it isn't -- the election is still fully in
     // progress. Anyone wanting a checkpoint mid-election already has "📋 Save
-    // to Election History" for that, and a real ending goes through "End the
-    // Election Process," which archives automatically on its own.
+    // to Election History" for that, and a real ending goes through "End of
+    // Voting," which archives automatically on its own.
     try {
       setLoading(true);
       setError(null);
@@ -1148,7 +1148,7 @@ export const AdminLandingPage = (): JSX.Element => {
                 </p>
                 <p style={{ margin: '0.5rem 0 0.75rem 0', fontSize: '0.8rem', color: '#065f46' }}>
                   Every action from here on is permanently logged (see the Activity Log tab) until this election is
-                  closed. Use Voting below to pause/resume; use the button below to end the election entirely.
+                  closed. Use Voting below to pause/resume; use the button below for End of Voting.
                 </p>
                 <button
                   className="button"
@@ -1156,7 +1156,7 @@ export const AdminLandingPage = (): JSX.Element => {
                   disabled={runLoading}
                   style={{ backgroundColor: '#991b1b' }}
                 >
-                  {runLoading ? 'Closing...' : '⏹ End the Election Process'}
+                  {runLoading ? 'Closing...' : '⏹ End of Voting'}
                 </button>
               </div>
             ) : showWizard ? (
@@ -1171,11 +1171,11 @@ export const AdminLandingPage = (): JSX.Element => {
             ) : (
               <div style={{ padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
                 <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', color: '#4b5563' }}>
-                  No election is in progress. Setup work (adding candidates, generating officer codes) is free and
-                  unlogged until you start one.
+                  No voting is in progress. Setup work (managing candidates, generating polling officer codes) can be
+                  carried out.
                 </p>
                 <button className="button" onClick={() => setShowWizard(true)}>
-                  🗳️ Start the Election Process (School / House)
+                  🗳️ Start the Voting Process (School / House)
                 </button>
                 {/* No "clear stray votes" button here (there was briefly one,
                     removed 2026-09-24): the poll can only ever be opened
@@ -1209,12 +1209,10 @@ export const AdminLandingPage = (): JSX.Element => {
                   ever removes the ability to vote, temporarily; nothing
                   that's locked for the whole election (Manage Candidates,
                   switching election type) becomes available just because
-                  polling is paused. Only "End the Election Process" changes
-                  that. */}
+                  polling is paused. Only "End of Voting" changes that. */}
               <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
-                <strong>Pause</strong> only stops new ballots from being activated or submitted -- the election
-                stays fully in progress the whole time it's paused (candidates stay locked, the election type can't
-                be switched). Re-start reverses only that. Nothing else changes until End the Election Process.
+                Pause only stops the voting process. Any feature available after the &quot;End of Voting&quot;
+                remains inaccessible.
               </p>
               <div className="admin-actions">
                 <button

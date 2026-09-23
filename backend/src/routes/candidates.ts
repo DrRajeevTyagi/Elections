@@ -24,7 +24,7 @@ export const candidatesRouter = Router();
 const ensureNoElectionInProgress = (): void => {
   if (getPollState().settings.isOpen || dataStore.getCurrentRun()) {
     throw new ForbiddenError(
-      'Candidates cannot be added, edited, or deleted while an election is in progress (this includes a Pause Polling break) -- changing candidates mid-election can strand an in-progress or already-cast ballot. End the Election Process first.'
+      'Candidates cannot be added, edited, or deleted while an election is in progress (this includes a Pause Polling break) -- changing candidates mid-election can strand an in-progress or already-cast ballot. End of Voting first.'
     );
   }
 };

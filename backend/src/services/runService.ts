@@ -6,7 +6,7 @@ import { logAction, resolveActor } from './auditLogService.js';
 import { BadRequestError, ConflictError } from '../utils/httpError.js';
 import type { ElectionRun, ElectionType } from '../types/election.js';
 
-// "Start the Election Process" (ELECTION-INTEGRITY-AND-TRUST.md item 11):
+// "Start the Voting Process" (ELECTION-INTEGRITY-AND-TRUST.md item 11):
 // one action, atomically --
 //   1. brings Poll Controls' election type into step with the run (reusing
 //      the same outgoing-type archive/clear safety net routes/poll.ts's own

@@ -136,10 +136,9 @@ describe('POST /api/poll/reset', () => {
 
   // Regression: Pause Polling closes the poll (isOpen: false) without ending
   // the election -- the election stays "in progress" (see the Dashboard's
-  // green banner) until End the Election Process. The isOpen guard above
-  // only protects a voter mid-ballot; on its own it left a window during any
-  // routine pause where Reset Poll would silently wipe an unfinished
-  // election's votes.
+  // green banner) until End of Voting. The isOpen guard above only protects
+  // a voter mid-ballot; on its own it left a window during any routine pause
+  // where Reset Poll would silently wipe an unfinished election's votes.
   it('is blocked while an election is in progress, even with polling paused', async () => {
     mockedDataStore.getPollState.mockReturnValue({
       activeElectionType: 'school',
@@ -152,7 +151,7 @@ describe('POST /api/poll/reset', () => {
     const response = await request(createApp()).post('/api/poll/reset').send({});
 
     expect(response.status).toBe(403);
-    expect(response.body.error).toContain('End the Election Process');
+    expect(response.body.error).toContain('End of Voting');
     expect(mockedDataStore.resetVotes).not.toHaveBeenCalled();
     expect(mockedArchiveCurrentElection).not.toHaveBeenCalled();
   });

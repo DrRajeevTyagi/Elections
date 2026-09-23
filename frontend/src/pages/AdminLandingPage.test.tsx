@@ -244,7 +244,7 @@ describe('AdminLandingPage tabs', () => {
     );
   });
 
-  it('"Start the Election Process" wizard walks through every step and opens the poll in one flow', async () => {
+  it('"Start the Voting Process" wizard walks through every step and opens the poll in one flow', async () => {
     mockApi.verifyAdminSecret.mockResolvedValue(undefined);
     mockApi.getPollStatus.mockResolvedValue({
       poll: { activeElectionType: 'school', settings: { isOpen: false, allowRevote: false } }
@@ -265,7 +265,7 @@ describe('AdminLandingPage tabs', () => {
     mockApi.openPoll.mockResolvedValue({ poll: { activeElectionType: 'school', settings: { isOpen: true, allowRevote: false } } });
 
     await unlockAsAdmin();
-    fireEvent.click(screen.getByRole('button', { name: /Start the Election Process/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Start the Voting Process/ }));
 
     // a. Select the election type -- picking the one already active
     // ('school', matching pollStatus) requires no API call.
