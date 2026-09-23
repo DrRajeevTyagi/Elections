@@ -267,9 +267,10 @@ describe('AdminLandingPage tabs', () => {
     await unlockAsAdmin();
     fireEvent.click(screen.getByRole('button', { name: /Start the Election Process/ }));
 
-    // a. Confirm election type (already 'school', matching pollStatus) -- no API call expected.
-    await screen.findByText(/currently set for/);
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, proceed' }));
+    // a. Select the election type -- picking the one already active
+    // ('school', matching pollStatus) requires no API call.
+    await screen.findByText('Select the Election type (School or House)');
+    fireEvent.click(screen.getByRole('button', { name: /🏫 School/ }));
     expect(mockApi.setElectionType).not.toHaveBeenCalled();
 
     // b. Vote counts reset notice

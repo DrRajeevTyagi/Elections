@@ -21,7 +21,7 @@ interface StartElectionWizardProps {
 type Step = 'type' | 'votes' | 'codes' | 'allotted' | 'candidates' | 'name' | 'open';
 const STEPS: Step[] = ['type', 'votes', 'codes', 'allotted', 'candidates', 'name', 'open'];
 const STEP_TITLES: Record<Step, string> = {
-  type: 'Confirm the election type',
+  type: 'Select the Election type (School or House)',
   votes: 'Vote counts will reset to zero',
   codes: 'Are polling officer codes ready?',
   allotted: 'Have the codes been allotted to persons?',
@@ -46,7 +46,6 @@ export const StartElectionWizard = ({
   const [stepIndex, setStepIndex] = useState(0);
   const [name, setName] = useState('');
   const [electionType, setLocalElectionType] = useState<ElectionType>(activeElectionType ?? 'school');
-  const [changingType, setChangingType] = useState(false);
   const [typeChangeLoading, setTypeChangeLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [wizError, setWizError] = useState<string | null>(null);
@@ -76,14 +75,9 @@ export const StartElectionWizard = ({
     </button>
   );
 
-  const handleConfirmType = async (chosen: ElectionType) => {
-    if (chosen === electionType && !changingType) {
-      goNext();
-      return;
-    }
+  const handleSelectType = async (chosen: ElectionType) => {
     if (chosen === activeElectionType) {
       setLocalElectionType(chosen);
-      setChangingType(false);
       goNext();
       return;
     }
@@ -92,7 +86,6 @@ export const StartElectionWizard = ({
       setWizError(null);
       await setElectionType(chosen, adminSecret);
       setLocalElectionType(chosen);
-      setChangingType(false);
       goNext();
     } catch (typeError) {
       setWizError(typeError instanceof Error ? typeError.message : 'Failed to change election type');
@@ -134,47 +127,25 @@ export const StartElectionWizard = ({
 
       {step === 'type' && (
         <div>
-          {!changingType ? (
-            <>
-              <p style={{ margin: '0 0 0.75rem 0' }}>
-                This election is currently set for <strong>{electionType === 'house' ? 'House' : 'School'} Elections</strong>.
-              </p>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button className="button" onClick={() => handleConfirmType(electionType)}>
-                  Yes, proceed
-                </button>
-                <button
-                  type="button"
-                  className="button"
-                  style={{ backgroundColor: '#6b7280' }}
-                  onClick={() => setChangingType(true)}
-                >
-                  No, change it
-                </button>
-                <AbortButton />
-              </div>
-            </>
-          ) : (
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <button
-                className="button"
-                style={{ backgroundColor: electionType === 'school' ? '#16a34a' : '#6b7280' }}
-                onClick={() => handleConfirmType('school')}
-                disabled={typeChangeLoading}
-              >
-                🏫 School
-              </button>
-              <button
-                className="button"
-                style={{ backgroundColor: electionType === 'house' ? '#16a34a' : '#6b7280' }}
-                onClick={() => handleConfirmType('house')}
-                disabled={typeChangeLoading}
-              >
-                🏠 House
-              </button>
-              <AbortButton />
-            </div>
-          )}
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button
+              className="button"
+              style={{ backgroundColor: electionType === 'school' ? '#16a34a' : '#6b7280' }}
+              onClick={() => handleSelectType('school')}
+              disabled={typeChangeLoading}
+            >
+              🏫 School
+            </button>
+            <button
+              className="button"
+              style={{ backgroundColor: electionType === 'house' ? '#16a34a' : '#6b7280' }}
+              onClick={() => handleSelectType('house')}
+              disabled={typeChangeLoading}
+            >
+              🏠 House
+            </button>
+            <AbortButton />
+          </div>
         </div>
       )}
 
