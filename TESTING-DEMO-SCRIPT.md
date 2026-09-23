@@ -27,7 +27,7 @@ The single biggest thing that makes a demo drag is doing setup work in front of 
 4. **Devices.** Have the admin dashboard on the projector, one teacher's phone ready for the single-voter demo, and everyone else's phones on the school wifi with the URL already open.
 5. **Keep one code back.** Hold one named, unused School code aside — you'll need it for the "wrong code type" demo in Part 1 and it must not have been handed out.
 
-> **Do not use "Reset Poll" anywhere in this demo.** It exists for ad-hoc corrections when no election is being recorded. Used in the middle of a recording it wipes the votes while leaving the recording open, so the final Election History entry for that election ends up showing zero votes. **End the Election Process** is the correct way to finish, every time. (See Part 3.)
+> **You will not need "Reset Poll" anywhere in this demo.** It exists only for clearing stray test votes before an election has ever been started, and is now blocked (with a clear message) for as long as the green "ELECTION IN PROGRESS" box is showing, even during a Pause Polling break. **End the Election Process** is the correct way to finish any election, every time. (See Part 3.)
 
 ---
 
@@ -139,6 +139,7 @@ Re-run before every real polling day. Everything below is verified working as de
 ### Poll lifecycle
 - **No duplicate history entry.** "Save to Election History" followed by End the Election Process produces one record, not two. *(Verified 2026-09-24.)*
 - **Reset Poll is blocked while the poll is open** (403, "Close the poll before resetting"). *(Fixed 2026-09-24: previously only the admin UI disabled the button, with no server-side guard — a direct API call could have reset live votes out from under a voter mid-ballot.)*
+- **Reset Poll is blocked for as long as an election is in progress — including during a Pause Polling break**, not just while polling is actively open (403, "An election is currently in progress. Use 'End the Election Process' to finish it"). *(Fixed 2026-09-24: Pause Polling stops new votes but does not end the election, so the first guard above alone still left a window — pause for a lunch break, then Reset Poll would silently wipe that election's votes while it was still under way. Verified: blocked immediately after Pause Polling, works again immediately after End the Election Process, on both the button and the API directly.)*
 - **Close the poll mid-voting.** No new ballot can be activated afterwards, and votes already fully cast are unaffected. **Note:** an already-activated but not-yet-submitted ballot *is* invalidated the instant the poll closes — that voter cannot submit ("Invalid kiosk session token"). Plan for that if a real voter is mid-ballot when Close Poll is clicked. *(Verified 2026-09-24.)*
 - **Switching election type is blocked while a recording is active.** *(Verified 2026-09-24.)*
 
@@ -166,7 +167,7 @@ Re-run before every real polling day. Everything below is verified working as de
 
 Worth knowing before someone reports them as faults.
 
-- **Reset Poll used during an active recording.** It is allowed (and flagged in the action log), but it clears the votes while leaving the recording open — so the Election History entry written later by End the Election Process shows zero votes. Use **End the Election Process** to finish an election; Reset Poll is for ad-hoc corrections when nothing is being recorded.
+- **Reset Poll is unavailable (greyed out) whenever an election is in progress**, including during a Pause Polling break — not just while polling is actively open. This is deliberate: it's the button's only job now — clearing stray test votes before an election has ever been started — and it stays that way even mid-pause, so there is no longer a window where it could silently wipe an unfinished election's votes. Use **End the Election Process** to finish an election properly; it saves the final result and clears the votes together.
 - **An officer code's vote count goes to zero when an election ends.** Expected: the votes were archived and cleared. That election's turnout is preserved in its Election History entry.
 - **The banner disappears the moment an election ends.** Expected: there is no election open to vote in, so there is nothing to announce.
 - **No banner while the wizard is open.** Expected: picking a type doesn't mean voting is possible. The wizard shows "🏫 School Election chosen" / "🏠 House Election chosen" on every step so the choice is still visible.
@@ -179,9 +180,6 @@ Worth knowing before someone reports them as faults.
 
 - **2026-09-24 — per-branch report totals were wrong.** Narrowing a report to one branch recomputed "total votes cast" by summing the filtered candidate totals. Because every ballot fills one selection per post, that counted each ballot once per post: a 4-ballot Dwarka School election reported **20**, and a 3-ballot House election reported **9**. Both Download Report buttons and both Election History View/Print buttons were affected — i.e. every per-branch report anyone actually clicks. The Dashboard's own "Total Votes" was right all along, so the two disagreed. Ballot counts are now captured per branch when the snapshot is taken; archives written before the fix fall back to a per-post derivation rather than the sum-across-posts one.
 - **2026-09-24 — archives came back mislabelled after a restart.** On loading saved data, every stored archive had its branch defaulted to "dwarka", even though an archive always covers both branches. After any server restart (routine on Cloud Run), an un-narrowed report header read "Mount Carmel School — Dwarka" while listing both branches' candidates underneath. Only reachable by editing the URL by hand, since the buttons always request one branch — but the stored data now matches what it claims.
-- **2026-09-24 — Reset Poll gained its server-side guard** (see Part 2).
+- **2026-09-24 — Reset Poll gained its server-side guard** while the poll is open (see Part 2).
+- **2026-09-24 — Reset Poll closed for good.** The guard above still left a gap: Pause Polling stops voting but does not end the election, so a routine pause (a lunch break) was enough to make the button active again while an election was still genuinely in progress, wiping its votes with no warning. Reset Poll is now unavailable for as long as the green "ELECTION IN PROGRESS" box is showing, paused or not, and is only ever usable for its one real remaining purpose: clearing stray test votes before an election has been started. Verified against a live server: blocked immediately on Pause Polling, works again immediately after End the Election Process.
 - **2026-09-24 — script restructured** into Part 0 (prep) / Part 1 (live demo) / Part 2 (regression) / Part 3 (known behaviours), with the Dwarka/AN branch split folded into the main demo rather than left as a footnote.
-
-## Still open for you to decide
-
-- Whether Reset Poll should be blocked outright while a recording is active, the same way it's now blocked while the poll is open. Today it's allowed and logged as notable. Blocking it would remove the zero-vote-archive trap described in Part 3, at the cost of the ad-hoc escape hatch.

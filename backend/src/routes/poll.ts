@@ -181,6 +181,22 @@ pollRouter.post(
       );
     }
 
+    // Pausing polling ("Pause Polling") only stops new votes -- it does NOT
+    // end the election, which stays "in progress" (see the green banner on
+    // the Dashboard) until an explicit End the Election Process. The isOpen
+    // check above only protects a voter mid-ballot; it does nothing to stop
+    // an admin from wiping an election's votes during a routine pause (e.g.
+    // a lunch break) while it's still under way. Reset Poll must only ever
+    // run with no election in progress at all -- for clearing stray test
+    // votes cast before Start the Election Process was ever used. Ending the
+    // election properly is what closeRecording (electionRuns.ts /close) is
+    // for, and it already archives + clears votes + closes the poll together.
+    if (dataStore.getCurrentRun()) {
+      throw new ForbiddenError(
+        'An election is currently in progress. Use "End the Election Process" to finish it -- that saves the final result and clears the votes together. Reset Poll is only for clearing stray votes before an election has been started.'
+      );
+    }
+
     // Snapshot the current election's results before wiping votes, so a
     // record survives the reset -- see GET /api/report/archives. Skips
     // creating a duplicate if this exact data was already saved (e.g. via

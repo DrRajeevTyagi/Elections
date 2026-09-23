@@ -813,6 +813,18 @@ export const AdminLandingPage = (): JSX.Element => {
       return;
     }
 
+    // Mirrors the backend guard in poll.ts's /reset route -- Pause Polling
+    // does not end the election (see the green "ELECTION IN PROGRESS" box),
+    // so this must also be blocked during a pause, not just while polling is
+    // actually open. Caught here purely to fail fast with a clear message;
+    // the button itself is already disabled in this state (see its `disabled`
+    // prop below), so reaching this branch would mean the button state and
+    // this check disagreed.
+    if (currentRun) {
+      setError('An election is currently in progress. Use "End the Election Process" to finish it instead.');
+      return;
+    }
+
     const confirmed = window.confirm(
       'Are you sure you want to RESET the poll?\n\nThis will:\n- Save a snapshot of the current results to Election History (skipped if you already saved this exact election with "Save to Election History")\n- Delete ALL votes for both election types\n- Reset all results to zero\n\nVotes cannot be recovered after this, but the snapshot will remain available in Election History.'
     );
@@ -1313,16 +1325,23 @@ export const AdminLandingPage = (): JSX.Element => {
               <button
                 className="button"
                 onClick={handleReset}
-                disabled={loading || pollStatus?.settings.isOpen === true}
+                disabled={loading || pollStatus?.settings.isOpen === true || Boolean(currentRun)}
                 style={{
-                  backgroundColor: pollStatus?.settings.isOpen ? '#9ca3af' : '#ea580c',
+                  backgroundColor: pollStatus?.settings.isOpen || currentRun ? '#9ca3af' : '#ea580c',
                   width: '100%',
-                  opacity: pollStatus?.settings.isOpen ? 0.5 : 1
+                  opacity: pollStatus?.settings.isOpen || currentRun ? 0.5 : 1
                 }}
-                title={pollStatus?.settings.isOpen ? 'Close the poll before resetting' : 'Delete all votes and reset the poll'}
+                title={
+                  pollStatus?.settings.isOpen
+                    ? 'Close the poll before resetting'
+                    : currentRun
+                    ? 'An election is in progress -- use "End the Election Process" instead'
+                    : 'Delete all votes and reset the poll'
+                }
               >
                 🗑️ Reset Poll (Clear All Votes)
                 {pollStatus?.settings.isOpen && ' (Close poll first)'}
+                {!pollStatus?.settings.isOpen && currentRun && ' (End the election first)'}
               </button>
             </div>
           </section>
