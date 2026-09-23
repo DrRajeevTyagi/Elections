@@ -78,32 +78,35 @@ Each step has a one-line **Say:** cue — the point staff should take away — s
 18. **Download the live report, per branch.** Dashboard → **🖨️ Download Dwarka Report** and **🖨️ Download AN Report**. Check the "total votes cast" on each report against the number of people you physically counted in steps 15–16.
     **Say:** *These two buttons always show the current position — during the election that's live, and after it closes it's the final result. They never stop working.*
 19. **Save a checkpoint.** **📋 Save to Election History** on the Dashboard. This files a permanent record and changes nothing — the poll stays open and no votes are touched. Show the new entry in the Election History tab.
+20. **Pause for a break.** Click **⏸ Pause Polling** (it's one button — it swaps to **▶ Re-start Polling** in the same spot). Read out the line under it. Try Activate Ballot on any device — refused, voting is closed. Then try Manage Candidates → attempt to edit or delete a candidate — **also refused**, even though the election is only paused, not ended.
+    **Say:** *Pausing only stops voting. Everything else about this election — including the fact that candidates are locked — stays exactly as it was. It comes back exactly the same way when you re-start.*
+21. **Re-start.** Click **▶ Re-start Polling**. Confirm voting works again immediately.
 
 ### Act 6 — Finishing the School election
 
-20. **Try to switch type first.** Open Start the Election Process and try to pick House. It's refused — "a recording is currently active, close it before switching election type."
+22. **Try to switch type first.** Open Start the Election Process and try to pick House. It's refused — "a recording is currently active, close it before switching election type."
     **Say:** *You can't accidentally start the next election on top of one that's still running.*
-21. **End the Election Process.** Dashboard → **End the Election Process**. This saves the final result to Election History, resets the votes to zero, and closes the poll. The banner disappears. Officer codes and their teacher allotments are kept.
-22. **Confirm nothing was lost.** Polling Officer Codes tab — every code and every officer name is still there, and any booth that had been closed is usable again. Election History — the School election's final record is there, and did **not** get duplicated by the checkpoint you saved in step 19.
-23. **Reports still work.** Hit **Download Dwarka Report** again now that nothing is running — it shows the School election's final result.
+23. **End the Election Process.** Dashboard → **End the Election Process**. This saves the final result to Election History, resets the votes to zero, and closes the poll. The banner disappears. Officer codes and their teacher allotments are kept.
+24. **Confirm nothing was lost.** Polling Officer Codes tab — every code and every officer name is still there, and any booth that had been closed is usable again. Election History — the School election's final record is there, and did **not** get duplicated by the checkpoint you saved in step 19.
+25. **Reports still work.** Hit **Download Dwarka Report** again now that nothing is running — it shows the School election's final result.
 
 ### Act 7 — The House election (shorter; show only what differs)
 
-24. **Start House.** Start the Election Process → House → through to Open the Poll.
-25. **School code is now refused.** Try the School code — "this code is for School Elections."
-26. **A house code opens only its own house.** Activate with, say, the Prem code and show that only Prem's candidates appear. The house comes from the code itself; the officer never picks it.
+26. **Start House.** Start the Election Process → House → through to Open the Poll.
+27. **School code is now refused.** Try the School code — "this code is for School Elections."
+28. **A house code opens only its own house.** Activate with, say, the Prem code and show that only Prem's candidates appear. The house comes from the code itself; the officer never picks it.
     **Say:** *Nobody has to remember which house they're running. The code knows.*
-27. **Vote, and show Live Results grouped by house.**
-28. **Close a booth.** Have an officer use "Close Polling at This Booth" on their code, then try to activate with it again — refused. Reopen it from the admin Codes tab and show it works again.
+29. **Vote, and show Live Results grouped by house.**
+30. **Close a booth.** Have an officer use "Close Polling at This Booth" on their code, then try to activate with it again — refused. Reopen it from the admin Codes tab and show it works again.
     **Say:** *That's how an officer signs off at the end of the day, and how you undo it if it was a mistake.*
-29. **End the Election Process** for House.
+31. **End the Election Process** for House.
 
 ### Act 8 — After everything is closed
 
-30. **Reports survive.** With nothing running at all, **Download Dwarka Report** / **Download AN Report** still work and show the House election's final result — the most recently closed election. They never go permanently dark.
-31. **Election History.** Show **View/Print Dwarka** and **View/Print AN** on a past entry. Point out that the vote totals on these match what was counted on the day. Show renaming an entry, and the confirmation prompt on deleting one.
-32. **Officer turnout.** On an Election History report, untick **"Include polling officer turnout"** for a results-only copy to hand out; it's ticked by default.
-33. **Storage indicator.** Point at the green "Storage: OK" on the Dashboard once, so whoever is on duty would recognise the red warning banner if storage ever failed for real.
+32. **Reports survive.** With nothing running at all, **Download Dwarka Report** / **Download AN Report** still work and show the House election's final result — the most recently closed election. They never go permanently dark.
+33. **Election History.** Show **View/Print Dwarka** and **View/Print AN** on a past entry. Point out that the vote totals on these match what was counted on the day. Show renaming an entry, and the confirmation prompt on deleting one.
+34. **Officer turnout.** On an Election History report, untick **"Include polling officer turnout"** for a results-only copy to hand out; it's ticked by default.
+35. **Storage indicator.** Point at the green "Storage: OK" on the Dashboard once, so whoever is on duty would recognise the red warning banner if storage ever failed for real.
     **Say:** *If this is ever red on polling day, stop and call me.*
 
 ---
@@ -119,7 +122,7 @@ Re-run before every real polling day. Everything below is verified working as de
 - **Takeover requires consent.** A second device is refused with a 409 until it explicitly takes over. *(Verified 2026-09-24.)*
 
 ### Candidate management guardrails
-- **No edits while voting is open.** Add / edit / delete from Manage Candidates are all blocked with the same explanation. *(Verified 2026-09-24.)*
+- **No edits for as long as an election is in progress — including during a Pause Polling break.** Add / edit / delete from Manage Candidates are all blocked with the same explanation, whether polling is open or paused. *(Fixed 2026-09-24: previously this checked only "is polling open right now," so pausing — a routine lunch-break action — silently unlocked candidate edits mid-election, even though the wizard's own "Candidates will be locked" step implied otherwise. Verified against a live server: blocked while open, blocked while paused, blocked again once re-started, allowed only after End the Election Process.)*
 - **Empty post blocks Open Poll.** Blocked with a message naming the post; add a candidate back and it opens. *(Verified 2026-09-24.)*
 - **Missing photo.** The voting screen shows a sensible placeholder, not a broken image.
 
@@ -137,6 +140,9 @@ Re-run before every real polling day. Everything below is verified working as de
 - **Back button** cannot un-confirm a vote or reopen the ballot — the confirmation is in-app state, not browser history. Refresh is the meaningful test, not Back.
 
 ### Poll lifecycle
+- **"Pause Polling" and "Re-start Polling" are now one button** that swaps its own label (2026-09-24) — red "⏸ Pause Polling" while voting is live, green "▶ Re-start Polling" while paused, in the same spot, rather than two separate buttons where one was always greyed out.
+- **What Pause actually means, stated plainly on the Dashboard itself** (below the button, 2026-09-24): pausing only ever removes the ability to activate or submit a ballot, temporarily. It does **not** end the election — everything that stays locked for the whole election (Manage Candidates, switching election type) stays locked through a pause exactly as it does while polling is open. Only End the Election Process changes that. See the Candidate management guardrails entry above for the bug this closes.
+- **Pausing no longer prompts "Save this election to Election History?"** (removed 2026-09-24) — that prompt predated Start/End the Election Process and treated a pause like an ending point, which it isn't. A mid-election checkpoint is still available any time via "📋 Save to Election History"; a real ending archives automatically via "End the Election Process."
 - **No duplicate history entry.** "Save to Election History" followed by End the Election Process produces one record, not two. *(Verified 2026-09-24.)*
 - **There is no "Reset Poll" / "Clear Test Votes" button anywhere in the admin dashboard any more (removed 2026-09-24).** It existed to guard against votes existing with no election recorded against them -- but the poll can only ever be opened through Start the Election Process's own final step (which starts the election in that same click) or "Re-start Polling" (which only works while a run is already active). Neither can ever produce that state, so it's unreachable through the app, and the button had nothing left to protect against. `POST /api/poll/reset` still exists on the server as a maintenance-only escape hatch, not reachable from any button, for the one remaining case: someone calling the API directly rather than through the app.
 - **Close the poll mid-voting.** No new ballot can be activated afterwards, and votes already fully cast are unaffected. **Note:** an already-activated but not-yet-submitted ballot *is* invalidated the instant the poll closes — that voter cannot submit ("Invalid kiosk session token"). Plan for that if a real voter is mid-ballot when Close Poll is clicked. *(Verified 2026-09-24.)*
@@ -166,6 +172,7 @@ Re-run before every real polling day. Everything below is verified working as de
 
 Worth knowing before someone reports them as faults.
 
+- **What "Pause Polling" means, precisely:** pausing removes only the ability to vote, temporarily. The election itself stays fully in progress for the whole time it's paused — the same as while polling is open — right up until End the Election Process. Nothing that's locked for the duration of an election (candidates, the election type) becomes available just because polling happens to be paused.
 - **There is no "Reset Poll" button any more.** It used to sit, prominent and orange, next to the report buttons in "Records & Reports" -- but the poll can only ever be opened through Start the Election Process (which starts the election in the same click), so there was never a way to reach the state it was meant to fix. Use **End the Election Process** to finish an election properly; it saves the final result and clears the votes together, on its own.
 - **An officer code's vote count goes to zero when an election ends.** Expected: the votes were archived and cleared. That election's turnout is preserved in its Election History entry.
 - **The banner disappears the moment an election ends.** Expected: there is no election open to vote in, so there is nothing to announce.
@@ -183,3 +190,4 @@ Worth knowing before someone reports them as faults.
 - **2026-09-24 — the guard was widened to the whole election, not just the poll being open.** Pause Polling stops voting but does not end the election, so a routine pause (a lunch break) was enough to make the button active again while an election was still genuinely in progress, wiping its votes with no warning. It's now blocked for as long as the green "ELECTION IN PROGRESS" box is showing, paused or not. Verified against a live server: blocked immediately on Pause Polling, works again immediately after End the Election Process.
 - **2026-09-24 — Reset Poll removed from the dashboard entirely.** Checked whether the poll can ever actually be opened without a formal election already running (i.e. whether "stray votes" are reachable through the app at all) -- it can't: the only two places that open the poll are Start the Election Process's final step, which always starts the election first in the same click, and "Re-start Polling," which is disabled unless a run is already active. So the state Reset Poll existed to clean up cannot occur through the app, and there was nothing left for a button to do. Removed the button (and its now-dead handler) rather than relabelling it again; `POST /api/poll/reset` remains server-side, unreachable from any button, as a maintenance-only escape hatch for the one remaining case -- someone calling the API directly.
 - **2026-09-24 — script restructured** into Part 0 (prep) / Part 1 (live demo) / Part 2 (regression) / Part 3 (known behaviours), with the Dwarka/AN branch split folded into the main demo rather than left as a footnote.
+- **2026-09-24 — "Pause" was checked against a precise definition, and the app didn't fully match it.** Pausing polling must mean exactly one thing: no new ballot can be activated or submitted, and nothing else about the election changes -- everything locked for the whole election stays locked through a pause. Checked this directly: Manage Candidates' add/edit/delete guard checked only "is polling open right now," so a Pause Polling break silently unlocked candidate edits mid-election, letting a candidate someone had already voted for be deleted before voting resumed -- contradicting the wizard's own "Candidates will be locked" step. Fixed to check whether an election is in progress at all, not just whether polling happens to be open at this instant (same reasoning as the Reset Poll fix above). Also found the "Pause Polling" button prompted "Save this election to Election History?" on every use -- a leftover from before Start/End the Election Process existed, that treated a routine pause like an ending point. Removed that prompt, and merged "Pause Polling"/"Re-start Polling" into one button that swaps its own label, with the definition of what pausing does and doesn't mean spelled out on the Dashboard itself, next to the button.

@@ -727,45 +727,27 @@ export const AdminLandingPage = (): JSX.Element => {
       }
     }
 
-    let closedElectionType: ElectionType | null = null;
+    // Deliberately does NOT offer to save to Election History on pausing
+    // (removed 2026-09-24) -- this action is Pause Polling now, not a
+    // separate "Close Poll" that used to double as how an election ended
+    // before Start/End the Election Process existed. Prompting "save this
+    // election to history?" on every pause implied a pause was some kind of
+    // ending point, which it isn't -- the election is still fully in
+    // progress. Anyone wanting a checkpoint mid-election already has "📋 Save
+    // to Election History" for that, and a real ending goes through "End the
+    // Election Process," which archives automatically on its own.
     try {
       setLoading(true);
       setError(null);
       setMessage(null);
       await (action === 'open' ? openPoll(adminSecret) : closePoll(adminSecret));
       setMessage(`Polling ${action === 'open' ? 're-started' : 'paused'} successfully.`);
-      if (action === 'close') {
-        closedElectionType = pollStatus?.activeElectionType ?? null;
-      }
       // Reload everything to ensure consistency
       await loadDashboard();
     } catch (mutationError) {
       setError(mutationError instanceof Error ? mutationError.message : 'Action failed');
-      return;
     } finally {
       setLoading(false);
-    }
-
-    // Closing doesn't touch votes or create a history record on its own --
-    // only Reset Poll / Switch Election Type do, as a side effect of
-    // clearing votes. Offer to save one now, while it's top of mind, so a
-    // closed election isn't silently missing from Election History until
-    // someone remembers to Reset. Cancel skips entirely; OK with a blank
-    // name still saves, just unnamed.
-    if (closedElectionType) {
-      const name = window.prompt(
-        'Save this election to Election History?\n\nEnter a name (e.g. "House Elections -- Term 1 2026"), or leave blank and click OK to save without one. Votes are not affected, and you can do this anytime later with "Save to Election History". Click Cancel to skip for now.',
-        `${closedElectionType === 'house' ? 'House' : 'School'} Election -- ${new Date().toLocaleDateString('en-GB')}`
-      );
-      if (name !== null) {
-        try {
-          await saveElectionToHistory(adminSecret, name.trim() || undefined);
-          setMessage('Poll closed. Saved to Election History.');
-          await loadArchives();
-        } catch (saveError) {
-          setError(saveError instanceof Error ? saveError.message : 'Failed to save to Election History');
-        }
-      }
     }
   };
 
@@ -1207,30 +1189,35 @@ export const AdminLandingPage = (): JSX.Element => {
               For pausing/resuming voting within the election currently in progress -- opening the very first poll
               of a new election happens through "Start the Election Process" above.
             </p>
+            {/* Spells out what "Pause" actually means, in the one place an
+                admin is looking right before they click it -- pausing only
+                ever removes the ability to vote, temporarily; nothing that's
+                locked for the whole election (Manage Candidates, switching
+                election type) becomes available just because polling is
+                paused. Only "End the Election Process" changes that. */}
+            <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
+              <strong>Pause</strong> only stops new ballots from being activated or submitted -- the election stays
+              fully in progress the whole time it's paused (candidates stay locked, the election type can't be
+              switched). Re-start reverses only that. Nothing else changes until End the Election Process.
+            </p>
             <div className="admin-actions">
               <button
                 className="button"
-                onClick={() => mutatePoll('open')}
-                disabled={loading || !currentRun || pollStatus?.settings.isOpen === true}
-                style={{ opacity: pollStatus?.settings.isOpen === true ? 0.5 : 1 }}
+                onClick={() => mutatePoll(pollStatus?.settings.isOpen ? 'close' : 'open')}
+                disabled={loading || !currentRun}
+                style={{
+                  backgroundColor: pollStatus?.settings.isOpen ? '#dc2626' : '#16a34a',
+                  opacity: !currentRun ? 0.5 : 1
+                }}
                 title={
-                  pollStatus?.settings.isOpen === true
-                    ? 'Voting is already running'
-                    : !currentRun
+                  !currentRun
                     ? 'Start the election process first'
+                    : pollStatus?.settings.isOpen
+                    ? 'Pause voting -- safe and reversible, will not affect votes already cast'
                     : 'Resume voting'
                 }
               >
-                ▶ Re-start Polling
-              </button>
-              <button
-                className="button"
-                onClick={() => mutatePoll('close')}
-                disabled={loading || pollStatus?.settings.isOpen !== true}
-                style={{ backgroundColor: '#dc2626', opacity: pollStatus?.settings.isOpen !== true ? 0.5 : 1 }}
-                title={pollStatus?.settings.isOpen !== true ? 'Voting is already paused' : 'Pause voting'}
-              >
-                ⏸ Pause Polling
+                {pollStatus?.settings.isOpen ? '⏸ Pause Polling' : '▶ Re-start Polling'}
               </button>
               <button className="button" onClick={() => void loadDashboard()} disabled={loading} style={{ backgroundColor: '#6b7280', opacity: loading ? 0.5 : 1 }}>
                 Refresh this Page
