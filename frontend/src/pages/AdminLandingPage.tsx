@@ -1207,8 +1207,10 @@ export const AdminLandingPage = (): JSX.Element => {
                     "Re-start Polling" below, which itself only works while a
                     run is active -- so there is no path through this app that
                     produces votes with no election recorded against them.
-                    Every vote that can exist here was cast during a run, and
-                    every run's own Close clears its votes. If leftover votes
+                    Every vote that can exist here was cast during a run. A
+                    run's End of Voting deliberately leaves its final tally in
+                    place (since 2026-09-24); the next Start of that election
+                    type is what resets it to zero. If leftover votes
                     are ever found with no run active (only reachable by
                     calling the API directly, bypassing this app), POST
                     /api/poll/reset still exists server-side as a maintenance
@@ -1803,9 +1805,7 @@ export const AdminLandingPage = (): JSX.Element => {
       <div className="admin-panel">
         <h2>Election History</h2>
         <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
-          A snapshot of results and polling-officer turnout is saved here automatically every time "Reset Poll" is
-          used, so a completed election's record survives even after votes are cleared or the election type is
-          switched.
+          Each election's final results and polling-officer turnout are saved here automatically at End of Voting.
         </p>
         {archives.length === 0 ? (
           <p>No past elections have been archived yet.</p>

@@ -44,10 +44,21 @@ Manages elections for **3 house-level posts**:
 8. Shanti
 
 ### House Elections Workflow
-- **One-time house selection per booth** — the polling officer picks a house once;
-  every subsequent voter at that station skips straight to activation
+- **Every House code is tied to one house** at the moment it is created, so the
+  ballot opens straight into that house — no house-selection step at the booth
 - Separate candidate pools per house and post
 - House-wise results display, grouped in the fixed order above
+
+---
+
+## 🏢 Two Branches: Dwarka and AN
+
+- Candidates, officer codes and votes each belong to one branch — **Dwarka** or
+  **AN**. A voter only ever sees their own branch's candidates; the branch comes
+  from the officer code used to unlock the ballot, and is enforced by the server.
+- One election covers both branches at once (one Start, one End of Voting).
+- The admin dashboard has a **Dwarka / AN** toggle on Manage Candidates, Live
+  Results and Polling Officer Codes, and every report can be printed per branch.
 
 ---
 
@@ -55,24 +66,26 @@ Manages elections for **3 house-level posts**:
 
 ### Voting Flow (both election types)
 
-1. **Welcome Page** — landing screen; for house elections, redirects to house
-   selection the first time only.
-2. **House Selection** (house elections only, one-time, by polling officer)
-3. **Activation Page** — the polling officer enters their personal **6-character
-   activation code** 
-   A single-use ballot session token is issued.
-4. **Voting screen, styled as an EVM ballot unit** — one post at a time, presented as
+1. **Welcome Page** — "Welcome to the Polling Booth", with the **Officer
+   Activation** button and a small "Close polling at this booth" link.
+2. **Activation Page** — the polling officer enters their personal **6-character
+   code**. It is refused if the code has no officer name yet, has been closed,
+   is for the other election type, or if polling is paused. A single-use ballot
+   session is issued.
+3. **Voting screen, styled as an EVM ballot unit** — one post at a time, presented as
    a stylized electronic-voting-machine panel: a numbered row per candidate with the
    candidate's photo (or a default silhouette), a blue "vote" button, and a red
    indicator LED that lights up on selection. Must pick one candidate per post before
    moving on; Previous/Next navigation between posts.
-5. **Review screen** — after the last post, every selection is shown on one screen
+4. **Review screen** — after the last post, every selection is shown on one screen
    (post name, candidate photo, candidate name) with a per-post **Change** button that
    jumps back to that post and returns to the review screen afterward. Nothing is
    submitted until "Submit Ballot" is pressed here.
-6. **Confirmation** — simple "Vote Recorded" receipt plus the requesting officer's **running
+5. **Confirmation** — simple "Vote Recorded" receipt plus the officer's **running
    vote count for their station**, so they can cross-check against a physical voter
    list. "Finish" clears the session for the next voter.
+6. **Close polling at this booth** — the officer enters their code once they're
+   done for the day; the code then stops working until the administrator reopens it.
 
 ### Candidate Photos
 - Candidates can have a photo, uploaded from the admin "Manage Candidates" **Edit**
@@ -82,15 +95,16 @@ Manages elections for **3 house-level posts**:
 
 ### Voting Security Features
 - **Per-officer single-use tokens**: each activation creates a unique session token
-- **Token expiration**: tokens expire after 5 minutes if unused, with an
-  on-screen warning banner once the last 90 seconds are reached
+- **Token expiration**: tokens expire after 5 minutes, with an on-screen warning
+  banner once the last 90 seconds are reached
 - **Consumed tokens**: invalidated immediately after a vote is submitted
+- **Branch and house come from the code, not the kiosk**: a ballot can only be
+  cast for candidates of the code's own branch (and house)
 - **No demo candidates**: a brand-new election starts with zero candidates
-  everywhere (no placeholder names to accidentally leave in front of real
-  voters); Open Poll is blocked until every post (and, for house elections,
+  everywhere; the poll cannot open until every post (and, for house elections,
   every house/post pair) has at least one real candidate
-- **Poll state validation**: cannot activate a ballot if the poll is closed by Chief Election Commisioner. 
-- **Election type validation**: cannot activate if no election type is active
+- **Poll state validation**: a ballot cannot be activated or submitted while
+  polling is paused or no election is under way
 
 ---
 
@@ -98,95 +112,118 @@ Manages elections for **3 house-level posts**:
 
 ### Access Control
 - The entire admin dashboard is **hidden behind a password screen**. Nothing about
-  poll status, candidates, or results is visible or fetched until the admin secret is
-  verified against the server.
+  poll status, candidates, or results is shown until the admin secret is verified
+  against the server.
 - The verified secret is kept for the browser tab (`sessionStorage`) so it doesn't
   need to be re-entered on every page reload; "Log out" clears it.
+- **One admin terminal at a time**: logging in on a second device offers "Take
+  Over This Terminal", which signs the first device out.
 
-### Election Type Management
-- **Toggle between School and House Elections** — only one is active at a time
-- Switching types requires the poll to be closed first, and clears active kiosk
-  sessions
-- Color-coded buttons show which type is active; disabled while the poll is open
-
-### Poll Controls
-- **Open Poll** / **Close Poll** (with a confirmation dialog) / **Reset Poll**
-  (only when closed, with a confirmation dialog) / **Refresh** (manual
-  refresh of the whole dashboard)
-- **Reset Poll** now archives the current results to Election History
-  automatically before clearing votes, so nothing is lost — see below
-- All poll-changing actions require the admin secret and confirm destructive ones
+### Running an Election (Dashboard tab)
+- **🗳️ Start the Voting Process (School / House)** — a step-by-step wizard:
+  choose School or House → vote counts will reset to zero → officer codes ready
+  (shows the count per branch, and how many are unnamed) → codes allotted →
+  candidates will be locked → name this election → **Open the Poll**. It can be
+  abandoned at any step with **Abort**.
+- While an election is running, a green **ELECTION IN PROGRESS** banner shows
+  its name, type, start time and who started it.
+- **⏸ Pause Polling / ▶ Re-start Polling** — one button; pausing stops all voting
+  (and cancels any ballot in progress) without ending the election.
+- **⏹ End of Voting** — saves the final result to Election History, closes the
+  poll and ends the Activity Log recording. The final vote counts stay on screen
+  until the next election of the same type is started.
+- Candidates are locked for the whole election, including while paused.
+- **Storage** card — confirms changes are durably saved; a red banner appears at
+  the top if saves start failing.
 
 ### Manage Candidates
-- **School view**: candidates grouped by post (HB, HG, SSC, SRC, SCC)
+- **🏫 School Posts / 🏠 House Posts** and **Dwarka / AN** toggles
+- **School view**: one post per row (HB, HG, SSC, SRC, SCC)
 - **House view**: all 8 houses in a fixed order, each with its 3 posts (HC, HCC, HSC)
-  listed vertically
-- **Add candidate**: name only, per post (and house, for house elections)
+- **Add candidate**: name only, per post (and house, for house elections), into
+  the selected branch
 - **Edit candidate**: update the name and/or **photo**,
   or "Remove photo" to fall back to the silhouette
 - **Delete candidate**: with a confirmation prompt
+- All changes are blocked while an election is in progress
 
-### Results Overview
-- Results grouped by post, or by house then post
+### Live Results
+- **🏫 School Posts / 🏠 House Posts** and **Dwarka / AN** toggles
 - Candidates sorted **leading-candidate-first** within each post, with the current
-  leader highlighted in green
-- Vote badges with singular/plural handling ("1 vote" / "3 votes")
-- **Auto-refreshes vote counts every 3 seconds** while the poll is open — and only
-  vote counts. It does not touch poll status, candidate data, or any in-progress
-  admin edit, so an admin can safely add/edit a candidate or a polling officer's name
-  while voting is underway without losing what they're typing.
-- Manual "Refresh" always available; auto-refresh stops automatically once the poll
-  is closed
+  leader highlighted; a per-post total under each post, and the overall ballot
+  count in the header
+- **Auto-refreshes every 3 seconds** while polling is open (vote counts only —
+  it never disturbs an admin who is mid-edit elsewhere); manual "Refresh" always
+  available
+- **🖥️ Present Full Screen** — a clean projector view without the toggles
 
-### Per-Officer Activation Codes
-
-- **Generate codes**: enter how many new codes to add and click "Generate Codes".
-  Each is a random 6-character code (ambiguous characters like `I`/`O`/`0`/`1`
-  excluded so it's easy to read aloud or copy by hand). **Generating always adds to
-  the existing list — it never replaces or clears previously generated codes.**
-- **Name a code**: attach a polling officer's name to a code for reference
-- **Delete a code**: revokes that officer's ability to activate a kiosk, with a
-  confirmation prompt
-- **Live "Votes Cast" column**: shows each code's running vote total, refreshed every
-  3 seconds while the poll is open
+### Polling Officer Codes
+- **📋 Bulk Allot from List**: upload a teacher list (Excel) — name, WhatsApp
+  number, School duty, House duty — and a named code is created for every duty in
+  one go, with a WhatsApp link per teacher to send it
+- **Generate codes**: for House (the same number for all 8 houses, or top up one
+  house) or for School posts, into the selected branch. Each is a random
+  6-character lowercase code (confusable characters `i`, `l`, `o`, `0`, `1`
+  excluded; matching ignores capitals). **Generating always adds to the existing
+  list — it never replaces or clears previously generated codes.**
+- **Name a code**: a code cannot unlock a ballot until an officer's name is saved
+  against it
+- **Close / Reopen** a code directly from this tab (same effect as the officer's
+  own "Close polling at this booth")
+- **Delete a code**: allowed only if no vote has been cast under it; otherwise
+  close it instead
+- **Live "Votes Cast" column**, refreshed every 3 seconds while polling is open
+- Codes carry forward from one election to the next; a code closed at the end of
+  one election is automatically reopened when the next election of its type starts
+- **🖨️ Print Dwarka/AN Code List**: a printable "who has which code" roster per branch
+- **🖨️ Print Officer Turnout**: code, officer name and votes cast, while an
+  election is under way
 - Because each code is tied to one officer/station, votes can be traced back to a
   station for auditing without ever recording which voter cast which ballot
-- **🖨️ Print Officer Turnout**: a separate, always-available printable report of
-  just the officer/station turnout table (code, officer name, votes cast) — for
-  whoever wants that on its own, without candidate results attached
 
 ### Election History & Reports
-- **Download Report (current results)**: a printable, **results-only** report for
-  the currently active election, any time — school post-wise, or house-then-post
-  for house elections. Opens in a new tab; "Print / Save as PDF" uses the
-  browser's own print dialog, so no extra software is needed. Officer turnout is
-  deliberately not on this page — see "Print Officer Turnout" above for that.
-- **Auto-archived on Reset or Switch Election Type**: right before votes are
-  cleared, a full snapshot (results **and** officer turnout together) is saved
-  permanently, so a completed election's record survives. The admin is prompted
-  to give it a meaningful name (e.g. "School Council — Term 1 2026") at that
-  moment; leaving it blank is fine, and a name can be added or fixed later.
-- **Election History** panel lists every past snapshot (name, date, election
-  type, total votes), with the name editable inline at any time, and
-  "View / Print" (full report: results + turnout together, since this is the
-  permanent historical record) and **Delete** (with a confirmation prompt) for
-  each entry — e.g. to clear out test/junk snapshots left behind by a
-  teacher testing round before real polling day.
+- **🖨️ Download Dwarka Report / Download AN Report** (Dashboard): a printable,
+  **results-only** report — the live results while an election is running, or the
+  most recently finished election once voting has ended. "Print / Save as PDF"
+  uses the browser's own print dialog.
+- **Saved automatically at End of Voting**, under the election's own name: a full
+  snapshot of results **and** officer turnout.
+- **📋 Save to Election History**: an optional mid-election checkpoint, without
+  affecting any votes.
+- **Election History** tab lists every saved election (name, date, type, total
+  votes), with the name editable inline, and **View/Print Dwarka** / **View/Print
+  AN** for each — with an "Include polling officer turnout" tick box.
+- The Delete button is intentionally hidden; removing a test entry needs a developer.
+
+### Activity Log
+- A permanent record of every admin action taken between Start the Voting Process
+  and End of Voting (code generation, naming, closing, reopening, deletion; pause
+  and re-start; saves to history; admin logins and takeovers), plus officers
+  closing their own booths. Nothing in it can be edited or deleted.
+- Click an election's name to see its log, or search by election, type, branch,
+  code, actor or action. **👥 Who were the polling officers?** and **Admin actions
+  only** are one-click filters.
 
 ---
 
 ## 🔐 Security Features
 
 ### Authentication & Authorization
-- **Admin Secret** required to view the admin dashboard at
-  all, and for every poll/candidate/officer-code mutation
+- **Admin Secret** required to view the admin dashboard at all, and for every
+  election, candidate, officer-code and report action — checked in constant time
+- **Single admin session**: even with the secret, only the device currently
+  holding the admin console can act
 - **Per-officer activation codes**: each polling officer/station gets their own
-  6-character code (generated and managed from the admin dashboard) 
+  6-character code (generated and managed from the admin dashboard)
+- **Rate limiting**: repeated wrong admin secrets (20 per 10 minutes) or wrong
+  officer codes (30 per 10 minutes) from one network are temporarily blocked
+- Standard security headers (Helmet)
 
 ### Data Protection
-
-- Cannot vote when the poll is closed; cannot activate without a valid, unrevoked
-  officer code
+- Cannot vote while polling is paused; cannot activate without a valid, named,
+  open officer code of the right election type
+- The server refuses to start if any stored vote record fails validation, rather
+  than silently dropping it
 
 ---
 
@@ -207,7 +244,7 @@ Manages elections for **3 house-level posts**:
 - Modular routes/services/middleware structure
 - Centralized error-handling middleware translating internal errors into
   human-readable API responses
-- CORS enabled
+- No CORS: the frontend is served from the same Express server
 
 ### Frontend Architecture
 - **React + TypeScript**, built with **Vite**
@@ -218,50 +255,58 @@ Manages elections for **3 house-level posts**:
 
 ### API Endpoints
 
+"Admin" below means the request needs the admin secret **and** must come from
+the device currently holding the admin console.
+
 #### Admin
-- `POST /api/admin/verify` — check the admin secret is correct (used to gate the
-  dashboard) before revealing any content
-- `GET /api/admin/storage-health` — whether the last save to Firestore/disk
-  succeeded, and when; backs the Dashboard tab's Storage status indicator
+- `POST /api/admin/verify` — check the admin secret and claim the admin console
+  (`x-admin-force: true` takes it over from another device)
+- `POST /api/admin/logout` — release the admin console
+- `GET /api/admin/storage-health` — whether the last save succeeded, and when (admin)
 
-#### Poll Management
-- `GET /api/poll` — get poll status
-- `POST /api/poll/open` / `close` — admin secret required
-- `POST /api/poll/reset` / `set-type` — admin secret required; accepts an
-  optional `name` used to label the archive snapshot this may create
+#### Elections (all admin)
+- `GET /api/election-runs/current` — the election in progress, if any
+- `GET /api/election-runs` — every election, newest first
+- `POST /api/election-runs/start` — Start the Voting Process
+- `POST /api/election-runs/close` — End of Voting
+- `GET /api/election-runs/:id/log` — one election's Activity Log
+- `GET /api/election-runs/log/search` — search the Activity Log
 
-#### Kiosk Operations
-- `POST /api/kiosk/activate` — activate a ballot with an officer code (+ house, for
-  house elections)
-- `POST /api/kiosk/deactivate` — end a session
+#### Poll
+- `GET /api/poll` — poll status (public)
+- `POST /api/poll/set-type` — choose School/House (wizard step 1) (admin)
+- `POST /api/poll/open` / `close` — open / pause polling (admin)
+- `POST /api/poll/reset` — maintenance only; no button in the app, and refused
+  while an election is in progress (admin)
 
-#### Voting
-- `POST /api/votes` — submit a vote (requires kiosk session token)
+#### Kiosk & Voting
+- `POST /api/kiosk/activate` — unlock a ballot with an officer code
+- `POST /api/kiosk/deactivate` — end a ballot session
+- `POST /api/kiosk/close-booth` — officer closes their own code
+- `POST /api/votes` — submit a vote (requires the kiosk session token)
 
-#### Candidates
-- `GET /api/posts` — posts + candidates for the active election (and house, if set)
+#### Candidates & Results
+- `GET /api/posts` — posts + candidates for the active election (optional
+  `house`, `branch`) (public)
 - `POST /api/candidates` / `PUT /api/candidates/:id` / `DELETE /api/candidates/:id`
-  — admin secret required; `PUT`/`POST` accept an optional photo (`imageUrl`)
+  — admin; refused while an election is in progress
+- `GET /api/results` — tallies (optional `house`, `branch`, `electionType`) —
+  currently public, see Known Issues
 
-#### Results
-- `GET /api/results` — results for the active election type (optional house filter)
+#### Polling Officer Codes (all admin)
+- `GET /api/officer-codes` — list codes with live vote counts
+- `POST /api/officer-codes/generate` — generate `count` new codes
+- `POST /api/officer-codes/bulk-allot` — create and name codes from a teacher list
+- `PUT /api/officer-codes/:code` — set an officer's name
+- `POST /api/officer-codes/:code/close` / `reopen`
+- `DELETE /api/officer-codes/:code` — only if no votes were cast under it
 
-#### Polling Officer Codes
-- `GET /api/officer-codes` — list codes with live vote counts (admin secret
-  required)
-- `POST /api/officer-codes/generate` — generate `count` new codes, added to the
-  existing list
-- `PUT /api/officer-codes/:code` — update an officer's name
-- `DELETE /api/officer-codes/:code` — revoke a code
-
-#### Reports
-- `GET /api/report/current` — live, unpersisted snapshot of the active
-  election (admin secret required)
-- `GET /api/report/archives` — list past snapshots (includes each one's name,
-  if set)
-- `GET /api/report/archives/:id` — one full past snapshot
-- `PUT /api/report/archives/:id` — set/change an archive's name
-- `DELETE /api/report/archives/:id` — permanently remove one archive
+#### Reports (all admin; optional `?branch=dwarka|AN`)
+- `GET /api/report/current` — live snapshot, or the last finished election
+- `POST /api/report/archives` — save a checkpoint to Election History
+- `GET /api/report/archives` / `GET /api/report/archives/:id`
+- `PUT /api/report/archives/:id` — rename
+- `DELETE /api/report/archives/:id` — no button in the app
 
 #### Health
 - `GET /api/health` — liveness check (used by Cloud Run)
@@ -281,17 +326,30 @@ Manages elections for **3 house-level posts**:
   Federation (no long-lived service-account keys in GitHub)
 - Runs with `--max-instances=1` (required — election state lives in a single
   in-memory document, mirrored to Firestore, so two instances would diverge)
-- Firestore document `school-election/state` holds the entire election
-  dataset, including archived reports
+- Firestore document `school-election/state` holds candidates, poll state,
+  officer codes and Election History; votes, elections and the Activity Log are
+  stored as separate documents in its `votes`, `electionRuns` and `actionLog`
+  subcollections (so vote volume never hits Firestore's per-document size limit)
 
 ---
 
 ## ⚠️ Known Issues
 
-None currently tracked. (The previously-noted unused `manifesto` and
-officer-code `label` fields were removed on 2026-09-21 rather than finished,
-since neither had an admin UI.)
+Found in the 2026-09-23 walkthrough; fixes pending. See ROLLOUT-CHECKLIST.md
+"Current Limitations" for the workarounds.
+
+- If a post has no candidate, Start the Voting Process starts the election but
+  cannot open the poll, and candidates are then locked until End of Voting.
+- The "every post has a candidate" check ignores branches, so the poll can open
+  with AN empty.
+- `GET /api/results` does not require the admin secret.
+- Choosing School/House in the wizard takes effect immediately, even if the
+  wizard is then aborted.
+- Two consecutive zero-vote elections of the same type share one Election
+  History entry.
+- One malformed candidate, officer-code or history record in storage causes that
+  whole list to be discarded on the next server restart.
 
 ---
 
-*Last updated: 2026-09-22, reflecting `main`.*
+*Last updated: 2026-09-23, reflecting `main`.*

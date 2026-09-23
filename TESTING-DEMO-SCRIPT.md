@@ -21,13 +21,13 @@ Keep adding to this file as new scenarios come up.
 
 The single biggest thing that makes a demo drag is doing setup work in front of an audience. Get all of this done first, so Part 1 opens on a clean, ready system.
 
-1. **Candidates entered for both branches.** Manage Candidates → add at least 2 dummy candidates for every School post (HB, HG, SSC, SRC, SCC) and every House post (HC, HCC, HSC) in every house — **once under the Dwarka sub-tab and once under the AN sub-tab**. Put a photo on a few of them and deliberately leave others without one, so the placeholder can be shown.
-2. **Officer codes generated and allotted.** Polling Officer Codes tab → generate at least: one School code for Dwarka, one School code for AN, and one code per house. **Give every code an officer name** — an un-named code cannot activate a ballot at all. Use "Print Code Allotment List" to have the slips ready to hand out.
+1. **Candidates entered for both branches.** Manage Candidates → add at least 3 dummy candidates for every School post (HB, HG, SSC, SRC, SCC) and every House post (HC, HCC, HSC) in every house — **once under the Dwarka sub-tab and once under the AN sub-tab**. Put a photo on a few of them and deliberately leave others without one, so the placeholder can be shown. (Photo will be added next year when we can handle large data associated with it).
+2. **Officer codes generated and allotted.** Polling Officer Codes tab → generate at least: one School code for Dwarka, (for everyone to copy from screen and vote), few school code for Dwarka (to be allotted to staffroom incharge as polling officer), one School code for AN, and one code per house. **Give every code an officer name** (actual incharge) — an un-named code cannot activate a ballot at all. Use "Print Code Allotment List" to have the slips ready to hand out.
 3. **Nothing left running.** Dashboard should show no active election, poll closed, no banner at the top. If an old recording is still active, use End of Voting first.
-4. **Devices.** Have the admin dashboard on the projector, one teacher's phone ready for the single-voter demo, and everyone else's phones on the school wifi with the URL already open.
+4. **Devices.** Have the admin dashboard on the projector, one teacher's phone ready for the single-voter demo, and everyone else's phones with the URL already open.
 5. **Keep one code back.** Hold one named, unused School code aside — you'll need it for the "wrong code type" demo in Part 1 and it must not have been handed out.
 
-> **There is no "Reset Poll" button in this demo — it was removed.** The poll can only ever be opened through Start the Voting Process itself, so there is no path through the app that produces votes with no election recorded against them; the button it used to protect against never had anything to do. **End of Voting** is the only, and correct, way to finish any election. (See Part 3.)
+> **There is no "Reset Poll" button in this demo — it was removed.** The poll can only ever be opened through "Start the Voting Process". **End of Voting** is the only, and correct, way to finish any election. (See Part 3.)
 
 ---
 
@@ -38,7 +38,7 @@ Each step has a one-line **Say:** cue — the point staff should take away — s
 ### Act 1 — Only one person controls the election
 
 1. **Single-terminal lock.** Log in to the super admin from one device, then log in again from a second device. The second login shows an "already open on another device" prompt with a **Take Over** option — confirm it, and the first device is logged out. Entering the secret on a second device does **not** silently evict the first; someone has to deliberately take over.
-   **Say:** *Only one terminal can control the election at a time, and taking control from someone else is a deliberate act that gets recorded in the log.*
+   **Say:** *Only one terminal can control the election at a time, and taking control from someone else is a deliberate act act that gets recorded in the log.(only if voting is going on).*
 2. Log back in on the main device and carry on from there.
 
 ### Act 2 — Setting up an election
@@ -46,7 +46,7 @@ Each step has a one-line **Say:** cue — the point staff should take away — s
 3. **Show the prep already in place.** Walk through Manage Candidates, and use the **School / House toggle** at the top of the tab to switch between the two sets of candidates, and the **Dwarka / AN** sub-tab to switch branches. Four combinations, one screen.
    **Say:** *Candidates and officer codes are prep work. They're entered once and stay put — they are not wiped when an election ends.*
 4. **Start the Voting Process.** Dashboard → **🗳️ Start the Voting Process**. On the wizard's first step pick **School**. Note the indicator now showing "🏫 School Election chosen" on every step of the wizard. Then click **Abort** to back out without opening the poll.
-   **Say:** *Picking the type takes effect straight away, but nothing can be voted on until the poll is actually opened — notice there's still no banner at the top of the screen.*
+   **Say:** *nothing can be voted on until the poll is actually opened.*
 5. **Un-named codes can't vote.** If you have an un-named code to hand, try it at Activate Ballot — it's refused with "has not yet been allotted to a polling officer", before any other check.
    **Say:** *A code is useless until it's been allotted to a named person. That's the audit trail.*
 
