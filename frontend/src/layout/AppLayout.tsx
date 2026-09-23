@@ -15,6 +15,9 @@ const POLL_STATUS_REFRESH_MS = 5000;
 
 export const AppLayout = ({ children }: PropsWithChildren): JSX.Element => {
   const [electionType, setElectionType] = useState<ElectionType | null>(null);
+  // Gates the banner on a genuinely active election, not just a leftover
+  // activeElectionType value -- see PollStatus.hasActiveRun.
+  const [hasActiveRun, setHasActiveRun] = useState(false);
   const location = useLocation();
   const { stationVoteCount, house } = useKiosk();
 
@@ -26,6 +29,7 @@ export const AppLayout = ({ children }: PropsWithChildren): JSX.Element => {
         const { poll } = await getPollStatus();
         if (!cancelled) {
           setElectionType(poll.activeElectionType);
+          setHasActiveRun(poll.hasActiveRun);
         }
       } catch {
         // Non-fatal -- the banner just stays hidden until the next poll.
@@ -43,11 +47,11 @@ export const AppLayout = ({ children }: PropsWithChildren): JSX.Element => {
   const showStationCount = location.pathname.startsWith('/kiosk') && typeof stationVoteCount === 'number';
   const isKioskRoute = location.pathname.startsWith('/kiosk');
   const bannerText =
-    electionType === 'house' && house && isKioskRoute
+    !hasActiveRun || !electionType
+      ? null
+      : electionType === 'house' && house && isKioskRoute
       ? `Election for House Posts — ${house} House`
-      : electionType
-      ? ELECTION_TYPE_LABEL[electionType]
-      : null;
+      : ELECTION_TYPE_LABEL[electionType];
 
   return (
     <div className="app-shell">

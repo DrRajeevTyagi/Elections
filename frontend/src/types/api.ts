@@ -33,6 +33,11 @@ export interface PollStatus {
     isOpen: boolean;
     allowRevote: boolean;
   };
+  // True only while an election is actually in progress (a run is active)
+  // -- activeElectionType can stay set even once nothing is running, so
+  // the "Election for X Posts" banner (AppLayout.tsx) must gate on this,
+  // not on activeElectionType alone.
+  hasActiveRun: boolean;
 }
 
 export interface PollResponse {

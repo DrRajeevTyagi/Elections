@@ -10,7 +10,18 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError, ConflictError } from '../utils/httpError.js';
 import type { PollState, ElectionType } from '../types/election.js';
 
-const sanitizePoll = ({ activeElectionType, settings }: PollState) => ({ activeElectionType, settings });
+// hasActiveRun lets the public banner (AppLayout.tsx, admin dashboard AND
+// kiosk) know whether activeElectionType currently means something real,
+// vs. a leftover value from a run that has since closed -- activeElectionType
+// itself is never reset to null on every path that ends an election (Reset
+// Poll doesn't touch it, and pre-existing stray values from before this
+// field existed will never self-correct), so the banner must not trust it
+// alone. See ROADMAP.md / this route's callers for the full account.
+const sanitizePoll = ({ activeElectionType, settings }: PollState) => ({
+  activeElectionType,
+  settings,
+  hasActiveRun: Boolean(dataStore.getCurrentRun())
+});
 
 export const pollRouter = Router();
 
