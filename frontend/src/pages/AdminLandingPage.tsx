@@ -1114,6 +1114,18 @@ export const AdminLandingPage = (): JSX.Element => {
                 {pollStatus.settings.isOpen ? 'Poll Open' : 'Poll Closed'}
               </span>
             )}
+            {/* Lives here, not inside "Voting" below, so it's available
+                regardless of whether an election is in progress -- the
+                Voting section itself only renders once there's actually
+                something to pause/resume. */}
+            <button
+              className="button"
+              onClick={() => void loadDashboard()}
+              disabled={loading}
+              style={{ backgroundColor: '#6b7280', padding: '0.35rem 0.75rem', fontSize: '0.85rem', opacity: loading ? 0.5 : 1 }}
+            >
+              Refresh this Page
+            </button>
           </div>
 
           <section className="dashboard-section">
@@ -1183,47 +1195,47 @@ export const AdminLandingPage = (): JSX.Element => {
             )}
           </section>
 
-          <section className="dashboard-section">
-            <h3 className="dashboard-section-title">Voting</h3>
-            <p style={{ fontSize: '0.8rem', color: '#9ca3af', marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
-              For pausing/resuming voting within the election currently in progress -- opening the very first poll
-              of a new election happens through "Start the Election Process" above.
-            </p>
-            {/* Spells out what "Pause" actually means, in the one place an
-                admin is looking right before they click it -- pausing only
-                ever removes the ability to vote, temporarily; nothing that's
-                locked for the whole election (Manage Candidates, switching
-                election type) becomes available just because polling is
-                paused. Only "End the Election Process" changes that. */}
-            <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
-              <strong>Pause</strong> only stops new ballots from being activated or submitted -- the election stays
-              fully in progress the whole time it's paused (candidates stay locked, the election type can't be
-              switched). Re-start reverses only that. Nothing else changes until End the Election Process.
-            </p>
-            <div className="admin-actions">
-              <button
-                className="button"
-                onClick={() => mutatePoll(pollStatus?.settings.isOpen ? 'close' : 'open')}
-                disabled={loading || !currentRun}
-                style={{
-                  backgroundColor: pollStatus?.settings.isOpen ? '#dc2626' : '#16a34a',
-                  opacity: !currentRun ? 0.5 : 1
-                }}
-                title={
-                  !currentRun
-                    ? 'Start the election process first'
-                    : pollStatus?.settings.isOpen
-                    ? 'Pause voting -- safe and reversible, will not affect votes already cast'
-                    : 'Resume voting'
-                }
-              >
-                {pollStatus?.settings.isOpen ? '⏸ Pause Polling' : '▶ Re-start Polling'}
-              </button>
-              <button className="button" onClick={() => void loadDashboard()} disabled={loading} style={{ backgroundColor: '#6b7280', opacity: loading ? 0.5 : 1 }}>
-                Refresh this Page
-              </button>
-            </div>
-          </section>
+          {/* This whole section only exists once there's actually an
+              election to pause/resume -- rendering it (even fully disabled)
+              while "No election is in progress" is showing right above it
+              is pure noise: a dimmed "Re-start Polling" makes no sense to
+              read when nothing has ever been started, and the explanation of
+              what pausing means has nothing to attach to yet. */}
+          {currentRun && (
+            <section className="dashboard-section">
+              <h3 className="dashboard-section-title">Voting</h3>
+              {/* Spells out what "Pause" actually means, in the one place an
+                  admin is looking right before they click it -- pausing only
+                  ever removes the ability to vote, temporarily; nothing
+                  that's locked for the whole election (Manage Candidates,
+                  switching election type) becomes available just because
+                  polling is paused. Only "End the Election Process" changes
+                  that. */}
+              <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
+                <strong>Pause</strong> only stops new ballots from being activated or submitted -- the election
+                stays fully in progress the whole time it's paused (candidates stay locked, the election type can't
+                be switched). Re-start reverses only that. Nothing else changes until End the Election Process.
+              </p>
+              <div className="admin-actions">
+                <button
+                  className="button"
+                  onClick={() => mutatePoll(pollStatus?.settings.isOpen ? 'close' : 'open')}
+                  disabled={loading}
+                  style={{ backgroundColor: pollStatus?.settings.isOpen ? '#dc2626' : '#16a34a' }}
+                  title={
+                    pollStatus?.settings.isOpen
+                      ? 'Pause voting -- safe and reversible, will not affect votes already cast'
+                      : 'Resume voting'
+                  }
+                >
+                  {pollStatus?.settings.isOpen ? '⏸ Pause Polling' : '▶ Re-start Polling'}
+                </button>
+                <button className="button" onClick={() => void loadDashboard()} disabled={loading} style={{ backgroundColor: '#6b7280', opacity: loading ? 0.5 : 1 }}>
+                  Refresh this Page
+                </button>
+              </div>
+            </section>
+          )}
 
           <section className="dashboard-section">
             <h3 className="dashboard-section-title">Records &amp; Reports</h3>
