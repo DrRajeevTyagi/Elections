@@ -145,10 +145,15 @@ const normalizeCandidateBranch = (entry: Candidate): Candidate => ({
   branch: entry.branch ?? DEFAULT_BRANCH
 });
 
-const normalizeArchiveBranch = (entry: ElectionArchive): ElectionArchive => ({
-  ...entry,
-  branch: entry.branch ?? DEFAULT_BRANCH
-});
+// Deliberately NOT branch-normalized on load, unlike candidates above. A
+// stored archive always covers BOTH branches together; its `branch` field
+// only ever means "this particular response was narrowed to that branch"
+// (see resultsService.ts filterArchiveByBranch) and is never persisted.
+// Defaulting it to 'dwarka' here made every archive come back claiming to be
+// Dwarka after a restart, so an unnarrowed report header read "Mount Carmel
+// School -- Dwarka" while listing both branches' candidates underneath. The
+// per-result/per-officer branch fields are defaulted at read time instead,
+// where the distinction actually matters.
 
 const isElectionArchive = (value: unknown): value is ElectionArchive => {
   if (typeof value !== 'object' || value === null) {
@@ -406,13 +411,12 @@ export class DataStore {
     }
 
     if (Array.isArray(parsed.archives) && parsed.archives.every((entry) => isElectionArchive(entry))) {
-      defaults.archives = parsed.archives.map((entry) =>
-        normalizeArchiveBranch({
-          ...entry,
-          results: entry.results.map((r) => ({ ...r })),
-          officerCodes: entry.officerCodes.map((o) => ({ ...o }))
-        })
-      );
+      defaults.archives = parsed.archives.map((entry) => ({
+        ...entry,
+        results: entry.results.map((r) => ({ ...r })),
+        officerCodes: entry.officerCodes.map((o) => ({ ...o })),
+        totalVotesByBranch: entry.totalVotesByBranch ? { ...entry.totalVotesByBranch } : undefined
+      }));
     }
 
     if (parsed.pollState && typeof parsed.pollState === 'object') {
@@ -769,7 +773,8 @@ export class DataStore {
     return this.data.archives.map((entry) => ({
       ...entry,
       results: entry.results.map((r) => ({ ...r })),
-      officerCodes: entry.officerCodes.map((o) => ({ ...o }))
+      officerCodes: entry.officerCodes.map((o) => ({ ...o })),
+      totalVotesByBranch: entry.totalVotesByBranch ? { ...entry.totalVotesByBranch } : undefined
     }));
   }
 
@@ -781,7 +786,8 @@ export class DataStore {
     return {
       ...entry,
       results: entry.results.map((r) => ({ ...r })),
-      officerCodes: entry.officerCodes.map((o) => ({ ...o }))
+      officerCodes: entry.officerCodes.map((o) => ({ ...o })),
+      totalVotesByBranch: entry.totalVotesByBranch ? { ...entry.totalVotesByBranch } : undefined
     };
   }
 

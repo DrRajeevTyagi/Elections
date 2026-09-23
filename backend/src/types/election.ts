@@ -172,6 +172,14 @@ export interface ElectionArchive {
   results: ArchivedCandidateResult[];
   officerCodes: ArchivedOfficerCode[];
   name?: string; // Admin-given label, e.g. "School Council -- Term 1 2026"
+  // How many ballots each branch actually cast, captured at snapshot time
+  // from the vote records themselves. Needed because a per-branch report
+  // cannot be derived from `results` alone: every ballot contributes one
+  // selection per post, so summing the filtered candidate totals counts
+  // each ballot once per post (5x for School, 3x for House) -- see
+  // resultsService.ts filterArchiveByBranch. Optional: archives saved
+  // before this field existed fall back to an estimate.
+  totalVotesByBranch?: Partial<Record<Branch, number>>;
   // Set on the archive itself only when a report was narrowed to one
   // branch at read time (see resultsService.ts filterArchiveByBranch) --
   // a stored archive always covers both branches together; this field is

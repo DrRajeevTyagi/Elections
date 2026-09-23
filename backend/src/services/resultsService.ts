@@ -1,7 +1,16 @@
 import { randomUUID } from 'crypto';
-import { SCHOOL_POST_IDS, HOUSE_POST_IDS } from '../config/posts.js';
+import { SCHOOL_POST_IDS, HOUSE_POST_IDS, BRANCH_IDS } from '../config/posts.js';
 import { dataStore } from '../storage/datastore.js';
-import { Candidate, PostId, StoredVote, ElectionType, HouseId, ElectionArchive, Branch } from '../types/election.js';
+import {
+  Candidate,
+  PostId,
+  StoredVote,
+  ElectionType,
+  HouseId,
+  ElectionArchive,
+  ArchivedCandidateResult,
+  Branch
+} from '../types/election.js';
 import { getPollState } from './voteService.js';
 
 export interface CandidateResult {
@@ -136,12 +145,20 @@ export const buildElectionSnapshot = (name?: string): ElectionArchive | null => 
     }));
 
   const totalVotes = getTotalVotes();
+  // Captured per branch now, while the vote records still exist -- once the
+  // election closes they're reset, and a branch's ballot count can no longer
+  // be recovered from the archived candidate totals (see
+  // filterArchiveByBranch for why summing those doesn't work).
+  const totalVotesByBranch = Object.fromEntries(
+    BRANCH_IDS.map((branch) => [branch, getTotalVotes(branch)])
+  ) as Partial<Record<Branch, number>>;
 
   return {
     id: randomUUID(),
     archivedAt: Date.now(),
     electionType,
     totalVotes,
+    totalVotesByBranch,
     results,
     officerCodes,
     name: name?.trim() || undefined
@@ -168,13 +185,33 @@ export const buildCurrentOrLastResultsSnapshot = (): ElectionArchive | null => {
   return [...archives].sort((a, b) => b.archivedAt - a.archivedAt)[0];
 };
 
+// Best-effort ballot count for one branch of an archive saved before
+// totalVotesByBranch existed. Every ballot fills exactly one selection per
+// post, so for any single post the totals across its candidates already sum
+// to the number of ballots -- summing across *all* posts instead counts each
+// ballot once per post. Taking the largest per-post sum keeps that per-post
+// property while limiting the undercount if a candidate who received votes
+// was later deleted from one post. (For a house election the posts are
+// shared across all 8 houses, so this still works on a whole branch.)
+const estimateBallotsFromResults = (results: ArchivedCandidateResult[]): number => {
+  const perPost = new Map<string, number>();
+  for (const entry of results) {
+    perPost.set(entry.post, (perPost.get(entry.post) ?? 0) + entry.total);
+  }
+  return Math.max(0, ...perPost.values());
+};
+
 // Narrows a full (both-branches) snapshot/archive down to one branch, for
 // the "Download Report" / Election History "view" flows -- the stored
 // archive always covers both branches together (archiving itself is
 // unchanged), this only affects what a given report *read* returns.
-// `totalVotes` is recomputed from the filtered results (summing per-post
-// totals) rather than re-querying live votes, so this works identically for
-// a live snapshot and a long-closed archive whose votes are long gone.
+// `totalVotes` comes from the ballot counts captured per branch at snapshot
+// time (see buildElectionSnapshot): it must NOT be re-derived by summing the
+// filtered candidate totals, which counts every ballot once per post and so
+// reported 5x (School) or 3x (House) the real figure -- the same
+// sum-across-posts mistake getTotalVotes exists to avoid. Live votes can't be
+// re-queried here either, since this has to work identically for a
+// long-closed archive whose votes are gone.
 export const filterArchiveByBranch = (archive: ElectionArchive, branch: Branch): ElectionArchive => {
   const results = archive.results.filter((entry) => (entry.branch ?? 'dwarka') === branch);
   const officerCodes = archive.officerCodes.filter((entry) => (entry.branch ?? 'dwarka') === branch);
@@ -182,7 +219,7 @@ export const filterArchiveByBranch = (archive: ElectionArchive, branch: Branch):
     ...archive,
     results,
     officerCodes,
-    totalVotes: results.reduce((sum, entry) => sum + entry.total, 0),
+    totalVotes: archive.totalVotesByBranch?.[branch] ?? estimateBallotsFromResults(results),
     branch
   };
 };
