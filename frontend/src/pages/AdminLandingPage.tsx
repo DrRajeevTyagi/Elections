@@ -1114,18 +1114,6 @@ export const AdminLandingPage = (): JSX.Element => {
                 {pollStatus.settings.isOpen ? 'Poll Open' : 'Poll Closed'}
               </span>
             )}
-            {/* Lives here, not inside "Voting" below, so it's available
-                regardless of whether an election is in progress -- the
-                Voting section itself only renders once there's actually
-                something to pause/resume. */}
-            <button
-              className="button"
-              onClick={() => void loadDashboard()}
-              disabled={loading}
-              style={{ backgroundColor: '#6b7280', padding: '0.35rem 0.75rem', fontSize: '0.85rem', opacity: loading ? 0.5 : 1 }}
-            >
-              Refresh this Page
-            </button>
           </div>
 
           <section className="dashboard-section">
@@ -1228,9 +1216,6 @@ export const AdminLandingPage = (): JSX.Element => {
                 >
                   {pollStatus?.settings.isOpen ? '⏸ Pause Polling' : '▶ Re-start Polling'}
                 </button>
-                <button className="button" onClick={() => void loadDashboard()} disabled={loading} style={{ backgroundColor: '#6b7280', opacity: loading ? 0.5 : 1 }}>
-                  Refresh this Page
-                </button>
               </div>
             </section>
           )}
@@ -1317,7 +1302,7 @@ export const AdminLandingPage = (): JSX.Element => {
                 <p className="status-card-title">Screen Data</p>
                 <p className="status-card-value">{lastUpdated ? formatTimestamp(lastUpdated) : 'Not loaded yet'}</p>
                 <p className="status-card-hint">
-                  How recently the poll status and vote counts on this screen were fetched from the server. This updates automatically every 3 seconds while the poll is open &mdash; click "Refresh this Page" above to update it immediately.
+                  How recently the poll status and vote counts on this screen were fetched from the server. This updates automatically every 3 seconds while the poll is open.
                 </p>
               </div>
             </div>
