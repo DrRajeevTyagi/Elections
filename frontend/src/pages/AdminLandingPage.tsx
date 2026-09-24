@@ -16,6 +16,7 @@ import {
   closeOfficerCode,
   getArchivesList,
   getStorageHealth,
+  clearRateLimitLockouts,
   renameArchive,
   deleteArchive,
   logoutAdmin,
@@ -537,6 +538,29 @@ export const AdminLandingPage = (): JSX.Element => {
       await loadOfficerCodes();
     } catch (closeError) {
       setError(closeError instanceof Error ? closeError.message : 'Failed to close code');
+    } finally {
+      setOfficerCodesLoading(false);
+    }
+  };
+
+  // "Too many incorrect codes" lockouts are per-device now (see
+  // backend/src/middleware/rateLimit.ts), but during a live election an
+  // admin still needs a way to instantly clear a stuck one rather than
+  // telling someone to wait out the 10-minute window.
+  const handleClearLockouts = async () => {
+    const confirmed = window.confirm(
+      'Clear all officer-code lockouts? This immediately un-blocks every device that has been locked out for entering wrong codes.'
+    );
+    if (!confirmed) {
+      return;
+    }
+    try {
+      setOfficerCodesLoading(true);
+      setError(null);
+      await clearRateLimitLockouts(adminSecret);
+      setMessage('Cleared all officer-code lockouts.');
+    } catch (clearError) {
+      setError(clearError instanceof Error ? clearError.message : 'Failed to clear lockouts');
     } finally {
       setOfficerCodesLoading(false);
     }
@@ -1580,6 +1604,15 @@ export const AdminLandingPage = (): JSX.Element => {
               title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable turnout report in a new tab'}
             >
               🖨️ Print Officer Turnout
+            </button>
+            <button
+              className="button"
+              onClick={handleClearLockouts}
+              disabled={officerCodesLoading}
+              style={{ backgroundColor: '#b45309', opacity: officerCodesLoading ? 0.5 : 1 }}
+              title="Instantly un-block every device currently locked out for entering wrong officer codes"
+            >
+              🔓 Clear Code Lockouts
             </button>
           </div>
         </div>

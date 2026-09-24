@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { closeBooth } from '../services/api';
+import { MaskedCodeInput } from '../components/MaskedCodeInput';
 import './Page.css';
 
 export const ClosePollingPage = (): JSX.Element => {
@@ -55,18 +56,11 @@ export const ClosePollingPage = (): JSX.Element => {
         <label className="form-label" htmlFor="close-secret">
           Officer Code
         </label>
-        <input
+        <MaskedCodeInput
           id="close-secret"
-          name="close-secret"
-          type="text"
           value={secret}
-          className="form-input"
-          autoComplete="off"
-          autoCapitalize="none"
-          maxLength={6}
-          style={{ textTransform: 'lowercase', letterSpacing: '0.15em', fontFamily: 'monospace' }}
-          onChange={(event) => {
-            setSecret(event.target.value.toLowerCase());
+          onChange={(value) => {
+            setSecret(value);
             setConfirming(false);
           }}
           placeholder="e.g. ab2k7m"

@@ -271,12 +271,15 @@ export const VotePage = (): JSX.Element => {
                 key={candidate.id}
                 className={`evm-row${isSelected ? ' selected' : ''}`}
                 onClick={() => handleSelect(currentPost.post, candidate.id)}
+                onContextMenu={(event) => event.preventDefault()}
               >
                 <span className="evm-slno">{index + 1}</span>
                 <CandidatePhoto imageUrl={candidate.imageUrl} name={candidate.name} size={40} />
                 <span className="evm-name">{candidate.name}</span>
-                <span className="evm-led" aria-hidden="true" />
-                <span className="evm-vote-swatch" aria-hidden="true" />
+                <span className="evm-indicator" aria-hidden="true">
+                  <span className="evm-led" />
+                  <span className="evm-vote-swatch" />
+                </span>
               </button>
             );
           })}

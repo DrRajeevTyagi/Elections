@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useKiosk } from '../context/KioskContext';
+import { MaskedCodeInput } from '../components/MaskedCodeInput';
 import './Page.css';
 
 export const ActivationPage = (): JSX.Element => {
@@ -33,19 +34,7 @@ export const ActivationPage = (): JSX.Element => {
         <label className="form-label" htmlFor="secret">
           Officer Code
         </label>
-        <input
-          id="secret"
-          name="secret"
-          type="text"
-          value={secret}
-          className="form-input"
-          autoComplete="off"
-          autoCapitalize="none"
-          maxLength={6}
-          style={{ textTransform: 'lowercase', letterSpacing: '0.15em', fontFamily: 'monospace' }}
-          onChange={(event) => setSecret(event.target.value.toLowerCase())}
-          placeholder="e.g. ab2k7m"
-        />
+        <MaskedCodeInput id="secret" value={secret} onChange={setSecret} placeholder="e.g. ab2k7m" />
         {formError && <p style={{ color: '#dc2626', margin: 0 }}>{formError}</p>}
         <button className="button" type="submit" disabled={!secret.trim() || status === 'activating'}>
           {status === 'activating' ? 'Unlocking...' : 'Unlock Ballot'}

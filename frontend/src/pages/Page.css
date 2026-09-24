@@ -9,6 +9,14 @@
   gap: 1.5rem;
 }
 
+/* Reclaims side padding on narrow phones -- the ballot's candidate-name
+   column (see Evm.css) needs every spare pixel it can get. */
+@media (max-width: 420px) {
+  .page-card {
+    padding: 1.25rem;
+  }
+}
+
 .page-card.admin {
   width: min(1400px, 95%);
 }

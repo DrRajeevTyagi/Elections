@@ -5,6 +5,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { adminSessionService } from '../services/adminSessionService.js';
 import { logAction } from '../services/auditLogService.js';
 import { BadRequestError, ConflictError } from '../utils/httpError.js';
+import { kioskLimiterStore } from '../middleware/rateLimit.js';
 
 export const adminRouter = Router();
 
@@ -69,5 +70,20 @@ adminRouter.get(
   requireAdminSession,
   asyncHandler((_req, res) => {
     res.json(dataStore.getStorageHealth());
+  })
+);
+
+// Instantly un-blocks every device currently locked out of entering an
+// officer code (see middleware/rateLimit.ts's kioskGuessLimiter) -- lets an
+// admin recover during a live election instead of everyone waiting out the
+// 10-minute window. Does not touch the (separate) admin-secret limiter.
+adminRouter.post(
+  '/rate-limit/reset',
+  requireAdminSession,
+  asyncHandler(async (req, res) => {
+    await kioskLimiterStore.resetAll();
+    const clientId = req.header('x-admin-client-id') ?? 'unknown';
+    await logAction(clientId, 'admin.rateLimit.reset', {});
+    res.status(204).send();
   })
 );

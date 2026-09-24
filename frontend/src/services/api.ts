@@ -47,6 +47,27 @@ const getAdminClientId = (): string => {
 
 api.defaults.headers.common['x-admin-client-id'] = getAdminClientId();
 
+// Identifies this browser/phone to the backend's kiosk officer-code rate
+// limiter (see backend/src/middleware/rateLimit.ts) so a run of mistyped
+// codes on one device can't lock out every other device sharing the same
+// WiFi or mobile-carrier IP (2026-09-24 trial: ~70 teachers manually typing
+// one shared code on their own phones tripped this network-wide for
+// everyone once a few mistyped it). Stored in localStorage, not
+// sessionStorage -- unlike the admin client id above, this should stay the
+// same for a given phone across tab closes/reloads during a polling day.
+const KIOSK_DEVICE_ID_KEY = 'kioskDeviceId';
+
+const getKioskDeviceId = (): string => {
+  let deviceId = localStorage.getItem(KIOSK_DEVICE_ID_KEY);
+  if (!deviceId) {
+    deviceId = crypto.randomUUID();
+    localStorage.setItem(KIOSK_DEVICE_ID_KEY, deviceId);
+  }
+  return deviceId;
+};
+
+api.defaults.headers.common['x-kiosk-device-id'] = getKioskDeviceId();
+
 // A short, automatically-derived "what kind of device is this" tag (e.g.
 // "Chrome / Windows") sent as the admin session's label -- see
 // verifyAdminSecret below. There's deliberately no UI to type a name here
@@ -195,6 +216,14 @@ export const getStorageHealth = async (adminSecret: string): Promise<StorageHeal
     headers: { 'x-admin-secret': adminSecret }
   });
   return response.data;
+};
+
+// Instantly un-blocks every device currently locked out of entering an
+// officer code -- see backend/src/routes/admin.ts's POST /admin/rate-limit/reset.
+export const clearRateLimitLockouts = async (adminSecret: string): Promise<void> => {
+  await api.post('/admin/rate-limit/reset', undefined, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
 };
 
 const updatePoll = async (action: 'open' | 'close', adminSecret: string): Promise<PollResponse> => {
