@@ -17,6 +17,8 @@
     "react-router-dom": "^6.26.1"
   },
   "devDependencies": {
+    "@reticlehq/react": "^3.2.0",
+    "@reticlehq/vite-plugin": "^3.2.0",
     "@testing-library/jest-dom": "^6.4.2",
     "@testing-library/react": "^14.3.1",
     "@testing-library/user-event": "^14.5.2",

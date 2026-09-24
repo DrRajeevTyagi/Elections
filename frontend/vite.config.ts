@@ -1,8 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+import { reticle } from '@reticlehq/vite-plugin';
 export default defineConfig({
-  plugins: [react()],
+  plugins: [reticle({ port: 4400 }), react()],
   server: {
     host: '0.0.0.0',
     port: 5173,
