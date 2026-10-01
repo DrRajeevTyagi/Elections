@@ -435,4 +435,40 @@ describe('DataStore -- election runs and the append-only action log (ROADMAP.md 
       expect(new Set(created.map((entry) => entry.code)).size).toBe(50);
     });
   });
+
+  // Send Codes screen: phone numbers and "sent" ticks are saved with the
+  // code, so sending can resume after a refresh or the next morning.
+  describe('phone numbers and sent marks', () => {
+    it('keeps the phone from bulk allot, and lets it be changed or cleared later', async () => {
+      const store = await importFreshDataStore();
+      await store.init();
+      const [created] = store.bulkAllotOfficerCodes([
+        { officerName: 'Mrs. Sharma', electionType: 'school', branch: 'dwarka', phone: '919876543210' }
+      ]);
+      expect(created.phone).toBe('919876543210');
+
+      expect(store.updateOfficerCode(created.code, { phone: '919999999999' })?.phone).toBe('919999999999');
+      expect(store.updateOfficerCode(created.code, { phone: '' })?.phone).toBeUndefined();
+      expect(store.findOfficerCode(created.code)?.officerName).toBe('Mrs. Sharma');
+    });
+
+    it('marks several codes as sent in one go, matching case-insensitively, and can undo it', async () => {
+      const store = await importFreshDataStore();
+      await store.init();
+      const created = store.bulkAllotOfficerCodes([
+        { officerName: 'Mrs. Sharma', electionType: 'school', branch: 'dwarka' },
+        { officerName: 'Mrs. Sharma', electionType: 'house', house: 'Anand', branch: 'dwarka' },
+        { officerName: 'Mr. Rao', electionType: 'school', branch: 'dwarka' }
+      ]);
+
+      const marked = store.markOfficerCodesSent([created[0].code.toUpperCase(), created[1].code, 'nope00'], true);
+      expect(marked.map((entry) => entry.code)).toEqual([created[0].code, created[1].code]);
+      expect(store.findOfficerCode(created[0].code)?.sentAt).toEqual(expect.any(Number));
+      expect(store.findOfficerCode(created[2].code)?.sentAt).toBeUndefined();
+
+      store.markOfficerCodesSent([created[0].code], false);
+      expect(store.findOfficerCode(created[0].code)?.sentAt).toBeUndefined();
+      expect(store.findOfficerCode(created[1].code)?.sentAt).toEqual(expect.any(Number));
+    });
+  });
 });

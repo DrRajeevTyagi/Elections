@@ -323,9 +323,18 @@ export const closeOfficerCode = async (code: string, adminSecret: string): Promi
   });
 };
 
+// Send Codes screen -- `sent: false` is "Undo".
+export const markOfficerCodesSent = async (codes: string[], sent: boolean, adminSecret: string): Promise<void> => {
+  await api.post(
+    '/officer-codes/mark-sent',
+    { codes, sent },
+    { headers: { 'x-admin-secret': adminSecret } }
+  );
+};
+
 export const updateOfficerCode = async (
   code: string,
-  updates: { officerName?: string; label?: string },
+  updates: { officerName?: string; label?: string; phone?: string },
   adminSecret: string
 ): Promise<void> => {
   await api.put(`/officer-codes/${code}`, updates, {

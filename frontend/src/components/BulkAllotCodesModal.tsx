@@ -1,13 +1,6 @@
 import { useState } from 'react';
 import { bulkAllotOfficerCodes } from '../services/api';
-import {
-  guessColumnMapping,
-  parseTeacherRows,
-  buildAllotments,
-  buildWhatsAppLink,
-  fillMessageTemplate,
-  DEFAULT_MESSAGE_TEMPLATE
-} from '../utils/bulkAllot';
+import { guessColumnMapping, parseTeacherRows, buildAllotments } from '../utils/bulkAllot';
 import type { ColumnMapping, ParsedTeacherRow } from '../utils/bulkAllot';
 import type { Branch } from '../types/election';
 import type { BulkAllotedCode } from '../types/api';
@@ -19,6 +12,9 @@ interface BulkAllotCodesModalProps {
   // Called after a successful bulk-allot so the parent can refresh the
   // Officer Codes roster below.
   onAllotted: () => void;
+  // Sending happens on the separate Send Codes screen (phone numbers are
+  // saved with the codes), so this window can be closed before sending.
+  onOpenSendCodes: () => void;
 }
 
 type Step = 'upload' | 'mapping' | 'preview' | 'results';
@@ -49,7 +45,7 @@ const cellToText = (value: unknown): string => {
   return String(value).trim();
 };
 
-export const BulkAllotCodesModal = ({ adminSecret, branch, onClose, onAllotted }: BulkAllotCodesModalProps): JSX.Element => {
+export const BulkAllotCodesModal = ({ adminSecret, branch, onClose, onAllotted, onOpenSendCodes }: BulkAllotCodesModalProps): JSX.Element => {
   const [step, setStep] = useState<Step>('upload');
   const [fileName, setFileName] = useState('');
   const [headers, setHeaders] = useState<string[]>([]);
@@ -59,8 +55,6 @@ export const BulkAllotCodesModal = ({ adminSecret, branch, onClose, onAllotted }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdCodes, setCreatedCodes] = useState<BulkAllotedCode[]>([]);
-  const [phoneByName, setPhoneByName] = useState<Record<string, string | undefined>>({});
-  const [messageTemplate, setMessageTemplate] = useState(DEFAULT_MESSAGE_TEMPLATE);
 
   const handleFile = async (file: File) => {
     setError(null);
@@ -136,7 +130,6 @@ export const BulkAllotCodesModal = ({ adminSecret, branch, onClose, onAllotted }
       setError(null);
       const response = await bulkAllotOfficerCodes(branch, allotments, adminSecret);
       setCreatedCodes(response.codes);
-      setPhoneByName(Object.fromEntries(cleanRows.map((row) => [row.name, row.phone])));
       setStep('results');
       onAllotted();
     } catch (submitError) {
@@ -278,60 +271,15 @@ export const BulkAllotCodesModal = ({ adminSecret, branch, onClose, onAllotted }
       {step === 'results' && (
         <div>
           <p style={{ margin: '0 0 0.75rem 0', fontWeight: 600, color: '#16a34a' }}>
-            ✓ {createdCodes.length} code{createdCodes.length === 1 ? '' : 's'} allotted. Now send each one on
-            WhatsApp -- click "Send", then hit Send inside WhatsApp. Nothing is sent automatically.
+            ✓ {createdCodes.length} code{createdCodes.length === 1 ? '' : 's'} allotted, with each teacher&apos;s
+            WhatsApp number saved. Nothing has been sent yet.
           </p>
-          <label className="form-label" htmlFor="bulk-message-template">Message template</label>
-          <textarea
-            id="bulk-message-template"
-            className="form-input"
-            style={{ width: '100%', minHeight: '110px', fontFamily: 'inherit' }}
-            value={messageTemplate}
-            onChange={(event) => setMessageTemplate(event.target.value)}
-          />
-          <p style={{ fontSize: '0.8rem', color: '#9ca3af', margin: '0.25rem 0 1rem 0' }}>
-            Placeholders: {'{name}'}, {'{code}'}, {'{duty}'}, {'{branch}'} -- filled in per teacher below.
+          <p style={{ margin: '0 0 1rem 0' }}>
+            Send them now or any time later (e.g. the evening before) from <strong>📲 Send Codes on WhatsApp</strong>.
           </p>
-          <div style={{ maxHeight: '420px', overflowY: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '2px solid #e5e7eb' }}>
-                  <th style={{ padding: '0.4rem' }}>Name</th>
-                  <th style={{ padding: '0.4rem' }}>Duty</th>
-                  <th style={{ padding: '0.4rem' }}>Code</th>
-                  <th style={{ padding: '0.4rem' }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {createdCodes.map((entry) => {
-                  const duty = entry.electionType === 'house' ? `${entry.house} House` : 'School';
-                  const phone = phoneByName[entry.officerName];
-                  const message = fillMessageTemplate(messageTemplate, {
-                    name: entry.officerName,
-                    code: entry.code,
-                    duty,
-                    branch: branch === 'AN' ? 'AN' : 'Dwarka'
-                  });
-                  return (
-                    <tr key={entry.code} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '0.4rem' }}>{entry.officerName}</td>
-                      <td style={{ padding: '0.4rem' }}>{duty}</td>
-                      <td style={{ padding: '0.4rem', fontFamily: 'monospace', fontWeight: 700 }}>{entry.code}</td>
-                      <td style={{ padding: '0.4rem' }}>
-                        {phone ? (
-                          <a className="button" style={{ display: 'inline-block', backgroundColor: '#16a34a' }} href={buildWhatsAppLink(phone, message)} target="_blank" rel="noreferrer">
-                            Send via WhatsApp
-                          </a>
-                        ) : (
-                          <span style={{ color: '#92400e' }}>No valid number -- send manually</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <button className="button" style={{ backgroundColor: '#16a34a' }} onClick={onOpenSendCodes}>
+            📲 Go to Send Codes
+          </button>
         </div>
       )}
     </div>

@@ -9,6 +9,29 @@ import type { ElectionType, HouseId } from '../types/election.js';
 
 export const officerCodesRouter = Router();
 
+// WhatsApp numbers are stored digits-only with the country code (the
+// frontend normalizes Indian numbers to e.g. "919876543210" -- see
+// frontend utils/bulkAllot.ts normalizeIndianPhone). The check here is
+// deliberately loose (any 8-15 digits, the international range) so it only
+// rejects plain garbage, not a valid number from another country.
+const isValidPhone = (value: string): boolean => /^\d{8,15}$/.test(value);
+
+// Returns undefined for "not given", '' for "explicitly cleared", or the
+// digits; throws on anything else.
+const parsePhone = (value: unknown, who: string): string | undefined => {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw new BadRequestError(`Invalid WhatsApp number for ${who}`);
+  }
+  const trimmed = value.trim();
+  if (trimmed !== '' && !isValidPhone(trimmed)) {
+    throw new BadRequestError(`Invalid WhatsApp number for ${who}`);
+  }
+  return trimmed;
+};
+
 officerCodesRouter.use(requireAdminSession);
 
 officerCodesRouter.get(
@@ -87,7 +110,7 @@ officerCodesRouter.post(
   asyncHandler(async (req, res) => {
     const { branch, allotments } = req.body as {
       branch?: string;
-      allotments?: Array<{ officerName?: string; electionType?: string; house?: string }>;
+      allotments?: Array<{ officerName?: string; electionType?: string; house?: string; phone?: string }>;
     };
     if (branch === undefined || !isValidBranch(branch)) {
       throw new BadRequestError('Invalid branch');
@@ -100,7 +123,14 @@ officerCodesRouter.post(
     }
 
     const run = dataStore.getCurrentRun();
-    const validated: Array<{ officerName: string; electionType: ElectionType; house?: HouseId; branch: typeof branch; runId?: string }> = [];
+    const validated: Array<{
+      officerName: string;
+      electionType: ElectionType;
+      house?: HouseId;
+      branch: typeof branch;
+      runId?: string;
+      phone?: string;
+    }> = [];
     for (const entry of allotments) {
       const officerName = typeof entry.officerName === 'string' ? entry.officerName.trim() : '';
       if (!officerName) {
@@ -116,12 +146,17 @@ officerCodesRouter.post(
         }
         house = entry.house;
       }
+      // A teacher with no valid number still gets a code (the preview step
+      // shows "no valid number" and lets the row through) -- so a missing
+      // phone is fine here, only a malformed one is rejected.
+      const phone = parsePhone(entry.phone, officerName) || undefined;
       validated.push({
         officerName,
         electionType: entry.electionType,
         house,
         branch,
-        runId: run?.electionType === entry.electionType ? run.id : undefined
+        runId: run?.electionType === entry.electionType ? run.id : undefined,
+        phone
       });
     }
 
@@ -137,25 +172,61 @@ officerCodesRouter.post(
   })
 );
 
+// Send Codes screen -- marks the codes in one WhatsApp message as sent (or,
+// with `sent: false`, undoes that). Takes a list because a teacher's School
+// and House codes go out together in a single message.
+officerCodesRouter.post(
+  '/mark-sent',
+  asyncHandler(async (req, res) => {
+    const { codes, sent } = req.body as { codes?: unknown; sent?: unknown };
+    if (!Array.isArray(codes) || codes.length === 0 || codes.length > 20 || !codes.every((code) => typeof code === 'string')) {
+      throw new BadRequestError('Give between 1 and 20 codes');
+    }
+    if (typeof sent !== 'boolean') {
+      throw new BadRequestError('Missing sent flag');
+    }
+    const updated = dataStore.markOfficerCodesSent(codes as string[], sent);
+    if (updated.length === 0) {
+      throw new BadRequestError('Code not found');
+    }
+    for (const entry of updated) {
+      await logAction(
+        req.header('x-admin-client-id'),
+        sent ? 'officerCode.markSent' : 'officerCode.unmarkSent',
+        { code: entry.code, officerName: entry.officerName },
+        entry.branch
+      );
+    }
+    res.json({ codes: updated });
+  })
+);
+
 officerCodesRouter.put(
   '/:code',
   asyncHandler(async (req, res) => {
     const { code } = req.params;
-    const { officerName } = req.body as { officerName?: string };
+    const { officerName, phone } = req.body as { officerName?: string; phone?: unknown };
+    const parsedPhone = parsePhone(phone, code);
     // Matching is case-insensitive (see datastore.ts's codesMatch), so no
     // case normalization is needed here.
     const updated = dataStore.updateOfficerCode(code, {
-      officerName: typeof officerName === 'string' ? officerName.trim() : undefined
+      officerName: typeof officerName === 'string' ? officerName.trim() : undefined,
+      phone: parsedPhone
     });
     if (!updated) {
       throw new BadRequestError('Code not found');
     }
-    await logAction(
-      req.header('x-admin-client-id'),
-      'officerCode.name',
-      { code: updated.code, officerName: updated.officerName },
-      updated.branch
-    );
+    if (typeof officerName === 'string') {
+      await logAction(
+        req.header('x-admin-client-id'),
+        'officerCode.name',
+        { code: updated.code, officerName: updated.officerName },
+        updated.branch
+      );
+    }
+    if (parsedPhone !== undefined) {
+      await logAction(req.header('x-admin-client-id'), 'officerCode.phone', { code: updated.code }, updated.branch);
+    }
     res.json({ code: updated });
   })
 );

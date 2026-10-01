@@ -76,6 +76,15 @@ export interface OfficerCode {
   // startRecording / storage/datastore.ts stampOfficerCodesRunId). Also
   // undefined for codes generated before this feature existed.
   runId?: string;
+  // The officer's WhatsApp number, digits only with country code (e.g.
+  // "919876543210") -- saved from the Bulk Allot teacher list (or typed in
+  // later on the Send Codes screen) so codes can be sent at any time, not
+  // only while the upload window happens to still be open.
+  phone?: string;
+  // When this code was last marked as sent on WhatsApp (Send Codes screen).
+  // Cleared again by "Undo". Lets sending resume where it stopped after a
+  // refresh or the next morning.
+  sentAt?: number;
 }
 
 export type RunStatus = 'running' | 'closed';

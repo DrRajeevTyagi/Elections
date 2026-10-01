@@ -27,7 +27,8 @@ const mockedDataStore = {
   findOfficerCode: vi.fn<[string], OfficerCode | undefined>(),
   countVotesByOfficerCode: vi.fn<[string], number>(),
   deleteOfficerCode: vi.fn(),
-  updateOfficerCode: vi.fn(),
+  updateOfficerCode: vi.fn<unknown[], OfficerCode | undefined>(),
+  markOfficerCodesSent: vi.fn<unknown[], OfficerCode[]>(() => []),
   reopenOfficerCode: vi.fn(),
   closeOfficerCode: vi.fn<[string], OfficerCode | undefined>(),
   generateOfficerCodes: vi.fn<unknown[], OfficerCode[]>(() => []),
@@ -306,5 +307,119 @@ describe('POST /api/officer-codes/bulk-allot', () => {
     expect(mockedDataStore.appendLogEntry).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'officerCode.name', details: { code: 'aaa111', officerName: 'Jane' } })
     );
+  });
+
+  // Phone numbers are saved with the code so the Send Codes screen can send
+  // them later, after the upload window is closed.
+  it('saves each allotment\'s WhatsApp number, treating a blank one as no number', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp())
+      .post('/api/officer-codes/bulk-allot')
+      .send({
+        branch: 'dwarka',
+        allotments: [
+          { officerName: 'Jane', electionType: 'school', phone: '919876543210' },
+          { officerName: 'Priya', electionType: 'school', phone: '' }
+        ]
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedDataStore.bulkAllotOfficerCodes).toHaveBeenCalledWith([
+      expect.objectContaining({ officerName: 'Jane', phone: '919876543210' }),
+      expect.objectContaining({ officerName: 'Priya', phone: undefined })
+    ]);
+  });
+
+  it('rejects a malformed WhatsApp number', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp())
+      .post('/api/officer-codes/bulk-allot')
+      .send({ branch: 'dwarka', allotments: [{ officerName: 'Jane', electionType: 'school', phone: '98765-abc' }] });
+
+    expect(response.status).toBe(400);
+    expect(mockedDataStore.bulkAllotOfficerCodes).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT /api/officer-codes/:code', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDataStore.getCurrentRun.mockReturnValue(runningSchoolRun);
+  });
+
+  it('saves a WhatsApp number without touching or logging the officer name', async () => {
+    mockedDataStore.updateOfficerCode.mockReturnValue({ ...baseCode, officerName: 'Jane', phone: '919876543210' });
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).put('/api/officer-codes/ABC123').send({ phone: '919876543210' });
+
+    expect(response.status).toBe(200);
+    expect(mockedDataStore.updateOfficerCode).toHaveBeenCalledWith('ABC123', { officerName: undefined, phone: '919876543210' });
+    expect(mockedDataStore.appendLogEntry).toHaveBeenCalledWith(expect.objectContaining({ action: 'officerCode.phone' }));
+    expect(mockedDataStore.appendLogEntry).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'officerCode.name' }));
+  });
+
+  it('rejects a malformed WhatsApp number', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).put('/api/officer-codes/ABC123').send({ phone: '12' });
+
+    expect(response.status).toBe(400);
+    expect(mockedDataStore.updateOfficerCode).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/officer-codes/mark-sent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDataStore.getCurrentRun.mockReturnValue(runningSchoolRun);
+  });
+
+  it('marks every code in one message as sent and logs each', async () => {
+    mockedDataStore.markOfficerCodesSent.mockReturnValue([
+      { ...baseCode, code: 'aaa111', officerName: 'Jane', sentAt: Date.now() },
+      { ...baseCode, code: 'bbb222', officerName: 'Jane', electionType: 'house', house: 'Anand', sentAt: Date.now() }
+    ]);
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp())
+      .post('/api/officer-codes/mark-sent')
+      .send({ codes: ['aaa111', 'bbb222'], sent: true });
+
+    expect(response.status).toBe(200);
+    expect(mockedDataStore.markOfficerCodesSent).toHaveBeenCalledWith(['aaa111', 'bbb222'], true);
+    expect(mockedDataStore.appendLogEntry).toHaveBeenCalledTimes(2);
+    expect(mockedDataStore.appendLogEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'officerCode.markSent', details: { code: 'aaa111', officerName: 'Jane' } })
+    );
+  });
+
+  it('undoes a sent mark', async () => {
+    mockedDataStore.markOfficerCodesSent.mockReturnValue([{ ...baseCode, officerName: 'Jane' }]);
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/mark-sent').send({ codes: ['ABC123'], sent: false });
+
+    expect(response.status).toBe(200);
+    expect(mockedDataStore.markOfficerCodesSent).toHaveBeenCalledWith(['ABC123'], false);
+    expect(mockedDataStore.appendLogEntry).toHaveBeenCalledWith(expect.objectContaining({ action: 'officerCode.unmarkSent' }));
+  });
+
+  it('rejects a missing sent flag or an empty code list', async () => {
+    const { createApp } = await import('../app.js');
+    const noFlag = await request(createApp()).post('/api/officer-codes/mark-sent').send({ codes: ['ABC123'] });
+    const noCodes = await request(createApp()).post('/api/officer-codes/mark-sent').send({ codes: [], sent: true });
+
+    expect(noFlag.status).toBe(400);
+    expect(noCodes.status).toBe(400);
+    expect(mockedDataStore.markOfficerCodesSent).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when none of the codes exist', async () => {
+    mockedDataStore.markOfficerCodesSent.mockReturnValue([]);
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/mark-sent').send({ codes: ['NOPE00'], sent: true });
+
+    expect(response.status).toBe(400);
   });
 });

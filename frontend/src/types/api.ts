@@ -73,6 +73,7 @@ export interface ResultsResponse {
 export interface OfficerCode {
   code: string;
   officerName: string;
+  electionType?: ElectionType;
   house?: HouseId;
   createdAt: number;
   closedAt?: number;
@@ -80,6 +81,8 @@ export interface OfficerCode {
   branch?: Branch;
   everNamed?: boolean;
   runId?: string;
+  phone?: string; // WhatsApp number, digits with country code
+  sentAt?: number; // when last marked as sent on WhatsApp
 }
 
 // "Bulk Allot from List" (Officer Codes tab) -- see utils/bulkAllot.ts for
@@ -88,6 +91,7 @@ export interface BulkAllotment {
   officerName: string;
   electionType: ElectionType;
   house?: HouseId;
+  phone?: string;
 }
 
 export interface BulkAllotedCode {

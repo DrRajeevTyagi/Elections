@@ -682,7 +682,7 @@ export class DataStore {
   // would each trigger their own full-document persist (wasteful at the
   // ~100-200 codes this is meant for).
   bulkAllotOfficerCodes(
-    allotments: Array<{ officerName: string; electionType: ElectionType; house?: HouseId; branch: Branch; runId?: string }>
+    allotments: Array<{ officerName: string; electionType: ElectionType; house?: HouseId; branch: Branch; runId?: string; phone?: string }>
   ): OfficerCode[] {
     const newCodes = generateUniqueCodes(allotments.length, this.data.officerCodes.map((entry) => entry.code));
     const createdAt = Date.now();
@@ -694,7 +694,8 @@ export class DataStore {
       house: allotment.house,
       createdAt,
       branch: allotment.branch,
-      runId: allotment.runId
+      runId: allotment.runId,
+      phone: allotment.phone
     }));
     this.data.officerCodes.push(...entries);
     this.queuePersist();
@@ -743,7 +744,8 @@ export class DataStore {
     return { ...entry };
   }
 
-  updateOfficerCode(code: string, updates: { officerName?: string }): OfficerCode | undefined {
+  // `phone: ''` clears a saved number; leaving it undefined keeps it as is.
+  updateOfficerCode(code: string, updates: { officerName?: string; phone?: string }): OfficerCode | undefined {
     const entry = this.data.officerCodes.find((item) => codesMatch(item.code, code));
     if (!entry) {
       return undefined;
@@ -754,8 +756,30 @@ export class DataStore {
         entry.everNamed = true;
       }
     }
+    if (updates.phone !== undefined) {
+      entry.phone = updates.phone || undefined;
+    }
     this.queuePersist();
     return { ...entry };
+  }
+
+  // Send Codes screen -- marks (or, for "Undo", unmarks) several codes as
+  // sent in one persist, since one WhatsApp message can carry a teacher's
+  // School and House codes together. Unknown codes are skipped; returns the
+  // ones actually updated.
+  markOfficerCodesSent(codes: string[], sent: boolean): OfficerCode[] {
+    const now = Date.now();
+    const updated: OfficerCode[] = [];
+    for (const entry of this.data.officerCodes) {
+      if (codes.some((code) => codesMatch(entry.code, code))) {
+        entry.sentAt = sent ? now : undefined;
+        updated.push({ ...entry });
+      }
+    }
+    if (updated.length > 0) {
+      this.queuePersist();
+    }
+    return updated;
   }
 
   deleteOfficerCode(code: string): void {

@@ -42,6 +42,7 @@ import { AddCandidateForm } from '../components/AddCandidateForm';
 import { CandidateEditor } from '../components/CandidateEditor';
 import { StartElectionWizard } from '../components/StartElectionWizard';
 import { BulkAllotCodesModal } from '../components/BulkAllotCodesModal';
+import { SendCodesPanel } from '../components/SendCodesPanel';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
 import { POST_NAMES } from '../constants/posts';
 import { POST_COLORS } from '../constants/postColors';
@@ -131,6 +132,7 @@ export const AdminLandingPage = (): JSX.Element => {
   const [generateHouse, setGenerateHouse] = useState<HouseId | ''>('');
   const [officerCodesLoading, setOfficerCodesLoading] = useState(false);
   const [showBulkAllot, setShowBulkAllot] = useState(false);
+  const [showSendCodes, setShowSendCodes] = useState(false);
   const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
   const [archives, setArchives] = useState<ArchiveSummary[]>([]);
   const [archiveNameDrafts, setArchiveNameDrafts] = useState<Record<string, string>>({});
@@ -1590,6 +1592,19 @@ export const AdminLandingPage = (): JSX.Element => {
             </button>
             <button
               className="button"
+              onClick={() => setShowSendCodes(true)}
+              disabled={showSendCodes}
+              style={{ backgroundColor: '#16a34a', opacity: showSendCodes ? 0.5 : 1 }}
+              title={
+                showSendCodes
+                  ? 'Already open below -- use its own Close button to dismiss'
+                  : 'Send each teacher their code on WhatsApp, one click per teacher'
+              }
+            >
+              📲 Send Codes on WhatsApp
+            </button>
+            <button
+              className="button"
               onClick={() => window.open(`/admin/report/officer-codes/${selectedBranch}`, '_blank')}
               style={{ backgroundColor: '#0f766e' }}
               title={`Open a printable ${selectedBranch === 'AN' ? 'AN' : 'Dwarka'} code-allotment list -- hand this to that branch's Election Head/Principal`}
@@ -1623,6 +1638,20 @@ export const AdminLandingPage = (): JSX.Element => {
             branch={selectedBranch}
             onClose={() => setShowBulkAllot(false)}
             onAllotted={() => void loadOfficerCodes()}
+            onOpenSendCodes={() => {
+              setShowBulkAllot(false);
+              setShowSendCodes(true);
+            }}
+          />
+        )}
+
+        {showSendCodes && (
+          <SendCodesPanel
+            adminSecret={adminSecret}
+            branch={selectedBranch}
+            officerCodes={officerCodes}
+            onClose={() => setShowSendCodes(false)}
+            onChanged={() => loadOfficerCodes(false)}
           />
         )}
 

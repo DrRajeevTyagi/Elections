@@ -120,6 +120,8 @@ export interface Allotment {
   officerName: string;
   electionType: ElectionType;
   house?: HouseId;
+  // Saved with the code so the Send Codes screen can send it later.
+  phone?: string;
 }
 
 // Expands every error-free row into one allotment per duty -- a teacher with
@@ -131,26 +133,39 @@ export const buildAllotments = (rows: ParsedTeacherRow[]): Allotment[] => {
       continue;
     }
     if (row.schoolDuty) {
-      allotments.push({ officerName: row.name, electionType: 'school' });
+      allotments.push({ officerName: row.name, electionType: 'school', phone: row.phone });
     }
     if (row.house) {
-      allotments.push({ officerName: row.name, electionType: 'house', house: row.house });
+      allotments.push({ officerName: row.name, electionType: 'house', house: row.house, phone: row.phone });
     }
   }
   return allotments;
 };
 
-export const buildWhatsAppLink = (phone: string, message: string): string =>
-  `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+// Two ways to open a ready-to-send message: 'app' opens the WhatsApp app
+// installed on this computer directly (no new browser window per message);
+// 'web' is the wa.me link, which goes through the browser / WhatsApp Web --
+// the fallback for a computer without the app.
+export type WhatsAppMode = 'app' | 'web';
+
+export const buildWhatsAppLink = (phone: string, message: string, mode: WhatsAppMode = 'web'): string =>
+  mode === 'app'
+    ? `whatsapp://send?phone=${phone}&text=${encodeURIComponent(message)}`
+    : `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 
 export interface MessageTemplateVars {
   name: string;
-  code: string;
-  duty: string; // "School" or "Anand House"
+  // One line per code, e.g. "School Elections: abc123" -- a teacher with
+  // both duties gets both codes in a single message.
+  codes: string;
+  code: string; // the bare code(s), comma-separated
+  duty: string; // "School" or "Anand House" (joined with "and" for several)
   branch: string; // "Dwarka" or "AN"
 }
 
-export const DEFAULT_MESSAGE_TEMPLATE = `Dear {name}, your Polling Officer Code for the {duty} Elections ({branch} branch) is: {code}
+export const DEFAULT_MESSAGE_TEMPLATE = `Dear {name}, your Polling Officer Code for the {branch} branch elections:
+
+{codes}
 
 Please keep this code confidential. Use it only to activate the voting kiosk on election day.
 
@@ -159,6 +174,66 @@ Please keep this code confidential. Use it only to activate the voting kiosk on 
 export const fillMessageTemplate = (template: string, vars: MessageTemplateVars): string =>
   template
     .replace(/\{name\}/g, vars.name)
+    .replace(/\{codes\}/g, vars.codes)
     .replace(/\{code\}/g, vars.code)
     .replace(/\{duty\}/g, vars.duty)
     .replace(/\{branch\}/g, vars.branch);
+
+// The minimum the Send Codes screen needs from each officer code.
+export interface SendableCode {
+  code: string;
+  officerName: string;
+  electionType?: ElectionType;
+  house?: HouseId;
+  phone?: string;
+  sentAt?: number;
+}
+
+// One WhatsApp message: everything going to one teacher (same name and
+// number). `pending` is what still needs sending; once that's empty the
+// group is done, and re-sending repeats all of its codes.
+export interface SendGroup {
+  key: string;
+  officerName: string;
+  phone?: string;
+  codes: SendableCode[];
+  pending: SendableCode[];
+  lastSentAt?: number;
+}
+
+export const dutyLabel = (entry: Pick<SendableCode, 'electionType' | 'house'>): string =>
+  entry.electionType === 'house' || entry.house ? `${entry.house} House` : 'School';
+
+// Groups named codes into one message per teacher, in first-seen order.
+// Codes with no officer name are left out -- there is nobody to send them to.
+export const groupCodesForSending = (codes: SendableCode[]): SendGroup[] => {
+  const groups = new Map<string, SendGroup>();
+  for (const entry of codes) {
+    const officerName = entry.officerName.trim();
+    if (!officerName) {
+      continue;
+    }
+    const key = `${officerName.toLowerCase()}|${entry.phone ?? ''}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, officerName, phone: entry.phone, codes: [], pending: [] };
+      groups.set(key, group);
+    }
+    group.codes.push(entry);
+    if (entry.sentAt) {
+      group.lastSentAt = Math.max(group.lastSentAt ?? 0, entry.sentAt);
+    } else {
+      group.pending.push(entry);
+    }
+  }
+  return [...groups.values()];
+};
+
+export const buildGroupMessage = (template: string, codes: SendableCode[], officerName: string, branch: string): string =>
+  fillMessageTemplate(template, {
+    name: officerName,
+    codes: codes.map((entry) => `${dutyLabel(entry)} Elections: ${entry.code}`).join('\n'),
+    code: codes.map((entry) => entry.code).join(', '),
+    duty: codes.map(dutyLabel).join(' and '),
+    branch
+  });
