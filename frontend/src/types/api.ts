@@ -83,6 +83,7 @@ export interface OfficerCode {
   runId?: string;
   phone?: string; // WhatsApp number, digits with country code
   sentAt?: number; // when last marked as sent on WhatsApp
+  readyAt?: number; // when the teacher first entered this code on a kiosk
   // Set once a re-poll was ordered at this booth -- its votes no longer
   // count (voteCount is 0) and the code can never be used again.
   repoll?: RepollRecord;

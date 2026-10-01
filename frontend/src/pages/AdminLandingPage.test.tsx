@@ -31,7 +31,8 @@ const mockApi = vi.hoisted(() => ({
   requestAdminTakeover: vi.fn(),
   getAdminTakeoverRequest: vi.fn(),
   cancelAdminTakeover: vi.fn(),
-  respondToAdminTakeover: vi.fn()
+  respondToAdminTakeover: vi.fn(),
+  startFreshDuties: vi.fn()
 }));
 
 vi.mock('../services/api', () => mockApi);
@@ -245,6 +246,52 @@ describe('AdminLandingPage tabs', () => {
     } finally {
       mockApi.getCurrentRun.mockResolvedValue({ run: null });
     }
+  });
+
+  it('Officer Codes tab: colours each code by duty status, counts them, filters "not ready yet", and starts fresh duties', async () => {
+    mockApi.verifyAdminSecret.mockResolvedValue(undefined);
+    mockApi.getPollStatus.mockResolvedValue({
+      poll: { activeElectionType: null, settings: { isOpen: false, allowRevote: false } }
+    });
+    mockApi.getResults.mockResolvedValue({ results: [], totalVotes: 0 });
+    mockApi.getOfficerCodes.mockResolvedValue({
+      codes: [
+        { code: 'FRESH1', officerName: 'A', electionType: 'school', createdAt: 1, voteCount: 0 },
+        { code: 'SENT01', officerName: 'B', electionType: 'school', createdAt: 2, voteCount: 0, sentAt: 10 },
+        { code: 'READY1', officerName: 'C', electionType: 'school', createdAt: 3, voteCount: 0, sentAt: 10, readyAt: 20 },
+        { code: 'OVER01', officerName: 'D', electionType: 'school', createdAt: 4, voteCount: 0, sentAt: 10, readyAt: 20, closedAt: 30 }
+      ]
+    });
+    mockApi.getArchivesList.mockResolvedValue({ archives: [] });
+    mockApi.startFreshDuties.mockResolvedValue(4);
+
+    await unlockAsAdmin();
+    fireEvent.click(screen.getByRole('button', { name: /Polling Officer Codes/ }));
+    await screen.findByText('FRESH1');
+
+    const dutyOf = (code: string) => screen.getByText(code).closest('tr')?.getAttribute('data-duty');
+    expect(dutyOf('FRESH1')).toBe('fresh');
+    expect(dutyOf('SENT01')).toBe('sent');
+    expect(dutyOf('READY1')).toBe('ready');
+    expect(dutyOf('OVER01')).toBe('over');
+
+    const summary = screen.getByLabelText('Duty status summary');
+    expect(summary).toHaveTextContent('Ready: 1');
+    expect(summary).toHaveTextContent('Sent -- not ready yet: 1');
+    expect(summary).toHaveTextContent('Not sent: 1');
+    expect(summary).toHaveTextContent('Duty over: 1');
+
+    fireEvent.click(screen.getByLabelText('Not ready yet only'));
+    expect(screen.getByText('FRESH1')).toBeInTheDocument();
+    expect(screen.getByText('SENT01')).toBeInTheDocument();
+    expect(screen.queryByText('READY1')).not.toBeInTheDocument();
+    expect(screen.queryByText('OVER01')).not.toBeInTheDocument();
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: /Start Allotting Duties for a Fresh Election/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'School Elections' }));
+    await waitFor(() => expect(mockApi.startFreshDuties).toHaveBeenCalledWith('school', 'testadmin'));
+    confirmSpy.mockRestore();
   });
 
   it('shows all 5 School Elections posts together in one live results grid', async () => {

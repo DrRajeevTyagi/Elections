@@ -39,8 +39,10 @@ kioskRouter.post(
       // Polling at This Booth," or an admin closing it directly from the
       // Officer Codes tab (added 2026-09-25) -- the instruction is the same
       // either way.
+      // Also how a code from a finished election reads (End of Voting
+      // closes every booth -- "duty over", red on the Officer Codes tab).
       throw new ForbiddenError(
-        'This code has been closed and can no longer be used. Ask the election administrator to reopen it if this was a mistake.'
+        'This code is closed -- polling duty for it is over. Ask the election administrator to reopen it if this was a mistake.'
       );
     }
 
@@ -54,13 +56,17 @@ kioskRouter.post(
       );
     }
 
-    const pollState = getPollState();
-    if (!pollState.settings.isOpen) {
-      throw new ForbiddenError('Voting is currently closed. Ask the election administrator to open the poll before activating a ballot.');
-    }
+    // A correct, allotted, usable code: the teacher has received it and is
+    // at a kiosk -- marked ready (green on the Officer Codes tab) even if
+    // voting hasn't opened yet, which is exactly when teachers check in.
+    dataStore.markOfficerCodeReady(officerCode.code);
 
-    if (!pollState.activeElectionType) {
-      throw new ForbiddenError('No election has been set up yet. Please contact the election administrator.');
+    const pollState = getPollState();
+    if (!pollState.settings.isOpen || !pollState.activeElectionType) {
+      throw new ForbiddenError(
+        '✓ Your code is correct and you are marked as ready. Voting has not started yet -- please try again once the election administrator opens the poll.',
+        'READY_POLL_NOT_OPEN'
+      );
     }
 
     // A code generated for one election must never activate a ballot for

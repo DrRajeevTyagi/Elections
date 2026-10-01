@@ -30,6 +30,7 @@ const mockedDataStore = {
   getOfficerCodes: vi.fn<[], OfficerCode[]>(() => []),
   resetVotesByType: vi.fn(),
   reopenOfficerCodesByType: vi.fn(),
+  closeOfficerCodesByType: vi.fn(),
   stampOfficerCodesRunId: vi.fn(),
   getArchives: vi.fn<[], ElectionArchive[]>(() => []),
   startRun: vi.fn(),
@@ -149,6 +150,9 @@ describe('POST /api/election-runs/close', () => {
     // survives Close Recording, same as candidates -- closing must not wipe
     // them out.
     expect(mockedDataStore.reopenOfficerCodesByType).not.toHaveBeenCalled();
+    // ...but every booth's duty is over: red on the Officer Codes tab, and
+    // no longer able to activate a ballot.
+    expect(mockedDataStore.closeOfficerCodesByType).toHaveBeenCalledWith('school');
     expect(mockedDataStore.closeRun).toHaveBeenCalledWith(runningRun.id, expect.any(String), ['archive-1']);
     expect(mockedDataStore.appendLogEntry).toHaveBeenCalledWith(
       expect.objectContaining({ runId: runningRun.id, action: 'run.close' })

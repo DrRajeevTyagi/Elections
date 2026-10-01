@@ -122,6 +122,10 @@ export const closeRecording = async (clientId: string | undefined): Promise<Elec
     .sort((a, b) => b.archivedAt - a.archivedAt)[0];
 
   kioskService.clearSessions();
+  // Every booth of this election is now "duty over" (red on the Officer
+  // Codes tab) and can't activate a ballot, until "Start Allotting Duties
+  // for a Fresh Election" or the next Start of this type reopens it.
+  dataStore.closeOfficerCodesByType(run.electionType);
   // Clears activeElectionType back to null -- without this it stays set to
   // whatever type just closed, indefinitely, so the admin/kiosk "Election
   // for X Posts" banner (AppLayout.tsx) would keep announcing a type that's

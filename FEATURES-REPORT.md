@@ -173,6 +173,17 @@ Manages elections for **3 house-level posts**:
   list — it never replaces or clears previously generated codes.**
 - **Name a code**: a code cannot unlock a ballot until an officer's name is saved
   against it
+- **Duty colours** on every code: white = not sent, yellow = sent on WhatsApp but
+  not yet entered, green = ready (the teacher typed the code on a kiosk — counted
+  even before voting opens, and the teacher sees "✓ your code is correct, you are
+  marked as ready"), red = duty over (End of Voting closes every booth of that
+  election, or the booth was closed), grey = re-polled. A summary line counts each
+  colour; "Not ready yet only" shows who still needs chasing; the tab refreshes
+  itself every few seconds
+- **🔄 Start Allotting Duties for a Fresh Election**: pick School or House; every
+  existing code of that election, both branches, turns white (usable, not sent,
+  not ready). Not allowed while that election is running. If it is forgotten,
+  starting the election turns any red codes white automatically
 - **Close / Reopen** a code directly from this tab (same effect as the officer's
   own "Close polling at this booth")
 - **Re-poll** a booth (only while its election is running): the Chief Election

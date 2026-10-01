@@ -31,6 +31,7 @@ const mockedDataStore = {
   markOfficerCodesSent: vi.fn<unknown[], OfficerCode[]>(() => []),
   orderRepoll: vi.fn<unknown[], { original: OfficerCode; replacement: OfficerCode } | undefined>(),
   countCountedVotesByOfficerCode: vi.fn<[string], number>(() => 0),
+  startFreshDuties: vi.fn<[string], number>(() => 0),
   reopenOfficerCode: vi.fn(),
   closeOfficerCode: vi.fn<[string], OfficerCode | undefined>(),
   generateOfficerCodes: vi.fn<unknown[], OfficerCode[]>(() => []),
@@ -467,6 +468,44 @@ describe('POST /api/officer-codes/:code/repoll', () => {
     expect(remove.status).toBe(409);
     expect(mockedDataStore.reopenOfficerCode).not.toHaveBeenCalled();
     expect(mockedDataStore.deleteOfficerCode).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/officer-codes/fresh-duties', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDataStore.getCurrentRun.mockReturnValue(undefined);
+  });
+
+  it('turns every code of that election back to white and reports how many', async () => {
+    mockedDataStore.startFreshDuties.mockReturnValue(175);
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/fresh-duties').send({ electionType: 'house' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.count).toBe(175);
+    expect(mockedDataStore.startFreshDuties).toHaveBeenCalledWith('house');
+  });
+
+  it('is refused while that same election is running', async () => {
+    mockedDataStore.getCurrentRun.mockReturnValue(runningSchoolRun);
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/fresh-duties').send({ electionType: 'school' });
+
+    expect(response.status).toBe(409);
+    expect(mockedDataStore.startFreshDuties).not.toHaveBeenCalled();
+  });
+
+  it('is allowed for House while School is running', async () => {
+    mockedDataStore.getCurrentRun.mockReturnValue(runningSchoolRun);
+    const { createApp } = await import('../app.js');
+    await request(createApp()).post('/api/officer-codes/fresh-duties').send({ electionType: 'house' }).expect(200);
+  });
+
+  it('needs an election type', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/fresh-duties').send({});
+    expect(response.status).toBe(400);
   });
 });
 

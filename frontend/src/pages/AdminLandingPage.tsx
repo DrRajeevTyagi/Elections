@@ -25,7 +25,8 @@ import {
   getCurrentRun,
   getRuns,
   searchRunLog,
-  closeRecording
+  closeRecording,
+  startFreshDuties
 } from '../services/api';
 import type {
   PollStatus,
@@ -46,6 +47,7 @@ import { BulkAllotCodesModal } from '../components/BulkAllotCodesModal';
 import { SendCodesPanel } from '../components/SendCodesPanel';
 import { TakeoverPrompt, TakeoverRequestBox } from '../components/AdminTakeover';
 import { RepollDialog } from '../components/RepollDialog';
+import { countDutyStatuses, dutyStatus, DUTY_STYLES } from '../utils/dutyStatus';
 import { REPOLL_REASON_LABELS } from '../types/api';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
 import { POST_NAMES } from '../constants/posts';
@@ -142,6 +144,9 @@ export const AdminLandingPage = (): JSX.Element => {
   // the new code still has to be sent to the teacher.
   const [repollTarget, setRepollTarget] = useState<OfficerCode | null>(null);
   const [repollNotice, setRepollNotice] = useState<{ oldCode: string; replacement: OfficerCode } | null>(null);
+  // Duty colours (Officer Codes tab).
+  const [notReadyOnly, setNotReadyOnly] = useState(false);
+  const [showFreshDuties, setShowFreshDuties] = useState(false);
   const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
   const [archives, setArchives] = useState<ArchiveSummary[]>([]);
   const [archiveNameDrafts, setArchiveNameDrafts] = useState<Record<string, string>>({});
@@ -804,6 +809,42 @@ export const AdminLandingPage = (): JSX.Element => {
     };
   }, [authenticated, pollStatus?.settings.isOpen, refreshVoteCounts]);
 
+  // Officer Codes tab: keep the duty colours current even before voting
+  // opens -- teachers check in (turn green) on the morning of the
+  // election, while the poll is still closed and the 3-second refresh
+  // above isn't running.
+  useEffect(() => {
+    if (!authenticated || activeTab !== 'codes') {
+      return;
+    }
+    const intervalId = setInterval(() => {
+      void loadOfficerCodes(false);
+    }, 5000);
+    return () => clearInterval(intervalId);
+  }, [authenticated, activeTab, loadOfficerCodes]);
+
+  const handleStartFreshDuties = async (electionType: ElectionType) => {
+    const kind = electionType === 'house' ? 'House' : 'School';
+    const confirmed = window.confirm(
+      `Start allotting duties for a fresh ${kind} Election?\n\nEvery existing ${kind} Elections code, in both Dwarka and AN, turns WHITE: usable again, not sent, not ready. Their "sent" and "ready" marks from before are cleared. Re-polled codes stay cancelled.\n\nDo this before sending codes for the new election.`
+    );
+    if (!confirmed) {
+      return;
+    }
+    try {
+      setOfficerCodesLoading(true);
+      setError(null);
+      const count = await startFreshDuties(electionType, adminSecret);
+      setMessage(`${count} ${kind} Elections code${count === 1 ? '' : 's'} reset to white for a fresh election.`);
+      setShowFreshDuties(false);
+      await loadOfficerCodes();
+    } catch (freshError) {
+      setError(freshError instanceof Error ? freshError.message : 'Failed to start fresh duties');
+    } finally {
+      setOfficerCodesLoading(false);
+    }
+  };
+
   const mutatePoll = async (action: 'open' | 'close') => {
     if (!adminSecret.trim()) {
       setError('Enter the admin secret to manage the poll.');
@@ -1062,13 +1103,26 @@ export const AdminLandingPage = (): JSX.Element => {
   // unbound/school codes in their own group at the end -- so it reads as
   // "n codes for Anand House, then n for Dhiraj House, etc." rather than
   // whatever order they happened to be generated in.
+  // Codes generated before the branch field existed have no `branch` set
+  // client-side either -- treat that the same way the backend defaults it,
+  // so old Dwarka codes still show up under "Dwarka" instead of vanishing.
+  const branchOfficerCodes = useMemo(
+    () => officerCodes.filter((entry) => (entry.branch ?? 'dwarka') === selectedBranch),
+    [officerCodes, selectedBranch]
+  );
+  const dutyCounts = useMemo(() => countDutyStatuses(branchOfficerCodes), [branchOfficerCodes]);
+
   const groupedOfficerCodes = useMemo(() => {
-    // Codes generated before the branch field existed have no `branch` set
-    // client-side either -- treat that the same way the backend defaults it,
-    // so old Dwarka codes still show up under "Dwarka" instead of vanishing.
-    const branchFiltered = officerCodes.filter((entry) => (entry.branch ?? 'dwarka') === selectedBranch);
-    return groupOfficerCodesByHouse(branchFiltered);
-  }, [officerCodes, selectedBranch]);
+    // "Not ready yet" -- who still needs chasing: allotted codes that were
+    // never sent, or sent but never entered on a kiosk.
+    const shown = notReadyOnly
+      ? branchOfficerCodes.filter((entry) => {
+          const status = dutyStatus(entry);
+          return (status === 'fresh' || status === 'sent') && entry.officerName.trim();
+        })
+      : branchOfficerCodes;
+    return groupOfficerCodesByHouse(shown);
+  }, [branchOfficerCodes, notReadyOnly]);
 
   // "Download Dwarka/AN Report" mirrors GET /report/current: the live
   // results while an election is running, or the final result of whichever
@@ -1809,6 +1863,72 @@ export const AdminLandingPage = (): JSX.Element => {
           </div>
         </div>
 
+        <div
+          style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}
+        >
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }} aria-label="Duty status summary">
+            {(['ready', 'sent', 'fresh', 'over'] as const).map((status) => (
+              <span
+                key={status}
+                style={{
+                  padding: '0.25rem 0.6rem',
+                  borderRadius: '999px',
+                  border: `2px solid ${DUTY_STYLES[status].border}`,
+                  backgroundColor: DUTY_STYLES[status].background,
+                  color: DUTY_STYLES[status].text,
+                  fontWeight: 700,
+                  fontSize: '0.85rem'
+                }}
+              >
+                {DUTY_STYLES[status].label}: {dutyCounts[status]}
+              </span>
+            ))}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <input type="checkbox" checked={notReadyOnly} onChange={(event) => setNotReadyOnly(event.target.checked)} />
+              Not ready yet only
+            </label>
+            <button
+              className="button"
+              style={{ backgroundColor: '#0f766e' }}
+              onClick={() => setShowFreshDuties((open) => !open)}
+              title="Turn all codes of one election back to white before allotting duties for a new election"
+            >
+              🔄 Start Allotting Duties for a Fresh Election
+            </button>
+          </div>
+        </div>
+
+        {showFreshDuties && (
+          <div style={{ padding: '1rem', backgroundColor: '#f0fdfa', border: '2px solid #0f766e', borderRadius: '8px', marginBottom: '1rem' }}>
+            <p style={{ margin: '0 0 0.75rem 0' }}>
+              Which election are you allotting duties for? All of its existing codes, in <strong>both Dwarka and AN</strong>,
+              turn white &mdash; usable, not sent, not ready.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {(['school', 'house'] as const).map((type) => {
+                const running = currentRun?.status === 'running' && currentRun.electionType === type;
+                return (
+                  <button
+                    key={type}
+                    className="button"
+                    style={{ backgroundColor: '#0f766e', opacity: running || officerCodesLoading ? 0.5 : 1 }}
+                    disabled={running || officerCodesLoading}
+                    title={running ? 'This election is running right now' : undefined}
+                    onClick={() => void handleStartFreshDuties(type)}
+                  >
+                    {type === 'house' ? 'House Elections' : 'School Elections'}
+                  </button>
+                );
+              })}
+              <button className="button" style={{ backgroundColor: '#6b7280' }} onClick={() => setShowFreshDuties(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {officerCodes.length === 0 ? (
           <p>No codes generated yet.</p>
         ) : (
@@ -1843,16 +1963,27 @@ export const AdminLandingPage = (): JSX.Element => {
                       currentRun?.status === 'running' &&
                       currentRun.electionType === (entry.electionType ?? (entry.house ? 'house' : 'school')) &&
                       Boolean(entry.officerName.trim());
+                    const duty = dutyStatus(entry);
+                    const dutyStyle = DUTY_STYLES[duty];
                     return (
                       <tr
                         key={entry.code}
+                        data-duty={duty}
                         style={{
                           borderBottom: '1px solid #f3f4f6',
-                          backgroundColor: isRepolled ? '#f3f4f6' : isClosed ? '#fef2f2' : undefined,
+                          backgroundColor: dutyStyle.background,
                           color: isRepolled ? '#6b7280' : undefined
                         }}
                       >
-                        <td style={{ padding: '0.5rem', fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.05em' }}>
+                        <td
+                          style={{
+                            padding: '0.5rem',
+                            fontFamily: 'monospace',
+                            fontWeight: 700,
+                            letterSpacing: '0.05em',
+                            borderLeft: `6px solid ${dutyStyle.border}`
+                          }}
+                        >
                           <span style={{ textDecoration: isRepolled ? 'line-through' : undefined }}>{entry.code}</span>
                           {entry.replacesCode && (
                             <div style={{ fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600, color: '#7c3aed', letterSpacing: 0 }}>
@@ -1897,10 +2028,16 @@ export const AdminLandingPage = (): JSX.Element => {
                             >
                               RE-POLLED &rarr; {entry.repoll.replacementCode}
                             </span>
-                          ) : isClosed ? (
-                            <span style={{ color: '#dc2626', fontWeight: 700 }}>CLOSED</span>
                           ) : (
-                            <span style={{ color: '#16a34a', fontWeight: 600 }}>Open</span>
+                            <span style={{ color: dutyStyle.text, fontWeight: 700 }}>
+                              {duty === 'ready' && '✓ '}
+                              {dutyStyle.label}
+                              {duty === 'ready' && entry.readyAt && (
+                                <span style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600 }}>
+                                  since {new Date(entry.readyAt).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' })}
+                                </span>
+                              )}
+                            </span>
                           )}
                         </td>
                         <td style={{ padding: '0.5rem' }}>

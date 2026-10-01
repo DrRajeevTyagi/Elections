@@ -13,7 +13,8 @@ const mockedDataStore = {
   findOfficerCode: vi.fn<[string], OfficerCode | undefined>(),
   getPollState: vi.fn<[], PollState>(),
   countVotesByOfficerCode: vi.fn<[string], number>(),
-  closeOfficerCode: vi.fn()
+  closeOfficerCode: vi.fn(),
+  markOfficerCodeReady: vi.fn()
 };
 
 vi.mock('../storage/datastore.js', () => ({
@@ -24,6 +25,36 @@ describe('POST /api/kiosk/activate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedDataStore.countVotesByOfficerCode.mockReturnValue(0);
+  });
+
+  // Duty colours: a teacher typing their code before voting opens is how
+  // the admin sees they received it (green).
+  it('marks a correct code ready even before voting opens, and tells the teacher so', async () => {
+    mockedDataStore.findOfficerCode.mockReturnValue({ code: 'ABC123', officerName: 'Jane', electionType: 'school', createdAt: Date.now() });
+    mockedDataStore.getPollState.mockReturnValue({ activeElectionType: 'school', settings: { isOpen: false, allowRevote: false } });
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/kiosk/activate').send({ secret: 'abc123' });
+
+    expect(response.status).toBe(403);
+    expect(response.body.code).toBe('READY_POLL_NOT_OPEN');
+    expect(response.body.error).toContain('marked as ready');
+    expect(mockedDataStore.markOfficerCodeReady).toHaveBeenCalledWith('ABC123');
+  });
+
+  it('does not mark a closed ("duty over") or unallotted code as ready', async () => {
+    mockedDataStore.getPollState.mockReturnValue({ activeElectionType: 'school', settings: { isOpen: true, allowRevote: false } });
+    const { createApp } = await import('../app.js');
+
+    mockedDataStore.findOfficerCode.mockReturnValue({ code: 'ABC123', officerName: 'Jane', electionType: 'school', createdAt: 1, closedAt: 2 });
+    const closed = await request(createApp()).post('/api/kiosk/activate').send({ secret: 'abc123' });
+    mockedDataStore.findOfficerCode.mockReturnValue({ code: 'ABC123', officerName: '', electionType: 'school', createdAt: 1 });
+    const unallotted = await request(createApp()).post('/api/kiosk/activate').send({ secret: 'abc123' });
+
+    expect(closed.status).toBe(403);
+    expect(closed.body.error).toContain('duty for it is over');
+    expect(unallotted.status).toBe(403);
+    expect(mockedDataStore.markOfficerCodeReady).not.toHaveBeenCalled();
   });
 
   it('rejects a code whose booth was ordered to re-poll, saying why', async () => {

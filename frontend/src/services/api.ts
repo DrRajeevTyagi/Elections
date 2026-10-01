@@ -385,6 +385,17 @@ export const orderRepoll = async (
   return response.data;
 };
 
+// "Start Allotting Duties for a Fresh Election": every code of that
+// election type (both branches) goes back to white. Returns how many.
+export const startFreshDuties = async (electionType: ElectionType, adminSecret: string): Promise<number> => {
+  const response = await api.post<{ count: number }>(
+    '/officer-codes/fresh-duties',
+    { electionType },
+    { headers: { 'x-admin-secret': adminSecret } }
+  );
+  return response.data.count;
+};
+
 // Send Codes screen -- `sent: false` is "Undo".
 export const markOfficerCodesSent = async (codes: string[], sent: boolean, adminSecret: string): Promise<void> => {
   await api.post(

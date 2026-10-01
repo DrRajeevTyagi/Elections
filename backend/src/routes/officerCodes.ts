@@ -174,6 +174,29 @@ officerCodesRouter.post(
   })
 );
 
+// "Start Allotting Duties for a Fresh Election" (Officer Codes tab): every
+// code of one election type, both branches, goes back to white -- usable,
+// not sent, not ready -- so this election's duty colours start clean.
+// Refused while that election is running: it would reopen booths closed
+// mid-election and wipe the day's check-ins.
+officerCodesRouter.post(
+  '/fresh-duties',
+  asyncHandler(async (req, res) => {
+    const { electionType } = req.body as { electionType?: unknown };
+    if (electionType !== 'school' && electionType !== 'house') {
+      throw new BadRequestError('Choose School or House elections');
+    }
+    if (dataStore.getCurrentRun()?.electionType === electionType) {
+      throw new ConflictError(
+        `${electionType === 'house' ? 'House' : 'School'} Elections are running right now. Start fresh duties only before an election, or after End of Voting.`
+      );
+    }
+    const count = dataStore.startFreshDuties(electionType);
+    await logAction(req.header('x-admin-client-id'), 'officerCode.freshDuties', { electionType, count });
+    res.json({ count });
+  })
+);
+
 // Send Codes screen -- marks the codes in one WhatsApp message as sent (or,
 // with `sent: false`, undoes that). Takes a list because a teacher's School
 // and House codes go out together in a single message.

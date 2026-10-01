@@ -85,6 +85,15 @@ export interface OfficerCode {
   // Cleared again by "Undo". Lets sending resume where it stopped after a
   // refresh or the next morning.
   sentAt?: number;
+  // When the teacher first typed this code correctly on a kiosk -- proof
+  // they received it and are ready (green on the Officer Codes tab).
+  // Recorded even before voting opens; cleared by "Start Allotting Duties
+  // for a Fresh Election".
+  //
+  // Duty colours on the Officer Codes tab, derived from these fields:
+  // grey = repoll, red = closedAt ("duty over"), green = readyAt,
+  // yellow = sentAt, white = none of these.
+  readyAt?: number;
   // Set when the Chief Election Commissioner ordered a re-poll at this
   // booth (see routes/officerCodes.ts POST /:code/repoll). Every vote cast
   // under this code is then left out of all results -- the votes

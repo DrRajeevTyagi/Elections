@@ -51,6 +51,10 @@ interface ElectionData {
   // loadRuns()/loadLogEntries().
   runs: ElectionRun[];
   actionLog: LogEntry[];
+  // One-time switch-over to the officer-code duty colours (2026-10-01): set
+  // once every code that existed before then has been marked "duty over"
+  // (closed). See migrateDutyColours().
+  dutyColoursMigrated?: boolean;
 }
 
 const cloneCandidates = (candidates: Candidate[]): Candidate[] =>
@@ -242,8 +246,29 @@ export class DataStore {
     await this.loadVotes();
     await this.loadRuns();
     await this.loadLogEntries();
+    this.migrateDutyColours();
     await this.flush();
     this.storageHealth = { ok: true, lastSuccessAt: Date.now(), lastErrorAt: null };
+  }
+
+  // Every code that existed before the duty colours were introduced comes
+  // from an earlier election or trial, so it starts as "duty over" (red,
+  // closed) until "Start Allotting Duties for a Fresh Election" -- except
+  // codes of an election that happens to be running right now, which must
+  // keep working. Runs once, ever.
+  private migrateDutyColours(): void {
+    if (this.data.dutyColoursMigrated) {
+      return;
+    }
+    const runningType = this.getCurrentRun()?.electionType;
+    const now = Date.now();
+    for (const entry of this.data.officerCodes) {
+      if (entry.electionType !== runningType && !entry.closedAt) {
+        entry.closedAt = now;
+      }
+    }
+    this.data.dutyColoursMigrated = true;
+    this.queuePersist();
   }
 
   private subcollection(name: string) {
@@ -418,6 +443,8 @@ export class DataStore {
         totalVotesByBranch: entry.totalVotesByBranch ? { ...entry.totalVotesByBranch } : undefined
       }));
     }
+
+    defaults.dutyColoursMigrated = parsed.dutyColoursMigrated === true;
 
     if (parsed.pollState && typeof parsed.pollState === 'object') {
       const pollState = parsed.pollState as Partial<PollState>;
@@ -768,12 +795,62 @@ export class DataStore {
   // and therefore unusable, for the new one -- the code and its officer
   // allotment carry forward, only the "this booth is done for the day" flag
   // resets, same as votes reset to zero for a new run.
+  //
+  // Duty colours (2026-10-01): a code still closed ("duty over", red) at
+  // this point is left over from the previous election, so its sent/ready
+  // marks are stale and are cleared with it -- it goes back to white. A
+  // code NOT closed keeps its marks: those are this election's own
+  // check-ins (e.g. teachers who entered their code that morning, before
+  // Start). This is the safety net for when "Start Allotting Duties for a
+  // Fresh Election" (startFreshDuties) was never pressed.
   reopenOfficerCodesByType(electionType: ElectionType): void {
     // A re-polled code stays closed for good, in every later election too.
     this.data.officerCodes = this.data.officerCodes.map((entry) =>
-      entry.electionType === electionType && !entry.repoll ? { ...entry, closedAt: undefined } : entry
+      entry.electionType === electionType && !entry.repoll && entry.closedAt
+        ? { ...entry, closedAt: undefined, sentAt: undefined, readyAt: undefined }
+        : entry
     );
     this.queuePersist();
+  }
+
+  // End of Voting: every booth of that election is done ("duty over", red)
+  // and can no longer activate a ballot.
+  closeOfficerCodesByType(electionType: ElectionType): void {
+    const now = Date.now();
+    for (const entry of this.data.officerCodes) {
+      if (entry.electionType === electionType && !entry.closedAt) {
+        entry.closedAt = now;
+      }
+    }
+    this.queuePersist();
+  }
+
+  // "Start Allotting Duties for a Fresh Election" (Officer Codes tab):
+  // every code of this election type, both branches, goes back to white --
+  // usable, not sent, not ready. Re-polled codes stay dead. Returns how many
+  // codes were reset.
+  startFreshDuties(electionType: ElectionType): number {
+    let count = 0;
+    for (const entry of this.data.officerCodes) {
+      if (entry.electionType === electionType && !entry.repoll) {
+        entry.closedAt = undefined;
+        entry.sentAt = undefined;
+        entry.readyAt = undefined;
+        count += 1;
+      }
+    }
+    this.queuePersist();
+    return count;
+  }
+
+  // The teacher typed this code correctly on a kiosk -- they have received
+  // it and are ready. Only the first check-in is kept.
+  markOfficerCodeReady(code: string): void {
+    const entry = this.data.officerCodes.find((item) => codesMatch(item.code, code));
+    if (entry && !entry.readyAt) {
+      entry.readyAt = Date.now();
+      this.queuePersist();
+    }
   }
 
   // Called by runService.ts startRecording once a new run exists, to tag

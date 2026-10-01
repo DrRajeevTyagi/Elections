@@ -472,6 +472,99 @@ describe('DataStore -- election runs and the append-only action log (ROADMAP.md 
     });
   });
 
+  // Duty colours: white (fresh) -> yellow (sent) -> green (ready) -> red
+  // (duty over, closed).
+  describe('duty colours', () => {
+    const allot = (store: Awaited<ReturnType<typeof importFreshDataStore>>) =>
+      store.bulkAllotOfficerCodes([
+        { officerName: 'A', electionType: 'school', branch: 'dwarka' },
+        { officerName: 'B', electionType: 'school', branch: 'AN' },
+        { officerName: 'C', electionType: 'house', house: 'Anand', branch: 'dwarka' }
+      ]);
+
+    it('marks a code ready once, keeping the first check-in time', async () => {
+      vi.useFakeTimers();
+      try {
+        const store = await importFreshDataStore();
+        await store.init();
+        const [a] = allot(store);
+        vi.setSystemTime(1000);
+        store.markOfficerCodeReady(a.code.toUpperCase());
+        vi.setSystemTime(5000);
+        store.markOfficerCodeReady(a.code);
+        expect(store.findOfficerCode(a.code)?.readyAt).toBe(1000);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('End of Voting closes every code of that election only', async () => {
+      const store = await importFreshDataStore();
+      await store.init();
+      const [a, b, c] = allot(store);
+      store.closeOfficerCodesByType('school');
+      expect(store.findOfficerCode(a.code)?.closedAt).toEqual(expect.any(Number));
+      expect(store.findOfficerCode(b.code)?.closedAt).toEqual(expect.any(Number));
+      expect(store.findOfficerCode(c.code)?.closedAt).toBeUndefined();
+    });
+
+    it('fresh duties turn every code of that election, both branches, back to white -- except re-polled ones', async () => {
+      const store = await importFreshDataStore();
+      await store.init();
+      const [a, b, c] = allot(store);
+      store.markOfficerCodesSent([a.code, b.code, c.code], true);
+      store.markOfficerCodeReady(a.code);
+      store.closeOfficerCodesByType('school');
+      store.orderRepoll(b.code, { orderedBy: 'x', reason: 'disruption', note: '' }, { officerName: 'B' });
+
+      const count = store.startFreshDuties('school');
+
+      // a, plus b's replacement code; b itself stays dead.
+      expect(count).toBe(2);
+      expect(store.findOfficerCode(a.code)).toMatchObject({ closedAt: undefined, sentAt: undefined, readyAt: undefined });
+      expect(store.findOfficerCode(b.code)?.closedAt).toEqual(expect.any(Number));
+      expect(store.findOfficerCode(c.code)?.sentAt).toEqual(expect.any(Number));
+    });
+
+    it('starting an election turns leftover red codes white, but keeps this morning\'s check-ins', async () => {
+      const store = await importFreshDataStore();
+      await store.init();
+      const [a, b] = allot(store);
+      store.markOfficerCodesSent([a.code, b.code], true);
+      store.markOfficerCodeReady(a.code);
+      store.closeOfficerCode(b.code); // left over from the last election
+
+      store.reopenOfficerCodesByType('school');
+
+      expect(store.findOfficerCode(a.code)?.closedAt).toBeUndefined();
+      expect(store.findOfficerCode(a.code)).toMatchObject({ sentAt: expect.any(Number), readyAt: expect.any(Number) });
+      expect(store.findOfficerCode(b.code)).toMatchObject({ closedAt: undefined, sentAt: undefined, readyAt: undefined });
+    });
+
+    it('on first start after the update, every existing code becomes red -- except those of a running election -- and only once', async () => {
+      sharedFakeFirestore.store.set('school-election/state', {
+        officerCodes: [
+          { code: 'old111', officerName: 'A', electionType: 'school', createdAt: 1 },
+          { code: 'old222', officerName: 'B', electionType: 'house', house: 'Anand', createdAt: 1 }
+        ]
+      });
+      sharedFakeFirestore.store.set('school-election/state/electionRuns/run-1', {
+        id: 'run-1', electionType: 'house', name: 'House', status: 'running', startedAt: 1, startedBy: 'x'
+      });
+
+      const store = await importFreshDataStore();
+      await store.init();
+      expect(store.findOfficerCode('old111')?.closedAt).toEqual(expect.any(Number));
+      expect(store.findOfficerCode('old222')?.closedAt).toBeUndefined();
+
+      // Once only: after fresh duties, a restart must not turn them red again.
+      store.startFreshDuties('school');
+      const restarted = await importFreshDataStore();
+      await restarted.init();
+      expect(restarted.findOfficerCode('old111')?.closedAt).toBeUndefined();
+    });
+  });
+
   // Re-polling at a booth: its votes stop counting but are never deleted,
   // and a fresh code is issued for the same election/house/branch.
   describe('orderRepoll', () => {
