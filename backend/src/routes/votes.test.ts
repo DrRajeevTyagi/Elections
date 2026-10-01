@@ -143,4 +143,32 @@ describe('POST /api/votes -- branch integrity', () => {
     expect(response.body.error).toContain('re-poll');
     expect(mockedDataStore.addVote).not.toHaveBeenCalled();
   });
+
+  // A ballot opened before the booth was verified against its Paper List
+  // and sealed must not change the sealed count afterwards.
+  it('refuses a ballot from a booth that has already been sealed', async () => {
+    mockedKioskService.getActiveSession.mockReturnValue({
+      token: 'tok', activatedAt: Date.now(), house: 'Satya', officerCode: 'AN01', branch: 'AN'
+    });
+    mockedDataStore.findOfficerCode.mockReturnValueOnce({
+      code: 'AN01',
+      officerName: 'Jane',
+      electionType: 'house',
+      house: 'Satya',
+      createdAt: Date.now(),
+      closedAt: Date.now(),
+      seal: { sealedAt: Date.now(), sealedBy: 'Admin', paperListCount: 12, appCount: 12 }
+    });
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp())
+      .post('/api/votes')
+      .set('x-kiosk-token', 'tok')
+      .send({ selections: { HC: 'an-hc-1', HCC: 'an-hcc-1', HSC: 'an-hsc-1' } });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toContain('sealed');
+    expect(mockedDataStore.addVote).not.toHaveBeenCalled();
+    expect(mockedKioskService.markConsumed).not.toHaveBeenCalled();
+  });
 });

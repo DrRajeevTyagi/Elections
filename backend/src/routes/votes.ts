@@ -75,9 +75,17 @@ votesRouter.post(
     // not slip through afterwards (it wouldn't count anyway -- see
     // dataStore.getCountedVotes -- but the voter should be told, not
     // shown a misleading confirmation).
-    if (officerCode && dataStore.findOfficerCode(officerCode)?.repoll) {
+    const boothCode = officerCode ? dataStore.findOfficerCode(officerCode) : undefined;
+    if (boothCode?.repoll) {
       throw new ForbiddenError(
         'The Election Commission ordered a re-poll at this booth, so this ballot was not recorded. Please wait for the polling officer to start the re-poll with the new code.'
+      );
+    }
+    // Same for a booth already checked against its Paper List and sealed:
+    // a ballot opened before that must not change the sealed count.
+    if (boothCode?.seal) {
+      throw new ForbiddenError(
+        'Polling at this booth has been verified and sealed, so this ballot was not recorded. Please contact the election administrator.'
       );
     }
 

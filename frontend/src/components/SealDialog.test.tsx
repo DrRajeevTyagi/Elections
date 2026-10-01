@@ -61,6 +61,16 @@ describe('SealDialog', () => {
     expect(mockApi.sealOfficerCode).not.toHaveBeenCalled();
   });
 
+  it('sends the number typed from the Paper List, so the server checks it against its own latest count', async () => {
+    mockApi.sealOfficerCode.mockRejectedValue(new Error("The counts don't match: the app counted 39 votes at booth abc123, but the Paper List has 38."));
+    renderDialog();
+    typePaperList('38');
+    fireEvent.click(sealButton());
+
+    expect(await screen.findByText(/the app counted 39 votes/)).toBeInTheDocument();
+    expect(mockApi.sealOfficerCode).toHaveBeenCalledWith('abc123', 38, 'secret');
+  });
+
   it('ignores anything but digits', () => {
     renderDialog();
     typePaperList('3a8');

@@ -75,8 +75,15 @@ export const TakeoverRequestBox = ({ adminSecret, message, details, onGranted, o
         } else if (latest.status === 'expired' || latest.status === 'cancelled') {
           setPhase('expired');
         }
-      } catch {
-        // A blip -- the next check retries.
+      } catch (checkError) {
+        // A network blip (no response) -- the next check retries. But a
+        // refusal from the server (e.g. the request is gone after a server
+        // restart) must stop the checks: repeated refused admin requests
+        // count towards the admin-password lockout for the whole network.
+        if ((checkError as { response?: unknown })?.response && !stopped) {
+          stopped = true;
+          setPhase('expired');
+        }
       }
     };
     const id = setInterval(() => void check(), REQUEST_CHECK_MS);

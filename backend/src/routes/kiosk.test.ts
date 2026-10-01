@@ -42,6 +42,21 @@ describe('POST /api/kiosk/activate', () => {
     expect(mockedDataStore.markOfficerCodeReady).toHaveBeenCalledWith('ABC123');
   });
 
+  // 2026-09-24 trial lesson: lockouts hurt. A teacher re-trying a correct
+  // code before voting opens is checking in, not guessing.
+  it('does not count repeated check-ins before voting opens towards the wrong-code lockout', async () => {
+    mockedDataStore.findOfficerCode.mockReturnValue({ code: 'ABC123', officerName: 'Jane', electionType: 'school', createdAt: Date.now() });
+    mockedDataStore.getPollState.mockReturnValue({ activeElectionType: 'school', settings: { isOpen: false, allowRevote: false } });
+
+    const { createApp } = await import('../app.js');
+    const app = createApp();
+    for (let attempt = 0; attempt < 35; attempt += 1) {
+      const response = await request(app).post('/api/kiosk/activate').set('x-kiosk-device-id', 'teacher-phone-0001').send({ secret: 'abc123' });
+      expect(response.status).toBe(403);
+      expect(response.body.code).toBe('READY_POLL_NOT_OPEN');
+    }
+  });
+
   it('does not mark a closed ("duty over") or unallotted code as ready', async () => {
     mockedDataStore.getPollState.mockReturnValue({ activeElectionType: 'school', settings: { isOpen: true, allowRevote: false } });
     const { createApp } = await import('../app.js');

@@ -79,6 +79,24 @@ describe('TakeoverRequestBox (the device asking for control)', () => {
     expect(await screen.findByText(/silent for 3 minutes/)).toBeInTheDocument();
   });
 
+  it('stops checking once the server refuses (e.g. after a restart), so it cannot trip the admin lockout', async () => {
+    renderBox();
+    mockApi.getAdminTakeoverRequest.mockRejectedValue(Object.assign(new Error('Request not found'), { response: { status: 400 } }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ask for Control' }));
+    await screen.findByText(/Waiting for Laptop A/);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100);
+    });
+    expect(await screen.findByText(/No answer from Laptop A/)).toBeInTheDocument();
+
+    const callsSoFar = mockApi.getAdminTakeoverRequest.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+    expect(mockApi.getAdminTakeoverRequest.mock.calls.length).toBe(callsSoFar);
+  });
+
   it('cancelling withdraws the request', async () => {
     renderBox();
     fireEvent.click(screen.getByRole('button', { name: 'Ask for Control' }));

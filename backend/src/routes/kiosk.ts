@@ -63,6 +63,8 @@ kioskRouter.post(
 
     const pollState = getPollState();
     if (!pollState.settings.isOpen || !pollState.activeElectionType) {
+      // Not a wrong guess -- see middleware/rateLimit.ts kioskGuessLimiter.
+      res.locals.kioskCheckIn = true;
       throw new ForbiddenError(
         '✓ Your code is correct and you are marked as ready. Voting has not started yet -- please try again once the election administrator opens the poll.',
         'READY_POLL_NOT_OPEN'

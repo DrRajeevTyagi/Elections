@@ -31,13 +31,16 @@ export const SealDialog = ({ adminSecret, entry, onClose, onSealed, onOrderRepol
   const mismatch = typedIsValid && typed !== appCount;
 
   const handleSeal = async () => {
-    if (!matches) {
+    if (!matches || typed === null) {
       return;
     }
     setSaving(true);
     setError(null);
     try {
-      await sealOfficerCode(entry.code, appCount, adminSecret);
+      // The number actually read off the Paper List -- the server compares
+      // it with its own, current count (a vote may have landed since this
+      // window opened).
+      await sealOfficerCode(entry.code, typed, adminSecret);
       onSealed();
     } catch (sealError) {
       setError(sealError instanceof Error ? sealError.message : 'Could not seal this booth');

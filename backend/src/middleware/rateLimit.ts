@@ -63,6 +63,11 @@ export const kioskGuessLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
+  // A correct code entered before voting opens is refused (403) but is a
+  // successful check-in, not a wrong guess -- see routes/kiosk.ts, which
+  // sets this flag. Otherwise a teacher re-trying their code a few times on
+  // the morning of the election would edge their device towards a lockout.
+  requestWasSuccessful: (_req, res) => res.statusCode < 400 || res.locals.kioskCheckIn === true,
   store: kioskLimiterStore,
   keyGenerator: kioskKeyGenerator,
   handler: (_req, res) => {
