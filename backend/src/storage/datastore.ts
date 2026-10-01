@@ -5,7 +5,7 @@ import { Firestore } from '@google-cloud/firestore';
 import { env } from '../config/env.js';
 import { DEFAULT_CANDIDATES } from '../config/posts.js';
 import { generateUniqueCodes } from '../utils/officerCode.js';
-import { Candidate, PollState, StoredVote, ElectionType, OfficerCode, ElectionArchive, HouseId, Branch, ElectionRun, LogEntry, RepollRecord } from '../types/election.js';
+import { Candidate, PollState, StoredVote, ElectionType, OfficerCode, ElectionArchive, HouseId, Branch, ElectionRun, LogEntry, RepollRecord, SealRecord } from '../types/election.js';
 
 // Single document holds candidates/pollState/officerCodes/archives. This
 // keeps the in-memory, synchronous DataStore API unchanged for those; only
@@ -807,7 +807,7 @@ export class DataStore {
     // A re-polled code stays closed for good, in every later election too.
     this.data.officerCodes = this.data.officerCodes.map((entry) =>
       entry.electionType === electionType && !entry.repoll && entry.closedAt
-        ? { ...entry, closedAt: undefined, sentAt: undefined, readyAt: undefined }
+        ? { ...entry, closedAt: undefined, sentAt: undefined, readyAt: undefined, seal: undefined }
         : entry
     );
     this.queuePersist();
@@ -836,11 +836,25 @@ export class DataStore {
         entry.closedAt = undefined;
         entry.sentAt = undefined;
         entry.readyAt = undefined;
+        entry.seal = undefined;
         count += 1;
       }
     }
     this.queuePersist();
     return count;
+  }
+
+  // "Verify & Seal": records the check against the Paper List. The caller
+  // (routes/officerCodes.ts) has already confirmed the booth is closed, not
+  // re-polled, not sealed, and that the counts match.
+  sealOfficerCode(code: string, seal: SealRecord): OfficerCode | undefined {
+    const entry = this.data.officerCodes.find((item) => codesMatch(item.code, code));
+    if (!entry) {
+      return undefined;
+    }
+    entry.seal = { ...seal };
+    this.queuePersist();
+    return { ...entry, seal: { ...entry.seal } };
   }
 
   // The teacher typed this code correctly on a kiosk -- they have received

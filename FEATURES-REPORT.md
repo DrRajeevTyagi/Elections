@@ -180,6 +180,13 @@ Manages elections for **3 house-level posts**:
   election, or the booth was closed), grey = re-polled. A summary line counts each
   colour; "Not ready yet only" shows who still needs chasing; the tab refreshes
   itself every few seconds
+- **🔒 Verify & Seal**: once a booth's polling is closed (red), the Chief Election
+  Commissioner types the number of voters on the printed Paper List. If it matches
+  the app's count for that booth, the booth is sealed for good (white, 🔒 Sealed,
+  "Paper List 38 · App 38") and can't be reopened, re-polled or deleted; if not,
+  the screen offers Order Re-poll instead. **End of Voting is refused until every
+  booth that received votes is sealed** (booths with no votes need no check), and
+  names the booths still waiting. Reports note "Verified against the Paper List"
 - **🔄 Start Allotting Duties for a Fresh Election**: pick School or House; every
   existing code of that election, both branches, turns white (usable, not sent,
   not ready). Not allowed while that election is running. If it is forgotten,

@@ -385,6 +385,12 @@ export const orderRepoll = async (
   return response.data;
 };
 
+// "Verify & Seal": refused (errorCode SEAL_COUNT_MISMATCH) unless the
+// Paper List count matches the app's count for that booth.
+export const sealOfficerCode = async (code: string, paperListCount: number, adminSecret: string): Promise<void> => {
+  await api.post(`/officer-codes/${code}/seal`, { paperListCount }, { headers: { 'x-admin-secret': adminSecret } });
+};
+
 // "Start Allotting Duties for a Fresh Election": every code of that
 // election type (both branches) goes back to white. Returns how many.
 export const startFreshDuties = async (electionType: ElectionType, adminSecret: string): Promise<number> => {

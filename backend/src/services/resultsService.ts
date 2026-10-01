@@ -154,7 +154,8 @@ export const buildElectionSnapshot = (name?: string): ElectionArchive | null => 
             replacementCode: entry.repoll.replacementCode
           }
         : {}),
-      ...(entry.replacesCode ? { replacesCode: entry.replacesCode } : {})
+      ...(entry.replacesCode ? { replacesCode: entry.replacesCode } : {}),
+      ...(entry.seal ? { paperListCount: entry.seal.paperListCount } : {})
     }));
 
   const totalVotes = getTotalVotes();

@@ -256,6 +256,61 @@ officerCodesRouter.put(
   })
 );
 
+// "Verify & Seal" -- once a booth has closed, the Chief Election
+// Commissioner compares the app's vote count for it with the number of
+// voters on the printed Paper List. Matching counts seal the booth for good;
+// a mismatch is refused (the remedy is Order Re-poll). Only while that
+// election is running -- End of Voting itself needs every booth with votes
+// sealed (see services/runService.ts closeRecording).
+officerCodesRouter.post(
+  '/:code/seal',
+  asyncHandler(async (req, res) => {
+    const entry = dataStore.findOfficerCode(req.params.code);
+    if (!entry) {
+      throw new BadRequestError('Code not found');
+    }
+    const { paperListCount } = req.body as { paperListCount?: unknown };
+    if (typeof paperListCount !== 'number' || !Number.isInteger(paperListCount) || paperListCount < 0) {
+      throw new BadRequestError('Enter the number of voters on the Paper List');
+    }
+    if (entry.seal) {
+      throw new ConflictError(`Booth ${entry.code} is already sealed.`);
+    }
+    if (entry.repoll) {
+      throw new ConflictError(`A re-poll was ordered at booth ${entry.code} -- check and seal its new code ${entry.repoll.replacementCode} instead.`);
+    }
+    if (!entry.closedAt) {
+      throw new ConflictError(`Polling at booth ${entry.code} is still open. Close the booth before verifying it.`);
+    }
+    const run = dataStore.getCurrentRun();
+    if (!run || run.electionType !== entry.electionType) {
+      throw new ConflictError('A booth can only be verified and sealed while its election is running.');
+    }
+    const appCount = dataStore.countCountedVotesByOfficerCode(entry.code);
+    if (appCount !== paperListCount) {
+      throw new ConflictError(
+        `The counts don't match: the app counted ${appCount} vote${appCount === 1 ? '' : 's'} at booth ${entry.code}, but the Paper List has ${paperListCount}. Check again, or order a re-poll at this booth.`,
+        'SEAL_COUNT_MISMATCH',
+        { appCount, paperListCount }
+      );
+    }
+    const clientId = req.header('x-admin-client-id');
+    const sealed = dataStore.sealOfficerCode(entry.code, {
+      sealedAt: Date.now(),
+      sealedBy: resolveActor(clientId),
+      paperListCount,
+      appCount
+    });
+    await logAction(
+      clientId,
+      'officerCode.seal',
+      { code: entry.code, officerName: entry.officerName, paperListCount, appCount },
+      entry.branch
+    );
+    res.json({ code: sealed });
+  })
+);
+
 const REPOLL_REASONS: RepollReason[] = ['irregularity', 'disruption', 'count-mismatch', 'other'];
 
 // Re-polling at one booth -- ordered by the Chief Election Commissioner when
@@ -289,6 +344,9 @@ officerCodesRouter.post(
     }
     if (entry.repoll) {
       throw new ConflictError(`A re-poll was already ordered for ${entry.code} -- its new code is ${entry.repoll.replacementCode}.`);
+    }
+    if (entry.seal) {
+      throw new ConflictError(`Booth ${entry.code} was verified and sealed, so a re-poll can no longer be ordered there.`);
     }
     const run = dataStore.getCurrentRun();
     if (!run || run.electionType !== entry.electionType) {
@@ -337,8 +395,12 @@ officerCodesRouter.post(
   '/:code/reopen',
   asyncHandler(async (req, res) => {
     const { code } = req.params;
-    if (dataStore.findOfficerCode(code)?.repoll) {
+    const existing = dataStore.findOfficerCode(code);
+    if (existing?.repoll) {
       throw new ConflictError('A re-poll was ordered at this booth, so this code can never be reopened. Use its new code instead.');
+    }
+    if (existing?.seal) {
+      throw new ConflictError('This booth was verified and sealed, so it can no longer be reopened.');
     }
     const updated = dataStore.reopenOfficerCode(code);
     if (!updated) {
@@ -398,6 +460,9 @@ officerCodesRouter.delete(
     // Both sides of a re-poll are part of the permanent record of it.
     if (entry.repoll || entry.replacesCode) {
       throw new ConflictError(`Code ${entry.code} is part of a re-poll record and cannot be deleted.`);
+    }
+    if (entry.seal) {
+      throw new ConflictError(`Booth ${entry.code} was verified and sealed and cannot be deleted.`);
     }
     const voteCount = dataStore.countVotesByOfficerCode(entry.code);
     if (voteCount > 0) {

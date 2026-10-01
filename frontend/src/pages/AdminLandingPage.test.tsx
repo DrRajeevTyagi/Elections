@@ -279,7 +279,7 @@ describe('AdminLandingPage tabs', () => {
     expect(summary).toHaveTextContent('Ready: 1');
     expect(summary).toHaveTextContent('Sent -- not ready yet: 1');
     expect(summary).toHaveTextContent('Not sent: 1');
-    expect(summary).toHaveTextContent('Duty over: 1');
+    expect(summary).toHaveTextContent('Polling closed: 1');
 
     fireEvent.click(screen.getByLabelText('Not ready yet only'));
     expect(screen.getByText('FRESH1')).toBeInTheDocument();

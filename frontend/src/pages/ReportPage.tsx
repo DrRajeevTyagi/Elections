@@ -42,6 +42,9 @@ export const OfficerTurnoutTable = ({ officerCodes }: { officerCodes: ArchivedOf
               </td>
               <td>
                 {entry.officerName || <em>(unnamed)</em>}
+                {entry.paperListCount !== undefined && (
+                  <div className="report-sealed-note">🔒 Verified against the Paper List ({entry.paperListCount}) and sealed</div>
+                )}
                 {entry.replacementCode && (
                   <div className="report-repoll-note">
                     Re-polled: {entry.cancelledVoteCount ?? 0} vote{entry.cancelledVoteCount === 1 ? '' : 's'} cancelled.

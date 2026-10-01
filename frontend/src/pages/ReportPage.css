@@ -103,6 +103,12 @@
   font-weight: 700;
 }
 
+/* A booth verified against its Paper List and sealed (OfficerTurnoutTable). */
+.report-sealed-note {
+  font-size: 0.85em;
+  color: #1e293b;
+}
+
 /* A re-polled booth, or the code that ran its re-poll (OfficerTurnoutTable). */
 .report-repoll-note {
   font-size: 0.85em;

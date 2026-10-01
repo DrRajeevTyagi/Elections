@@ -89,6 +89,15 @@ export interface OfficerCode {
   repoll?: RepollRecord;
   // On the fresh code issued for a re-poll: the code it replaces.
   replacesCode?: string;
+  // Set once the booth was verified against the Paper List and sealed.
+  seal?: SealRecord;
+}
+
+export interface SealRecord {
+  sealedAt: number;
+  sealedBy: string;
+  paperListCount: number;
+  appCount: number;
 }
 
 export type RepollReason = 'irregularity' | 'disruption' | 'count-mismatch' | 'other';
@@ -229,6 +238,7 @@ export interface ArchivedOfficerCode {
   repollNote?: string;
   replacementCode?: string;
   replacesCode?: string;
+  paperListCount?: number; // set when the booth was verified and sealed
 }
 
 export interface ElectionReport {

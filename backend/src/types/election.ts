@@ -102,6 +102,19 @@ export interface OfficerCode {
   repoll?: RepollRecord;
   // On the fresh code issued for a re-poll: the code it replaces.
   replacesCode?: string;
+  // "Verify & Seal" (Officer Codes tab): after the booth closed, the Chief
+  // Election Commissioner checked the app's vote count against the Paper
+  // List and they matched. Final: a sealed booth can't be reopened,
+  // re-polled or deleted. End of Voting needs every booth with votes
+  // sealed. Cleared only by a fresh election (startFreshDuties / Start).
+  seal?: SealRecord;
+}
+
+export interface SealRecord {
+  sealedAt: number;
+  sealedBy: string; // actor label -- see LogEntry
+  paperListCount: number; // voters on the printed Paper List, as typed in
+  appCount: number; // votes counted by the app at that moment (always equal -- checked)
 }
 
 export type RepollReason = 'irregularity' | 'disruption' | 'count-mismatch' | 'other';
@@ -209,6 +222,8 @@ export interface ArchivedOfficerCode {
   repollNote?: string;
   replacementCode?: string;
   replacesCode?: string;
+  // Set when the booth was verified against the Paper List and sealed.
+  paperListCount?: number;
 }
 
 export interface ElectionArchive {

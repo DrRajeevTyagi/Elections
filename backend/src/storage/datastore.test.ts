@@ -517,10 +517,13 @@ describe('DataStore -- election runs and the append-only action log (ROADMAP.md 
       store.closeOfficerCodesByType('school');
       store.orderRepoll(b.code, { orderedBy: 'x', reason: 'disruption', note: '' }, { officerName: 'B' });
 
+      store.sealOfficerCode(a.code, { sealedAt: 1, sealedBy: 'x', paperListCount: 0, appCount: 0 });
+      expect(store.findOfficerCode(a.code)?.seal).toBeDefined();
       const count = store.startFreshDuties('school');
 
       // a, plus b's replacement code; b itself stays dead.
       expect(count).toBe(2);
+      expect(store.findOfficerCode(a.code)?.seal).toBeUndefined();
       expect(store.findOfficerCode(a.code)).toMatchObject({ closedAt: undefined, sentAt: undefined, readyAt: undefined });
       expect(store.findOfficerCode(b.code)?.closedAt).toEqual(expect.any(Number));
       expect(store.findOfficerCode(c.code)?.sentAt).toEqual(expect.any(Number));

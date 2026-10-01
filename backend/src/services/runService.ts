@@ -113,6 +113,29 @@ export const closeRecording = async (clientId: string | undefined): Promise<Elec
     throw new BadRequestError('No recording is currently active.');
   }
 
+  // Every booth that received votes must have been checked against its
+  // Paper List and sealed (Officer Codes tab, "Verify & Seal") before the
+  // election can be declared closed. A booth with no votes (e.g. an absent
+  // teacher) needs no check; a re-polled code's votes no longer count, so
+  // only its new code needs sealing.
+  const unsealed = dataStore
+    .getOfficerCodes()
+    .filter((entry) => entry.electionType === run.electionType && !entry.repoll && !entry.seal)
+    .filter((entry) => dataStore.countCountedVotesByOfficerCode(entry.code) > 0);
+  if (unsealed.length > 0) {
+    const listed = unsealed
+      .slice(0, 10)
+      .map((entry) => `${entry.code}${entry.officerName ? ` (${entry.officerName})` : ''}`)
+      .join(', ');
+    const more = unsealed.length > 10 ? ` and ${unsealed.length - 10} more` : '';
+    throw new ConflictError(
+      `${unsealed.length} booth${unsealed.length === 1 ? ' has' : 's have'} not been verified and sealed yet: ${listed}${more}. ` +
+        'Close each booth, check its count against the Paper List, and press Verify & Seal (or Order Re-poll) on the Polling Officer Codes tab first.',
+      'BOOTHS_NOT_SEALED',
+      { unsealedCodes: unsealed.map((entry) => entry.code) }
+    );
+  }
+
   const totalVotes = dataStore.getCountedVotes().filter((vote) => vote.electionType === run.electionType).length;
 
   archiveCurrentElection(run.name);

@@ -22,9 +22,13 @@ describe('dutyStatus', () => {
     expect(dutyStatus(code({ closedAt: 3, repoll }))).toBe('repolled');
   });
 
+  it('a closed booth checked against the Paper List is sealed', () => {
+    expect(dutyStatus(code({ readyAt: 2, closedAt: 3, seal: { sealedAt: 4, sealedBy: 'x', paperListCount: 9, appCount: 9 } }))).toBe('sealed');
+  });
+
   it('counts each colour', () => {
     expect(
       countDutyStatuses([code({}), code({ sentAt: 1 }), code({ readyAt: 1 }), code({ readyAt: 1 }), code({ closedAt: 1 })])
-    ).toEqual({ fresh: 1, sent: 1, ready: 2, over: 1, repolled: 0 });
+    ).toEqual({ fresh: 1, sent: 1, ready: 2, over: 1, sealed: 0, repolled: 0 });
   });
 });

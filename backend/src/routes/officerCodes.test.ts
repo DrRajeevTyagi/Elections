@@ -32,6 +32,7 @@ const mockedDataStore = {
   orderRepoll: vi.fn<unknown[], { original: OfficerCode; replacement: OfficerCode } | undefined>(),
   countCountedVotesByOfficerCode: vi.fn<[string], number>(() => 0),
   startFreshDuties: vi.fn<[string], number>(() => 0),
+  sealOfficerCode: vi.fn<unknown[], OfficerCode | undefined>(),
   reopenOfficerCode: vi.fn(),
   closeOfficerCode: vi.fn<[string], OfficerCode | undefined>(),
   generateOfficerCodes: vi.fn<unknown[], OfficerCode[]>(() => []),
@@ -467,6 +468,85 @@ describe('POST /api/officer-codes/:code/repoll', () => {
     expect(reopen.status).toBe(409);
     expect(remove.status).toBe(409);
     expect(mockedDataStore.reopenOfficerCode).not.toHaveBeenCalled();
+    expect(mockedDataStore.deleteOfficerCode).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/officer-codes/:code/seal', () => {
+  const closedBooth: OfficerCode = { ...baseCode, officerName: 'Jane', everNamed: true, closedAt: Date.now(), branch: 'dwarka' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDataStore.getCurrentRun.mockReturnValue(runningSchoolRun);
+    mockedDataStore.findOfficerCode.mockReturnValue({ ...closedBooth });
+    mockedDataStore.countCountedVotesByOfficerCode.mockReturnValue(38);
+    mockedDataStore.sealOfficerCode.mockImplementation((_code, seal) => ({ ...closedBooth, seal: seal as OfficerCode['seal'] }));
+  });
+
+  it('seals a closed booth when the Paper List matches the app, and logs both numbers', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp())
+      .post('/api/officer-codes/ABC123/seal')
+      .set('x-admin-client-id', 'admin-tab-1')
+      .send({ paperListCount: 38 });
+
+    expect(response.status).toBe(200);
+    expect(mockedDataStore.sealOfficerCode).toHaveBeenCalledWith(
+      'ABC123',
+      expect.objectContaining({ paperListCount: 38, appCount: 38, sealedBy: 'admin-tab-1' })
+    );
+    expect(mockedDataStore.appendLogEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'officerCode.seal', details: expect.objectContaining({ paperListCount: 38, appCount: 38 }) })
+    );
+  });
+
+  it('refuses when the counts do not match, giving both numbers', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/ABC123/seal').send({ paperListCount: 36 });
+
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe('SEAL_COUNT_MISMATCH');
+    expect(response.body.details).toEqual({ appCount: 38, paperListCount: 36 });
+    expect(mockedDataStore.sealOfficerCode).not.toHaveBeenCalled();
+  });
+
+  it('refuses a booth that is still open, already sealed, or re-polled', async () => {
+    const { createApp } = await import('../app.js');
+    mockedDataStore.findOfficerCode.mockReturnValueOnce({ ...closedBooth, closedAt: undefined });
+    const open = await request(createApp()).post('/api/officer-codes/ABC123/seal').send({ paperListCount: 38 });
+    mockedDataStore.findOfficerCode.mockReturnValueOnce({ ...closedBooth, seal: { sealedAt: 1, sealedBy: 'x', paperListCount: 38, appCount: 38 } });
+    const sealed = await request(createApp()).post('/api/officer-codes/ABC123/seal').send({ paperListCount: 38 });
+    mockedDataStore.findOfficerCode.mockReturnValueOnce({
+      ...closedBooth,
+      repoll: { orderedAt: 1, orderedBy: 'x', reason: 'disruption', note: '', cancelledVoteCount: 38, replacementCode: 'new999' }
+    });
+    const repolled = await request(createApp()).post('/api/officer-codes/ABC123/seal').send({ paperListCount: 38 });
+
+    expect(open.status).toBe(409);
+    expect(sealed.status).toBe(409);
+    expect(repolled.status).toBe(409);
+    expect(repolled.body.error).toContain('new999');
+    expect(mockedDataStore.sealOfficerCode).not.toHaveBeenCalled();
+  });
+
+  it('needs a whole number from the Paper List', async () => {
+    const { createApp } = await import('../app.js');
+    const missing = await request(createApp()).post('/api/officer-codes/ABC123/seal').send({});
+    const fraction = await request(createApp()).post('/api/officer-codes/ABC123/seal').send({ paperListCount: 3.5 });
+    expect(missing.status).toBe(400);
+    expect(fraction.status).toBe(400);
+  });
+
+  it('a sealed booth can no longer be reopened, re-polled or deleted', async () => {
+    mockedDataStore.findOfficerCode.mockReturnValue({ ...closedBooth, seal: { sealedAt: 1, sealedBy: 'x', paperListCount: 38, appCount: 38 } });
+    const { createApp } = await import('../app.js');
+    const reopen = await request(createApp()).post('/api/officer-codes/ABC123/reopen');
+    const repoll = await request(createApp()).post('/api/officer-codes/ABC123/repoll').send({ reason: 'disruption' });
+    const remove = await request(createApp()).delete('/api/officer-codes/ABC123');
+
+    expect([reopen.status, repoll.status, remove.status]).toEqual([409, 409, 409]);
+    expect(mockedDataStore.reopenOfficerCode).not.toHaveBeenCalled();
+    expect(mockedDataStore.orderRepoll).not.toHaveBeenCalled();
     expect(mockedDataStore.deleteOfficerCode).not.toHaveBeenCalled();
   });
 });

@@ -47,6 +47,7 @@ import { BulkAllotCodesModal } from '../components/BulkAllotCodesModal';
 import { SendCodesPanel } from '../components/SendCodesPanel';
 import { TakeoverPrompt, TakeoverRequestBox } from '../components/AdminTakeover';
 import { RepollDialog } from '../components/RepollDialog';
+import { SealDialog } from '../components/SealDialog';
 import { countDutyStatuses, dutyStatus, DUTY_STYLES } from '../utils/dutyStatus';
 import { REPOLL_REASON_LABELS } from '../types/api';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
@@ -146,6 +147,8 @@ export const AdminLandingPage = (): JSX.Element => {
   const [repollNotice, setRepollNotice] = useState<{ oldCode: string; replacement: OfficerCode } | null>(null);
   // Duty colours (Officer Codes tab).
   const [notReadyOnly, setNotReadyOnly] = useState(false);
+  // "Verify & Seal": the closed booth whose Paper List check is open.
+  const [sealTarget, setSealTarget] = useState<OfficerCode | null>(null);
   const [showFreshDuties, setShowFreshDuties] = useState(false);
   const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
   const [archives, setArchives] = useState<ArchiveSummary[]>([]);
@@ -1713,6 +1716,23 @@ export const AdminLandingPage = (): JSX.Element => {
           />
         )}
 
+        {sealTarget && (
+          <SealDialog
+            adminSecret={adminSecret}
+            entry={sealTarget}
+            onClose={() => setSealTarget(null)}
+            onSealed={() => {
+              setMessage(`Booth ${sealTarget.code} verified and sealed.`);
+              setSealTarget(null);
+              void loadOfficerCodes(false);
+            }}
+            onOrderRepoll={() => {
+              setRepollTarget(sealTarget);
+              setSealTarget(null);
+            }}
+          />
+        )}
+
         {repollTarget && (
           <RepollDialog
             adminSecret={adminSecret}
@@ -1867,7 +1887,7 @@ export const AdminLandingPage = (): JSX.Element => {
           style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}
         >
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }} aria-label="Duty status summary">
-            {(['ready', 'sent', 'fresh', 'over'] as const).map((status) => (
+            {(['ready', 'sent', 'fresh', 'over', 'sealed'] as const).map((status) => (
               <span
                 key={status}
                 style={{
@@ -1958,11 +1978,14 @@ export const AdminLandingPage = (): JSX.Element => {
                     const isRepolled = Boolean(entry.repoll);
                     // Only while this code's own election is being recorded,
                     // and only for a booth actually allotted to someone.
-                    const canRepoll =
-                      !isRepolled &&
+                    const isSealed = Boolean(entry.seal);
+                    const inRunningElection =
                       currentRun?.status === 'running' &&
-                      currentRun.electionType === (entry.electionType ?? (entry.house ? 'house' : 'school')) &&
-                      Boolean(entry.officerName.trim());
+                      currentRun.electionType === (entry.electionType ?? (entry.house ? 'house' : 'school'));
+                    const canRepoll = !isRepolled && !isSealed && inRunningElection && Boolean(entry.officerName.trim());
+                    // A closed booth of the running election waits for its
+                    // Paper List check.
+                    const canSeal = !isRepolled && !isSealed && isClosed && inRunningElection;
                     const duty = dutyStatus(entry);
                     const dutyStyle = DUTY_STYLES[duty];
                     return (
@@ -2043,8 +2066,24 @@ export const AdminLandingPage = (): JSX.Element => {
                         <td style={{ padding: '0.5rem' }}>
                           {isRepolled ? (
                             <span style={{ fontSize: '0.8rem' }}>{REPOLL_REASON_LABELS[entry.repoll!.reason]}</span>
+                          ) : isSealed ? (
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                              Paper List {entry.seal!.paperListCount} &middot; App {entry.seal!.appCount}
+                              <span style={{ display: 'block', fontWeight: 400 }}>sealed {formatTimestamp(entry.seal!.sealedAt)}</span>
+                            </span>
                           ) : (
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            {canSeal && (
+                              <button
+                                className="button"
+                                style={{ backgroundColor: '#1e293b', opacity: officerCodesLoading ? 0.5 : 1 }}
+                                disabled={officerCodesLoading}
+                                onClick={() => setSealTarget(entry)}
+                                title="Check this booth's vote count against the Paper List and seal it"
+                              >
+                                🔒 Verify &amp; Seal
+                              </button>
+                            )}
                             {canRepoll && (
                               <button
                                 className="button"

@@ -5,15 +5,18 @@ import type { OfficerCode } from '../types/api';
 //   white  -> fresh duty, code not sent yet
 //   yellow -> sent on WhatsApp, teacher hasn't entered it yet
 //   green  -> ready: teacher typed the code on a kiosk (backend readyAt)
-//   red    -> duty over: End of Voting, or that booth was closed
+//   red    -> polling closed at this booth (or End of Voting) -- waiting
+//             for the Paper List check
+//   white with a lock -> verified against the Paper List and sealed
 //   grey   -> re-polled booth, code dead for good
-// Order matters: a re-polled code is also closed, and a closed code may
-// still carry an old ready/sent mark.
+// Order matters: re-polled and sealed codes are also closed, and a closed
+// code may still carry an old ready/sent mark.
 
-export type DutyStatus = 'repolled' | 'over' | 'ready' | 'sent' | 'fresh';
+export type DutyStatus = 'repolled' | 'sealed' | 'over' | 'ready' | 'sent' | 'fresh';
 
-export const dutyStatus = (entry: Pick<OfficerCode, 'repoll' | 'closedAt' | 'readyAt' | 'sentAt'>): DutyStatus => {
+export const dutyStatus = (entry: Pick<OfficerCode, 'repoll' | 'seal' | 'closedAt' | 'readyAt' | 'sentAt'>): DutyStatus => {
   if (entry.repoll) return 'repolled';
+  if (entry.seal) return 'sealed';
   if (entry.closedAt) return 'over';
   if (entry.readyAt) return 'ready';
   if (entry.sentAt) return 'sent';
@@ -24,12 +27,13 @@ export const DUTY_STYLES: Record<DutyStatus, { background: string; border: strin
   fresh: { background: '#ffffff', border: '#d1d5db', text: '#374151', label: 'Not sent' },
   sent: { background: '#fef9c3', border: '#facc15', text: '#854d0e', label: 'Sent -- not ready yet' },
   ready: { background: '#dcfce7', border: '#22c55e', text: '#166534', label: 'Ready' },
-  over: { background: '#fee2e2', border: '#ef4444', text: '#991b1b', label: 'Duty over' },
+  over: { background: '#fee2e2', border: '#ef4444', text: '#991b1b', label: 'Polling closed' },
+  sealed: { background: '#ffffff', border: '#1e293b', text: '#1e293b', label: '🔒 Sealed' },
   repolled: { background: '#f3f4f6', border: '#9ca3af', text: '#6b7280', label: 'Re-polled' }
 };
 
 export const countDutyStatuses = (codes: OfficerCode[]): Record<DutyStatus, number> => {
-  const counts: Record<DutyStatus, number> = { fresh: 0, sent: 0, ready: 0, over: 0, repolled: 0 };
+  const counts: Record<DutyStatus, number> = { fresh: 0, sent: 0, ready: 0, over: 0, sealed: 0, repolled: 0 };
   for (const entry of codes) {
     counts[dutyStatus(entry)] += 1;
   }
