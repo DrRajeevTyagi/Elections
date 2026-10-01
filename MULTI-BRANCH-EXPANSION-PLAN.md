@@ -1,9 +1,9 @@
 # Multi-Branch Expansion Plan (Dwarka + AN)
 
-Status: **Partially implemented and live in production.** This captures the
+Status: **Mostly implemented and live in production.** This captures the
 plan agreed on 2026-09-22; see the Progress note below for exactly what's
-built versus still open, and [ROADMAP.md](ROADMAP.md) for the authoritative
-sequencing of what's left.
+built versus still open (updated 2026-10-01), and [ROADMAP.md](ROADMAP.md) for
+the authoritative sequencing of what's left.
 
 **Sequencing:** see [ROADMAP.md](ROADMAP.md) for how this plan combines with
 [ELECTION-INTEGRITY-AND-TRUST.md](ELECTION-INTEGRITY-AND-TRUST.md) (item 12
@@ -13,22 +13,34 @@ out to be the same piece of work — ROADMAP.md's Phase 0 is the combined,
 authoritative build order; the "Suggested build order" section later in this
 document is superseded by it.
 
-**Progress (updated 2026-09-22):**
+**Progress (updated 2026-10-01):**
 - The `Branch` type and `branch` field exist on `Candidate`, `StoredVote`,
   `OfficerCode`, and `ElectionArchive`.
-- **Backend (section 2, mostly done):** officer code generation, kiosk
-  activation/session, vote recording *and validation*, candidate creation, and
-  results (`getResults`/`getTotalVotes`) all read/write/filter by branch.
-  `candidateService.findMissingCandidateCoverage` and
-  `buildElectionSnapshot`/`archiveCurrentElection` gained the capability but
-  are deliberately not yet wired into Open Poll's gate or Reset's archiving —
-  see ROADMAP.md Phase 0 for why (real regression risk to this year's live
-  Dwarka election before AN has data). `routes/report.ts` doesn't accept
-  `branch` yet.
-- **Frontend (section 3, partially done):** Manage Candidates, Live Results,
-  and Polling Officer Codes all have a shared branch toggle and are fully
-  functional per-branch. Election History branch grouping and report pages'
-  branch selector are not built.
+- **Backend (section 2, mostly done):** officer code generation and bulk allot,
+  kiosk activation/session, vote recording *and validation*, candidate
+  creation, results (`getResults`/`getTotalVotes`), and reports
+  (`routes/report.ts`, `?branch=dwarka|AN`) all read/write/filter by branch.
+  **Two pieces still deliberately not branch-aware** (see ROADMAP.md Phase 0 for
+  why): Open Poll's "every post has a candidate" gate checks both branches
+  together, so the poll can open with AN empty (listed as a known issue in
+  FEATURES-REPORT.md); and an election is still saved as **one** archive covering
+  both branches — with each branch's ballot count captured at save time — and
+  narrowed to one branch when a report is read, rather than as two separate
+  archives.
+- **Frontend (section 3, done except one letterhead):** Manage Candidates, Live
+  Results, and Polling Officer Codes all have a shared branch toggle and are
+  fully functional per-branch. The Dashboard has **Download Dwarka Report /
+  Download AN Report**, and every Election History entry has **View/Print
+  Dwarka** and **View/Print AN**. The printable code list uses each branch's own
+  letterhead; the results report says "Mount Carmel School — AN" / "— Dwarka";
+  the officer turnout page still says only "Mount Carmel School" (see Open items).
+- **Features added 2026-10-01 all respect the branch:** Send Codes on WhatsApp
+  works on the selected branch's codes and names the branch in each message;
+  Start Allotting Duties for a Fresh Election resets one election type in
+  **both** branches at once (one election covers both); a re-poll's fresh code
+  keeps the old code's branch and house; Verify & Seal is per booth, and End of
+  Voting waits for every booth with votes **in both branches** to be sealed; the
+  duty-colour summary counts the selected branch.
 - **A real bug shipped and was fixed in this rollout:** the first backend
   branch-wiring pass missed the actual ballot (`GET /posts`) and vote
   validation, so an AN ballot could show and accept Dwarka candidates. Caught
@@ -52,7 +64,7 @@ The current app is built around a single, global election, not two running in pa
 
 - **One global poll switch.** `PollState` ([backend/src/types/election.ts:54-57](backend/src/types/election.ts#L54-L57)) holds one `activeElectionType` and one `isOpen` flag for the *whole app*. Every kiosk activation ([backend/src/routes/kiosk.ts:32-52](backend/src/routes/kiosk.ts#L32-L52)) checks against that single shared state. There is no per-branch open/close today.
 - **No branch dimension anywhere in the data.** `Candidate`, `StoredVote`, `OfficerCode`, and `ElectionArchive` ([backend/src/types/election.ts:14-84](backend/src/types/election.ts#L14-L84)) are only tagged with `electionType` and optional `house`. Adding branch sub-*tabs* to the UI without adding a `branch` field underneath would silently merge Dwarka's and AN's votes into the same tally — defeating the entire point.
-- **One admin session, system-wide.** [backend/src/middleware/adminAuth.ts:34-48](backend/src/middleware/adminAuth.ts#L34-L48) only lets one terminal hold the admin console at a time; a second login kicks the first one out.
+- **One admin session, system-wide.** [backend/src/middleware/adminAuth.ts:34-48](backend/src/middleware/adminAuth.ts#L34-L48) only lets one terminal hold the admin console at a time. *(At the time of writing, a second login kicked the first one out; since 2026-10-01 the second device can only ask for control, and the device in control must allow it — see ELECTION-INTEGRITY-AND-TRUST.md item 1. Either way, one session runs both branches, per decision 2 below.)*
 
 ## Decisions made (2026-09-22, reconfirmed explicitly 2026-09-23)
 
@@ -116,7 +128,11 @@ As always, each phase gets typechecked/tested/built on both frontend and backend
 - ~~Confirm there's nothing branch-specific about the printable report letterhead/footer (school name, address) that also needs a branch-aware template.~~
   **Resolved for the officer-code roster (2026-09-22):** AN's branch is
   "Mount Carmel School, Anand Niketan" (Dwarka stays "Mount Carmel School") —
-  see `OfficerCodesPrintPage.tsx`'s `BRANCH_LETTERHEAD` map. **Still open for
-  ReportPage.tsx/TurnoutReportPage.tsx**, which hardcode "Mount Carmel
-  School" regardless of branch — needs the same treatment once those pages
-  take a branch selector (see ROADMAP.md Phase 2).
+  see `OfficerCodesPrintPage.tsx`'s `BRANCH_LETTERHEAD` map. **Partly resolved
+  for reports (as of 2026-10-01):** ReportPage.tsx now takes a branch and
+  prints "Mount Carmel School — AN" / "— Dwarka", but not the full "Mount Carmel
+  School, Anand Niketan" letterhead; TurnoutReportPage.tsx (the live "Print
+  Officer Turnout" page) still prints only "Mount Carmel School". Both should
+  use the same `BRANCH_LETTERHEAD` wording as the code list.
+- Open Poll's candidate-coverage gate and per-branch archiving (see Progress
+  above) — decide whether to make them branch-aware now that AN has real data.

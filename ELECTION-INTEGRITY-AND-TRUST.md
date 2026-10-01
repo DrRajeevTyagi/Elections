@@ -15,6 +15,17 @@ the Status line on existing ones as they get designed and built.
   election — was introduced (item 11). Two items from that session's chat
   (tamper-evident hash chain, signed final results slip) are recorded here for the
   first time as items 9 and 10.
+- 2026-10-01: three items built, at the Election Commissioner's request. **Item 1**
+  — the forced takeover replaced by *Ask for Control* (the device in control must
+  allow it). **Item 4** — booth reconciliation built as **Verify & Seal** against
+  each booth's printed *Paper List*, with End of Voting refused until every booth
+  with votes is sealed. **Item 13 (new)** — **re-polling** at a booth: its votes
+  set aside (never deleted, never counted) and a fresh code issued. Also built the
+  same day, and relevant to item 3: WhatsApp delivery of codes with "sent" marks,
+  a kiosk check-in that marks each officer "ready", duty colours on every code,
+  and "Start Allotting Duties for a Fresh Election". A review the same day fixed
+  a gap that would have undermined item 4: a ballot opened before a booth was
+  sealed could still be recorded after sealing — now refused.
 
 ## Why this document exists
 
@@ -51,12 +62,32 @@ the real Election Commissioner should know about it.
 
 > **Update 2026-10-01 — friendly vs hostile takeover is now built.** The forced
 > takeover is gone. A second device can only *ask* for control; the device in
-> control gets an Allow / Deny popup (with a sound and a flashing tab title)
-> and stays in control unless it allows. An unanswered request expires after 1
-> minute. The one exception: a device in control that has been silent for 3+
-> minutes (crashed, closed, flat battery) can be replaced by a new login
-> without asking. Every request, approval, refusal and expiry is in the
-> Activity Log. See [adminSessionService.ts](backend/src/services/adminSessionService.ts).
+> control gets an Allow / Deny popup (with a sound and a flashing tab title,
+> naming the asking device) and stays in control unless it allows. An
+> unanswered request expires after 1 minute. The one exception: a device in
+> control that has been silent for 3+ minutes (crashed, closed, flat battery)
+> can be replaced by a new login without asking — without it, a dead laptop
+> would lock everyone out. Every request, approval, refusal and expiry is in
+> the Activity Log, with takeovers and refusals highlighted. A refused request
+> is itself a useful alarm: it means someone else knows the admin password.
+> See [adminSessionService.ts](backend/src/services/adminSessionService.ts) and
+> [AdminTakeover.tsx](frontend/src/components/AdminTakeover.tsx).
+>
+> How the pieces fit: the device in control checks in every 4 seconds
+> (`GET /admin/session-status`). That check is how it learns of a request, how
+> the server knows it is still alive, and how — once control has moved — it is
+> signed out within seconds instead of on its next click (this closes the
+> "eviction is passive" gap described below). A request can't be allowed once
+> the asking screen has gone away (no check from it for 15 seconds), so
+> control is never handed to an empty screen.
+>
+> Known limits: browsers slow down background tabs to about one check a
+> minute, so a popup in a hidden admin tab can arrive late or after the
+> request has expired — the guidance is to keep the admin tab in front during
+> an election. And a device left asleep for 3+ minutes can be replaced by
+> anyone who has the password, without asking; that trade-off was accepted
+> explicitly.
+>
 > The analysis below describes the behaviour *before* this change.
 
 **Behavior before 2026-10-01:** There was already a single-slot session lock
@@ -124,6 +155,17 @@ without asking anyone to type it. The rest of this item -- an active
 eviction banner, "last active from a different session at HH:MM" on the
 login screen, and distinguishing a harmless second tab from a genuinely
 different device -- is still not built.
+
+**Status update (2026-10-01): Implemented — consent-based handover.** The
+forced takeover is replaced by Ask for Control / Allow / Deny (see the update
+at the top of this item). This also delivers two of the proposals above: the
+person in control is told *actively* (popup, sound, flashing tab title) the
+moment someone asks, and the device that loses control is signed out within
+seconds with "You handed control to …" rather than discovering it on its next
+click. The login screen now names the device in control ("in use on Chrome /
+Windows · 3f2a since 9:05"). **Still not built:** telling a harmless second tab
+on the same laptop apart from a genuinely different device (a second tab
+still has to ask, like any other device), and per-person credentials (item 7).
 
 ---
 
@@ -282,6 +324,32 @@ closing case. Both changes are covered by regression tests
 discrepancy check (last bullet above) and logging every generation/naming/
 deletion, which folds into item 5's audit log — tracked as ROADMAP.md
 Phase 3. Election-run scoping is still tracked separately in item 11.
+*(The logging half has since been built — item 5, 2026-09-23 — so every
+generation, naming and deletion during an election is now logged.)*
+
+**Addendum (2026-10-01): a code now carries evidence of who received it and
+when it was used, and more codes are permanent.**
+- **Delivery and check-in evidence.** Each code can carry the officer's
+  WhatsApp number (saved from the Bulk Allot teacher list), a "sent" mark when
+  it was sent from the Send Codes screen, and a "ready" time — the first moment
+  a correct entry of that code was made on a kiosk, recorded even before voting
+  opens. On the Polling Officer Codes tab these show as duty colours (white not
+  sent → yellow sent → green ready → red polling closed → sealed). Sent marks and
+  phone changes are logged during an election. This doesn't prove *which
+  person* typed the code, but it makes "a code nobody was actually given" much
+  harder to hide: a code that turns green with no sent mark, or a booth that was
+  never staffed but voted, stands out on one screen.
+- **More codes are permanent.** Besides a code with votes, deletion is now also
+  refused for a **sealed** code (item 4) and for **both sides of a re-poll** —
+  the cancelled code and the fresh code issued for it (item 13).
+- **Codes now have an explicit end of duty.** End of Voting closes every code of
+  that election, and a closed code can't activate a ballot. They become usable
+  again only through **Start Allotting Duties for a Fresh Election** (all codes
+  of one election type, both branches, back to white — not allowed while that
+  election is running) or the next Start of that election type. This is a
+  lighter version of item 11's "codes scoped to one election": codes still
+  carry over, but a leftover code from a finished election can't vote until
+  someone deliberately starts fresh duties.
 
 ---
 
@@ -340,7 +408,37 @@ officer to self-report.
   physical signatures) — it makes the *comparison*, done by a neutral third party,
   a recorded, structural step instead of an unrecorded habit.
 
-**Status:** Designed.
+**Status:** **Implemented (2026-10-01) as "Verify & Seal"**, in a simpler form
+than proposed above — decided with the Election Commissioner:
+- **The flow.** When a booth's polling closes (the teacher's "Close polling at
+  this booth", or the admin's Close button), its code turns red on the Polling
+  Officer Codes tab. The Chief Election Commissioner counts the voters on that
+  booth's printed **Paper List** and presses **🔒 Verify & Seal**: the window
+  shows the app's count for that booth and asks for the Paper List number.
+  - **Match** → the booth is sealed: final, shown white with 🔒 Sealed and
+    "Paper List N · App N". A sealed booth can't be reopened, re-polled or
+    deleted, and a ballot opened there before sealing is refused on Submit, so
+    the sealed count can never change afterwards.
+  - **Mismatch** → sealing is refused (by the server too, which recounts at
+    that moment); the window offers **Order Re-poll** instead (item 13).
+- **The gate.** End of Voting is refused until every booth that received votes
+  is sealed; the refusal names the booths still waiting. Booths with no votes,
+  and the old code of a re-polled booth, need no check.
+- **The record.** The seal (time, who, Paper List count, app count) is stored on
+  the code, logged in the Activity Log, and printed in the saved Election
+  History report ("Verified against the Paper List (N) and sealed").
+- **Differences from the proposal above, named honestly:**
+  - The comparison is done by the **Chief Election Commissioner**, not a separate
+    presiding-officer role — this app has exactly one superadmin. The app records
+    the comparison; it can't make the person doing it independent.
+  - The number typed is the Paper List count read by the commissioner, not a
+    witnessed figure; the app can't check the paper's signatures.
+  - A **refused (mismatched) seal attempt is not itself logged** — only a
+    successful seal, or the re-poll that follows a real mismatch. A mismatch
+    that is "fixed" by recounting the paper therefore leaves no trace in the
+    app. See "Open items" at the end.
+  - Mismatches aren't shown in large "alarm" styling on the dashboard; the
+    booth simply stays red until sealed or re-polled.
 
 ---
 
@@ -434,6 +532,17 @@ ROADMAP.md's "Why a search UI instead of a chatbot" for the reasoning
 LLM-based answer carries a hallucination risk that's especially bad for a
 trust/audit tool).
 
+**Addendum (2026-10-01): new actions logged.** `admin.session.takeoverRequested`,
+`admin.session.takeoverDenied`, `admin.session.takeoverExpired` (plus the
+existing `admin.session.takeover`, now also written when a request is allowed
+or a silent device is replaced, with the reason); `officerCode.seal` (with the
+Paper List and app counts); `officerCode.repoll` (reason, note, cancelled vote
+count, new code and its officer); `officerCode.freshDuties`;
+`officerCode.markSent` / `unmarkSent`; `officerCode.phone`. Takeovers and
+refused requests are highlighted in the Activity Log tab. As before, nothing is
+logged outside an election in progress — so, for example, fresh duties pressed
+between elections leave no log entry.
+
 ---
 
 ## 6. Irreversible actions have no second-person confirmation
@@ -470,6 +579,12 @@ confirmation phrase for vote-affecting actions) stays as the current plan.
 **Status:** Deprioritized — logging (item 5) and confirmation phrases adopted as
 the near-term approach; full two-person approval left as a possible future
 addition, not built now.
+
+*2026-10-01:* the most vote-affecting action now in the app — **Order Re-poll**
+(item 13), which sets aside every vote cast at a booth — follows the lighter
+version: a reason must be chosen, the exact number of votes to be cancelled is
+shown, the word CONFIRM must be typed, the votes are never deleted, and the
+whole action is logged and printed on the saved report.
 
 ---
 
@@ -857,6 +972,24 @@ own Firestore subcollection, not the size-limited main document, so
 retaining a year's worth costs nothing. See TESTING-DEMO-SCRIPT.md's change
 log for the verification.
 
+**Addendum (2026-10-01): End of Voting now has a precondition and closes every
+booth.**
+- **Precondition:** End of Voting is refused until every booth that received
+  votes has been verified against its Paper List and sealed (item 4). The run
+  can no longer be closed over an unchecked booth.
+- **Closing booths:** End of Voting now closes every officer code of that
+  election (red, "duty over"). Previously codes stayed usable after the run
+  closed. They become usable again through **Start Allotting Duties for a Fresh
+  Election** (refused while that election is running), or at the next Start of
+  that election type — which now turns only *closed* codes back to white,
+  clearing their old sent/ready/seal marks, and leaves codes that checked in that
+  morning green. A re-polled code is never reopened.
+- **Re-polls are scoped to the run:** a re-poll can only be ordered while the
+  booth's election is running (item 13).
+- **Existing codes:** on the first server start after this change, every code
+  that already existed was closed once (except codes of an election running at
+  that moment), since all of them came from earlier elections or trials.
+
 ---
 
 ## Suggested build order
@@ -960,7 +1093,78 @@ see ROADMAP.md Phase 0 for the full current state.
 
 ---
 
+## 13. Re-polling at a booth — cancelling a booth's votes without erasing them
+
+**Concern (raised 2026-10-01):** if an irregularity, a physical disruption, or a
+mismatch between the app's count and the Paper List (item 4) is found at a
+booth, the Chief Election Commissioner must be able to order that booth to vote
+again. That is the most powerful thing the app now lets one person do to votes
+already cast — so it has to be done in a way that can't be used to quietly
+remove an inconvenient booth.
+
+**Why it's a manipulation risk:** the Election Commissioner's own child is a
+candidate (see "Why this document exists"). A re-poll ordered at a booth that
+voted the "wrong" way would, if it were silent or erased the votes, be a clean
+way to change the result.
+
+**How it was built (2026-10-01), and what makes it visible rather than silent:**
+- **Never deleted, never counted.** No vote record is changed or removed. The
+  booth's code is marked re-polled, and every count — live results, totals,
+  per-booth counts, End of Voting's saved report — reads only the votes that still
+  count (`dataStore.getCountedVotes`). The set-aside votes stay stored until the
+  next election of that type is started (which clears all of that type's votes,
+  as before); their count and reason survive permanently in the saved report.
+- **Deliberate, with a stated reason.** A reason must be chosen (irregularity,
+  physical disruption, vote-count mismatch, other — a note is required for
+  "other"), the exact number of votes to be cancelled is shown, and the word
+  CONFIRM must be typed.
+- **Only while it can matter.** Only while that booth's election is running, and
+  never on a booth already sealed (item 4) — a sealed booth is final.
+- **The old code is dead for good.** It can't activate a ballot (the officer is
+  told a re-poll was ordered), a ballot already open there is refused on Submit,
+  and it can't be reopened or deleted — not even in a later election.
+- **A fresh code, with the same details** (election type, branch, house), to the
+  same teacher (keeping their WhatsApp number) or a different one. It goes
+  through the normal duty colours and must itself be verified and sealed before
+  End of Voting.
+- **On the record, three times over:** the Activity Log (`officerCode.repoll` —
+  reason, note, cancelled count, new code and its officer), the Officer Codes tab
+  ("RE-POLLED → new code", "N cancelled"), and the saved Election History report
+  ("Re-polled: N votes cancelled. Reason: … New code: …"; the new code's row
+  marked "Re-poll of …").
+
+**What this does and doesn't guarantee:** it does not stop the Election
+Commissioner from ordering a re-poll for a bad reason — one superadmin still
+decides alone (see the Decision after item 7). It does make every re-poll, its
+stated reason and the number of votes it set aside impossible to hide or deny
+afterwards, on the same permanent record as everything else. A re-poll at a
+booth whose count matched its Paper List would look unusual on that record;
+whether to require a matching "count-mismatch" reason, or a second person, for
+re-polls is left open below.
+
+**Limit, named honestly:** votes are secret, so the app can't tell which
+students voted at the re-polled booth. Everyone who voted there has to vote
+again, managed physically by the teacher with the Paper List.
+
+**Status:** **Implemented (2026-10-01).** Covered by automated tests (backend
+routes, storage and results; the re-poll screen); not yet checked end to end in
+a real browser — see TESTING-DEMO-SCRIPT.md Part 2.
+
+---
+
 ## Open items still to think through (not yet designed)
+
+- **A refused Verify & Seal is not logged** (item 4). If the Paper List and app
+  counts disagree and the commissioner then recounts and seals, the app keeps no
+  record that they ever disagreed. Worth deciding whether a mismatch attempt
+  should be a permanent log entry.
+- **Re-polls rest on one person's judgement** (item 13). Worth deciding whether a
+  re-poll at a booth whose count matched its Paper List should need something
+  more (a second person, or at least a prominent flag in the report).
+- **Teachers' phone numbers are now stored** with their codes (for WhatsApp
+  sending), in the same Firestore document as the rest of the election data, and
+  visible to anyone with the admin password. Worth deciding how long they should
+  be kept, and whether they should be cleared after an election.
 
 - Voter eligibility / one-vote-per-person is entirely physical today (the polling
   officer's paper list) — see [ROLLOUT-CHECKLIST.md](ROLLOUT-CHECKLIST.md): "the
