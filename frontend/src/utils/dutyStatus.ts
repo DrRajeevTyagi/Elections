@@ -32,7 +32,29 @@ export const DUTY_STYLES: Record<DutyStatus, { background: string; border: strin
   repolled: { background: '#f3f4f6', border: '#9ca3af', text: '#6b7280', label: 'Re-polled' }
 };
 
-export const countDutyStatuses = (codes: OfficerCode[]): Record<DutyStatus, number> => {
+// What still stands between an election and End of Voting -- mirrors the
+// server's own check (backend services/runService.ts endOfVotingBlockers),
+// which is what actually enforces it. One rule: every code of the election,
+// both branches, is either deleted, or closed AND verified & sealed. A
+// re-polled code doesn't count (it's dead for good; its fresh code does).
+export interface EndOfVotingChecklist {
+  unallotted: OfficerCode[]; // delete
+  open: OfficerCode[]; // close, then Verify & Seal
+  unsealed: OfficerCode[]; // Verify & Seal
+}
+
+export const endOfVotingChecklist = (codes: OfficerCode[], electionType: 'school' | 'house'): EndOfVotingChecklist => {
+  const relevant = codes.filter(
+    (entry) => (entry.electionType ?? (entry.house ? 'house' : 'school')) === electionType && !entry.repoll
+  );
+  return {
+    unallotted: relevant.filter((entry) => !entry.officerName.trim()),
+    open: relevant.filter((entry) => entry.officerName.trim() && !entry.closedAt),
+    unsealed: relevant.filter((entry) => entry.officerName.trim() && entry.closedAt && !entry.seal)
+  };
+};
+
+export const countDutyStatuses =(codes: OfficerCode[]): Record<DutyStatus, number> => {
   const counts: Record<DutyStatus, number> = { fresh: 0, sent: 0, ready: 0, over: 0, sealed: 0, repolled: 0 };
   for (const entry of codes) {
     counts[dutyStatus(entry)] += 1;

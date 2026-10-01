@@ -48,7 +48,7 @@ import { SendCodesPanel } from '../components/SendCodesPanel';
 import { TakeoverPrompt, TakeoverRequestBox } from '../components/AdminTakeover';
 import { RepollDialog } from '../components/RepollDialog';
 import { SealDialog } from '../components/SealDialog';
-import { countDutyStatuses, dutyStatus, DUTY_STYLES } from '../utils/dutyStatus';
+import { countDutyStatuses, dutyStatus, DUTY_STYLES, endOfVotingChecklist } from '../utils/dutyStatus';
 import { REPOLL_REASON_LABELS } from '../types/api';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
 import { POST_NAMES } from '../constants/posts';
@@ -815,16 +815,19 @@ export const AdminLandingPage = (): JSX.Element => {
   // Officer Codes tab: keep the duty colours current even before voting
   // opens -- teachers check in (turn green) on the morning of the
   // election, while the poll is still closed and the 3-second refresh
-  // above isn't running.
+  // above isn't running. Also while an election is running at all, so the
+  // Dashboard's "Before End of Voting" checklist follows booths being
+  // closed by teachers even while polling is paused.
+  const electionRunning = currentRun?.status === 'running';
   useEffect(() => {
-    if (!authenticated || activeTab !== 'codes') {
+    if (!authenticated || (activeTab !== 'codes' && !electionRunning)) {
       return;
     }
     const intervalId = setInterval(() => {
       void loadOfficerCodes(false);
     }, 5000);
     return () => clearInterval(intervalId);
-  }, [authenticated, activeTab, loadOfficerCodes]);
+  }, [authenticated, activeTab, electionRunning, loadOfficerCodes]);
 
   const handleStartFreshDuties = async (electionType: ElectionType) => {
     const kind = electionType === 'house' ? 'House' : 'School';
@@ -1115,6 +1118,21 @@ export const AdminLandingPage = (): JSX.Element => {
   );
   const dutyCounts = useMemo(() => countDutyStatuses(branchOfficerCodes), [branchOfficerCodes]);
 
+  // The running election's End of Voting checklist, both branches together
+  // (the server enforces the same rule -- see utils/dutyStatus.ts).
+  const endOfVotingTodo = useMemo(() => {
+    if (currentRun?.status !== 'running') {
+      return null;
+    }
+    const checklist = endOfVotingChecklist(officerCodes, currentRun.electionType);
+    const counts = {
+      unallotted: checklist.unallotted.length,
+      open: checklist.open.length,
+      unsealed: checklist.unsealed.length
+    };
+    return { ...counts, done: counts.unallotted + counts.open + counts.unsealed === 0 };
+  }, [officerCodes, currentRun]);
+
   const groupedOfficerCodes = useMemo(() => {
     // "Not ready yet" -- who still needs chasing: allotted codes that were
     // never sent, or sent but never entered on a kiosk.
@@ -1271,6 +1289,40 @@ export const AdminLandingPage = (): JSX.Element => {
                   Every action from here on is permanently logged (see the Activity Log tab) until this election is
                   closed. Use Voting below to pause/resume; use the button below for End of Voting.
                 </p>
+                {endOfVotingTodo && (
+                  <div
+                    aria-label="Before End of Voting"
+                    style={{
+                      margin: '0 0 0.75rem 0',
+                      padding: '0.6rem 0.75rem',
+                      borderRadius: '6px',
+                      backgroundColor: endOfVotingTodo.done ? '#f0fdf4' : '#fff7ed',
+                      border: `1px solid ${endOfVotingTodo.done ? '#86efac' : '#fdba74'}`,
+                      color: endOfVotingTodo.done ? '#166534' : '#9a3412',
+                      fontSize: '0.9rem'
+                    }}
+                  >
+                    {endOfVotingTodo.done ? (
+                      <strong>✓ Every booth is closed and sealed — ready for End of Voting.</strong>
+                    ) : (
+                      <>
+                        <strong>Before End of Voting</strong> (every code must be deleted, or closed and 🔒 sealed —
+                        Dwarka and AN, on the Polling Officer Codes tab):
+                        <ul style={{ margin: '0.35rem 0 0 1.1rem', padding: 0 }}>
+                          {endOfVotingTodo.open > 0 && (
+                            <li>Booths still polling — close, then Verify &amp; Seal: <strong>{endOfVotingTodo.open}</strong></li>
+                          )}
+                          {endOfVotingTodo.unsealed > 0 && (
+                            <li>Closed booths waiting for Verify &amp; Seal: <strong>{endOfVotingTodo.unsealed}</strong></li>
+                          )}
+                          {endOfVotingTodo.unallotted > 0 && (
+                            <li>Unallotted codes to delete: <strong>{endOfVotingTodo.unallotted}</strong></li>
+                          )}
+                        </ul>
+                      </>
+                    )}
+                  </div>
+                )}
                 <button
                   className="button"
                   onClick={handleCloseRecording}
@@ -1985,7 +2037,9 @@ export const AdminLandingPage = (): JSX.Element => {
                     const canRepoll = !isRepolled && !isSealed && inRunningElection && Boolean(entry.officerName.trim());
                     // A closed booth of the running election waits for its
                     // Paper List check.
-                    const canSeal = !isRepolled && !isSealed && isClosed && inRunningElection;
+                    // An unnamed code is deleted instead (one path per code).
+                    const canSeal =
+                      !isRepolled && !isSealed && isClosed && inRunningElection && Boolean(entry.officerName.trim());
                     const duty = dutyStatus(entry);
                     const dutyStyle = DUTY_STYLES[duty];
                     return (

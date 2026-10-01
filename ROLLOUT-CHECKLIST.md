@@ -25,7 +25,7 @@ This is the checklist for everyone on duty for the voting app — the Chief Elec
 - [ ] A code only works once it has a name against it — an unnamed code is refused at the booth. A School code only works in a School election, and a House code only for its own house in a House election.
 - [ ] **🖨️ Print Dwarka/AN Code List** gives a printable "who has which code" sheet for each branch.
 - [ ] Brief every tester to check it, test it, use it, and misuse it — and specifically to look for (a) features that should be there but aren't, and (b) features that are there but aren't needed. Collect this feedback in one shared place (a sheet or form).
-- [ ] Each test round is a full election: **Start the Voting Process** → vote → close each booth → **🔒 Verify & Seal** each booth that has votes → **End of Voting**. End of Voting is refused until every booth with votes is sealed. Starting the next election of the same type resets its vote counts to zero automatically — there is nothing to clear by hand between rounds.
+- [ ] Each test round is a full election: **Start the Voting Process** → vote → close each booth → **🔒 Verify & Seal** every booth (even one with no votes) and delete unallotted codes → **End of Voting**. End of Voting is refused until that's done. Starting the next election of the same type resets its vote counts to zero automatically — there is nothing to clear by hand between rounds.
 - [ ] Be aware that every test round leaves a permanent trace:
   - an entry in **Election History** (the in-app Delete button is intentionally hidden, so clearing test entries out needs a developer — ask for that before real polling day), and
   - an election in the **Activity Log**, which can never be edited or deleted by anyone. Give test rounds obvious names (e.g. "TEST — School round 1") so they're easy to tell apart from the real election later.
@@ -63,7 +63,8 @@ This is the checklist for everyone on duty for the voting app — the Chief Elec
 - [ ] **Check each closed booth against its Paper List.** Count the voters on that booth's printed Paper List, press **🔒 Verify & Seal** next to the booth, and type the number in. The window shows the app's count for that booth beside it:
   - **Counts match** → press Verify & Seal. The booth turns ⚪ white with 🔒 Sealed and is final: it can't be reopened, re-polled or deleted, and no further vote can be recorded there.
   - **Counts don't match** → count the Paper List again. If it still doesn't match, press **Order Re-poll** (offered right there).
-  - A booth that received no votes (e.g. an absent teacher) doesn't need checking.
+  - A booth that received no votes (e.g. an absent teacher) is closed and sealed the same way, with a Paper List of **0**.
+  - A code that was never allotted to anyone (no name) can't be sealed — **Delete** it.
 - [ ] **Re-poll** (only while the election is running, and before the booth is sealed) — for an irregularity, a physical disruption, or a count that doesn't match the Paper List. Use the **Re-poll** button next to the booth (or from the Verify & Seal window). Pick a reason, add a note, check the number of votes that will be cancelled, and type CONFIRM.
   - All votes from that booth stop counting (they're kept on record, never deleted). The old code stops working for good.
   - A **new code** is issued with the same details (School/House, branch, house) — choose the same teacher (keeps their WhatsApp number) or a different one. Send it from **📲 Send Codes on WhatsApp**, or give it to the teacher directly.
@@ -72,7 +73,11 @@ This is the checklist for everyone on duty for the voting app — the Chief Elec
 
 ## Superadmin — After Polling Closes
 
-- [ ] Make sure every booth that received votes is **🔒 Sealed** (the summary line at the top of the Polling Officer Codes tab shows how many are still 🔴 "Polling closed"). End of Voting is refused until they are, and names the booths still waiting.
+- [ ] **One rule before End of Voting: every code of this election, in Dwarka and AN, is either deleted or 🔒 sealed.** The **"Before End of Voting"** box on the Dashboard, just above the button, shows what's left:
+  - **Booths still polling** → close them (the teacher, or you with **Close**), then Verify & Seal.
+  - **Closed booths waiting for Verify & Seal** → check each against its Paper List and seal it.
+  - **Unallotted codes** → delete them.
+  When everything is done it says "✓ Every booth is closed and sealed — ready for End of Voting". This is on purpose: once End of Voting is pressed, the election can't be reopened, so it can't be pressed while any booth is still polling.
 - [ ] Dashboard → **⏹ End of Voting**, and confirm. This saves the final result to Election History under the election's name, closes the poll, turns every remaining code of that election 🔴 red, and stops the Activity Log recording for this election.
 - [ ] The final vote counts stay visible (Live Results, the Codes tab's "Votes Cast") after End of Voting — they only reset when the next election of the same type is started.
 - [ ] Print the results: Dashboard → **🖨️ Download Dwarka Report** / **🖨️ Download AN Report**. These are results-only and, once voting has ended, show the most recently finished election.
@@ -116,7 +121,7 @@ Please don't spend testing time reporting these; they're intentional:
 - A code with no officer name, a closed code, a code replaced by a re-poll, or a code for the other election type is refused at the booth, with a message saying why.
 - Entering a correct code before voting opens shows "✓ … you are marked as ready. Voting has not started yet" instead of opening a ballot. That's the check-in, not a fault.
 - Codes from an earlier election are 🔴 red and refused ("polling duty for it is over") until **Start Allotting Duties for a Fresh Election** is pressed, or that election is started.
-- End of Voting is refused while any booth with votes hasn't been verified and sealed — the message lists them.
+- End of Voting is refused while any code of the election is still polling, closed but not sealed, or unallotted — the message lists them. Every booth, even one with no votes, has to be sealed.
 - A sealed booth has no Close / Reopen / Re-poll / Delete buttons, and a ballot opened there just before sealing is refused on Submit. Sealing is final, on purpose.
 - Verify & Seal stays greyed out until the Paper List number matches the app's count.
 - A re-polled booth's "Votes Cast" shows 0 with "N cancelled" under it — the votes are kept, just not counted. They're cleared when the next election of that type is started; the saved report keeps their count and reason.

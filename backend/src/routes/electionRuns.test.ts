@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ElectionArchive, ElectionRun, OfficerCode, PollState, StoredVote } from '../types/election.js';
 
 // Regression tests for "Start Recording" / "Close Recording" (ROADMAP.md
@@ -118,32 +118,57 @@ describe('POST /api/election-runs/close', () => {
     mockedDataStore.getPollState.mockReturnValue({ activeElectionType: 'school', settings: { isOpen: true, allowRevote: false } });
   });
 
-  // Verify & Seal: the election can only be declared closed once every
-  // booth that received votes was checked against its Paper List.
-  it('refuses End of Voting while a booth with votes is not sealed, naming it', async () => {
-    mockedDataStore.getCurrentRun.mockReturnValue(runningRun);
-    mockedDataStore.getOfficerCodes.mockReturnValue([
-      { code: 'seal01', officerName: 'A', electionType: 'school', createdAt: 1, seal: { sealedAt: 1, sealedBy: 'x', paperListCount: 5, appCount: 5 } },
-      { code: 'open01', officerName: 'Mrs. Sharma', electionType: 'school', createdAt: 1 },
-      { code: 'none01', officerName: 'Absent', electionType: 'school', createdAt: 1 },
-      { code: 'house1', officerName: 'C', electionType: 'house', house: 'Anand', createdAt: 1 }
-    ]);
-    mockedDataStore.countCountedVotesByOfficerCode.mockImplementation((code: string) => (code === 'none01' ? 0 : 5));
+  // One rule (2026-10-01): every code of the election, both branches, must
+  // be deleted or closed AND sealed -- even a booth with no votes. Also the
+  // safety valve against ending the election while booths still poll.
+  describe('End of Voting needs every code deleted or closed and sealed', () => {
+    const seal = { sealedAt: 1, sealedBy: 'x', paperListCount: 5, appCount: 5 };
+    const repoll = { orderedAt: 1, orderedBy: 'x', reason: 'disruption' as const, note: '', cancelledVoteCount: 3, replacementCode: 'new001' };
 
-    try {
+    afterEach(() => {
+      mockedDataStore.getOfficerCodes.mockReturnValue([]);
+    });
+
+    it('refuses while any code is unallotted, still polling, or closed but not sealed -- naming each', async () => {
+      mockedDataStore.getCurrentRun.mockReturnValue(runningRun);
+      mockedDataStore.getOfficerCodes.mockReturnValue([
+        { code: 'seal01', officerName: 'A', electionType: 'school', createdAt: 1, closedAt: 2, seal },
+        { code: 'spare1', officerName: '', electionType: 'school', createdAt: 1 },
+        { code: 'open01', officerName: 'Mrs. Sharma', electionType: 'school', createdAt: 1, branch: 'AN' },
+        { code: 'shut01', officerName: 'Absent', electionType: 'school', createdAt: 1, closedAt: 2 },
+        { code: 'old001', officerName: 'B', electionType: 'school', createdAt: 1, closedAt: 2, repoll },
+        { code: 'house1', officerName: 'C', electionType: 'house', house: 'Anand', createdAt: 1 }
+      ]);
+
       const { createApp } = await import('../app.js');
       const response = await request(createApp()).post('/api/election-runs/close');
 
       expect(response.status).toBe(409);
-      expect(response.body.code).toBe('BOOTHS_NOT_SEALED');
-      expect(response.body.details.unsealedCodes).toEqual(['open01']);
+      expect(response.body.code).toBe('BOOTHS_NOT_READY');
+      expect(response.body.details).toEqual({ unallottedCodes: ['spare1'], openCodes: ['open01'], unsealedCodes: ['shut01'] });
+      expect(response.body.error).toContain('delete 1 unallotted code (spare1)');
+      expect(response.body.error).toContain('close 1 booth that is still polling');
       expect(response.body.error).toContain('open01 (Mrs. Sharma)');
+      expect(response.body.error).toContain('Verify & Seal 1 closed booth (shut01 (Absent))');
       expect(mockedArchiveCurrentElection).not.toHaveBeenCalled();
       expect(mockedDataStore.closeRun).not.toHaveBeenCalled();
-    } finally {
-      mockedDataStore.getOfficerCodes.mockReturnValue([]);
-      mockedDataStore.countCountedVotesByOfficerCode.mockReturnValue(0);
-    }
+    });
+
+    it('goes through once every code is sealed (re-polled codes and the other election type ignored)', async () => {
+      mockedDataStore.getCurrentRun.mockReturnValue(runningRun);
+      mockedDataStore.getOfficerCodes.mockReturnValue([
+        { code: 'seal01', officerName: 'A', electionType: 'school', createdAt: 1, closedAt: 2, seal },
+        { code: 'old001', officerName: 'B', electionType: 'school', createdAt: 1, closedAt: 2, repoll },
+        { code: 'house1', officerName: 'C', electionType: 'house', house: 'Anand', createdAt: 1 }
+      ]);
+      mockedDataStore.closeRun.mockResolvedValue({ ...runningRun, status: 'closed', archiveIds: [] });
+
+      const { createApp } = await import('../app.js');
+      const response = await request(createApp()).post('/api/election-runs/close');
+
+      expect(response.status).toBe(200);
+      expect(mockedDataStore.closeRun).toHaveBeenCalled();
+    });
   });
 
   it('refuses to close when no recording is active', async () => {

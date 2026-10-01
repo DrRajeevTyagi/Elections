@@ -421,9 +421,18 @@ than proposed above — decided with the Election Commissioner:
     the sealed count can never change afterwards.
   - **Mismatch** → sealing is refused (by the server too, which recounts at
     that moment); the window offers **Order Re-poll** instead (item 13).
-- **The gate.** End of Voting is refused until every booth that received votes
-  is sealed; the refusal names the booths still waiting. Booths with no votes,
-  and the old code of a re-polled booth, need no check.
+- **The gate — one rule (tightened later the same day).** End of Voting is
+  refused until every code of that election, both branches, is either deleted
+  or closed and sealed. An unallotted code is deleted (it can't be sealed); a
+  booth that cast no votes is sealed with a Paper List of 0; the old code of a
+  re-polled booth doesn't count, but its fresh code does. The refusal names
+  the codes, and a "Before End of Voting" box on the Dashboard shows the same
+  counts. This doubles as a **safety valve**: a closed election can't be
+  reopened (deliberately, so its records can't be edited), so the commissioner
+  must not be able to end it by mistake while any booth is still polling.
+  (The first version that day only required booths *with votes* to be sealed,
+  which would have let a mistaken End of Voting cut off a booth still waiting
+  for its first voter.)
 - **The record.** The seal (time, who, Paper List count, app count) is stored on
   the code, logged in the Activity Log, and printed in the saved Election
   History report ("Verified against the Paper List (N) and sealed").

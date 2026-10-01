@@ -39,7 +39,7 @@ document is superseded by it.
   Start Allotting Duties for a Fresh Election resets one election type in
   **both** branches at once (one election covers both); a re-poll's fresh code
   keeps the old code's branch and house; Verify & Seal is per booth, and End of
-  Voting waits for every booth with votes **in both branches** to be sealed; the
+  Voting waits for every code **in both branches** to be deleted or sealed; the
   duty-colour summary counts the selected branch.
 - **A real bug shipped and was fixed in this rollout:** the first backend
   branch-wiring pass missed the actual ballot (`GET /posts`) and vote

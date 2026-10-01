@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countDutyStatuses, dutyStatus } from './dutyStatus';
+import { countDutyStatuses, dutyStatus, endOfVotingChecklist } from './dutyStatus';
 import type { OfficerCode } from '../types/api';
 
 const code = (overrides: Partial<OfficerCode>): OfficerCode => ({ code: 'abc123', officerName: 'A', createdAt: 1, voteCount: 0, ...overrides });
@@ -30,5 +30,31 @@ describe('dutyStatus', () => {
     expect(
       countDutyStatuses([code({}), code({ sentAt: 1 }), code({ readyAt: 1 }), code({ readyAt: 1 }), code({ closedAt: 1 })])
     ).toEqual({ fresh: 1, sent: 1, ready: 2, over: 1, sealed: 0, repolled: 0 });
+  });
+});
+
+describe('endOfVotingChecklist', () => {
+  const seal = { sealedAt: 4, sealedBy: 'x', paperListCount: 0, appCount: 0 };
+
+  it('lists codes to delete, booths to close, and booths to seal -- for this election only, ignoring re-polled codes', () => {
+    const checklist = endOfVotingChecklist(
+      [
+        code({ code: 'spare1', officerName: '', electionType: 'school' }),
+        code({ code: 'open01', electionType: 'school' }),
+        code({ code: 'shut01', electionType: 'school', closedAt: 1 }),
+        code({ code: 'seal01', electionType: 'school', closedAt: 1, seal }),
+        code({ code: 'old001', electionType: 'school', closedAt: 1, repoll }),
+        code({ code: 'house1', electionType: 'house', house: 'Anand' })
+      ],
+      'school'
+    );
+    expect(checklist.unallotted.map((c) => c.code)).toEqual(['spare1']);
+    expect(checklist.open.map((c) => c.code)).toEqual(['open01']);
+    expect(checklist.unsealed.map((c) => c.code)).toEqual(['shut01']);
+  });
+
+  it('is empty once every code is sealed', () => {
+    const checklist = endOfVotingChecklist([code({ electionType: 'school', closedAt: 1, seal })], 'school');
+    expect(checklist).toEqual({ unallotted: [], open: [], unsealed: [] });
   });
 });

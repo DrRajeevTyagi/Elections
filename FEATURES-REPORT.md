@@ -151,10 +151,16 @@ Manages elections for **3 house-level posts**:
   (and cancels any ballot in progress) without ending the election.
 - **⏹ End of Voting** — saves the final result to Election History, closes the
   poll, closes every booth of that election (red) and ends the Activity Log
-  recording. **Refused until every booth that received votes has been verified
-  against its Paper List and sealed** — the message names the booths still
-  waiting. The final vote counts stay on screen until the next election of the
-  same type is started.
+  recording. **One rule: refused until every code of that election (Dwarka and
+  AN) is either deleted, or closed and verified & sealed** — an unallotted code
+  is deleted; every allotted booth, even one with no votes, is closed and sealed
+  (Paper List 0). So the election can't be ended by mistake while any booth is
+  still polling — important, because a closed election can't be reopened. A
+  **"Before End of Voting"** box above the button lists what's left (booths still
+  polling, closed booths waiting for Verify & Seal, unallotted codes to delete),
+  and a refusal names the codes. Re-polled codes don't count; their fresh code
+  does. The final vote counts stay on screen until the next election of the same
+  type is started.
 - Candidates are locked for the whole election, including while paused.
 - **Storage** card — confirms changes are durably saved; a red banner appears at
   the top if saves start failing.
@@ -234,7 +240,9 @@ the tab refreshing itself every 5 seconds (even before voting opens):
   app's count for that booth, the booth is sealed for good (white, 🔒 Sealed,
   "Paper List 38 · App 38") and can't be reopened, re-polled or deleted. If not,
   sealing stays locked and the screen offers **Order Re-poll** instead. The server
-  re-checks the count at the moment of sealing. Booths with no votes need no check.
+  re-checks the count at the moment of sealing. A booth that cast no votes is
+  sealed too, with a Paper List of 0. An unallotted (unnamed) code can't be
+  sealed — it is deleted instead.
 - **Re-poll** a booth (only while its election is running, and not once sealed):
   the Chief Election Commissioner picks a reason (irregularity, physical
   disruption, vote-count mismatch, other), adds a note, sees exactly how many votes
@@ -313,8 +321,9 @@ the tab refreshing itself every 5 seconds (even before voting opens):
 - Cannot vote while polling is paused; cannot activate without a valid, named,
   open officer code of the right election type
 - Votes from a re-polled booth are never deleted, but never counted in any result
-- The election cannot be declared closed until every booth with votes has been
-  checked against its Paper List and sealed
+- The election cannot be declared closed until every code of it is deleted, or
+  closed and checked against its Paper List and sealed — so it can't be ended by
+  mistake while any booth is still polling
 - The server refuses to start if any stored vote record fails validation, rather
   than silently dropping it
 

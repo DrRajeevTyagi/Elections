@@ -363,6 +363,41 @@ describe('PUT /api/officer-codes/:code', () => {
     expect(mockedDataStore.appendLogEntry).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'officerCode.name' }));
   });
 
+  // Otherwise a used booth would count as "unallotted -- delete it" for End
+  // of Voting while being undeletable, so the election could never close.
+  it('refuses to erase the officer name of a booth that has votes or is sealed, but allows correcting it', async () => {
+    const { createApp } = await import('../app.js');
+    mockedDataStore.findOfficerCode.mockReturnValue({ ...baseCode, officerName: 'Jane', everNamed: true });
+    mockedDataStore.countVotesByOfficerCode.mockReturnValue(4);
+    const erased = await request(createApp()).put('/api/officer-codes/ABC123').send({ officerName: '  ' });
+
+    mockedDataStore.countVotesByOfficerCode.mockReturnValue(0);
+    mockedDataStore.findOfficerCode.mockReturnValue({
+      ...baseCode,
+      officerName: 'Jane',
+      closedAt: 1,
+      seal: { sealedAt: 1, sealedBy: 'x', paperListCount: 0, appCount: 0 }
+    });
+    const erasedSealed = await request(createApp()).put('/api/officer-codes/ABC123').send({ officerName: '' });
+
+    mockedDataStore.updateOfficerCode.mockReturnValue({ ...baseCode, officerName: 'Jane Smith' });
+    const corrected = await request(createApp()).put('/api/officer-codes/ABC123').send({ officerName: 'Jane Smith' });
+
+    expect(erased.status).toBe(409);
+    expect(erasedSealed.status).toBe(409);
+    expect(corrected.status).toBe(200);
+    expect(mockedDataStore.updateOfficerCode).toHaveBeenCalledTimes(1);
+  });
+
+  it('still allows clearing the name of an unused code', async () => {
+    mockedDataStore.findOfficerCode.mockReturnValue({ ...baseCode, officerName: 'Jane', everNamed: true });
+    mockedDataStore.countVotesByOfficerCode.mockReturnValue(0);
+    mockedDataStore.updateOfficerCode.mockReturnValue({ ...baseCode, officerName: '' });
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).put('/api/officer-codes/ABC123').send({ officerName: '' });
+    expect(response.status).toBe(200);
+  });
+
   it('rejects a malformed WhatsApp number', async () => {
     const { createApp } = await import('../app.js');
     const response = await request(createApp()).put('/api/officer-codes/ABC123').send({ phone: '12' });
@@ -527,6 +562,26 @@ describe('POST /api/officer-codes/:code/seal', () => {
     expect(repolled.status).toBe(409);
     expect(repolled.body.error).toContain('new999');
     expect(mockedDataStore.sealOfficerCode).not.toHaveBeenCalled();
+  });
+
+  it('refuses to seal a code never allotted to anyone -- it should be deleted instead', async () => {
+    mockedDataStore.findOfficerCode.mockReturnValue({ ...closedBooth, officerName: '' });
+    mockedDataStore.countCountedVotesByOfficerCode.mockReturnValue(0);
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/ABC123/seal').send({ paperListCount: 0 });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toContain('delete it instead');
+    expect(mockedDataStore.sealOfficerCode).not.toHaveBeenCalled();
+  });
+
+  it('seals a booth that cast no votes with a Paper List of 0', async () => {
+    mockedDataStore.countCountedVotesByOfficerCode.mockReturnValue(0);
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/ABC123/seal').send({ paperListCount: 0 });
+
+    expect(response.status).toBe(200);
+    expect(mockedDataStore.sealOfficerCode).toHaveBeenCalledWith('ABC123', expect.objectContaining({ paperListCount: 0, appCount: 0 }));
   });
 
   it('needs a whole number from the Paper List', async () => {

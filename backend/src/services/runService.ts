@@ -4,7 +4,7 @@ import { archiveCurrentElection } from './resultsService.js';
 import { kioskService } from './kioskService.js';
 import { logAction, resolveActor } from './auditLogService.js';
 import { BadRequestError, ConflictError } from '../utils/httpError.js';
-import type { ElectionRun, ElectionType } from '../types/election.js';
+import type { ElectionRun, ElectionType, OfficerCode } from '../types/election.js';
 
 // "Start the Voting Process" (ELECTION-INTEGRITY-AND-TRUST.md item 11):
 // one action, atomically --
@@ -107,33 +107,71 @@ export const startRecording = async (
 // reopenOfficerCodesByType call for how a booth closed in the previous
 // election becomes usable again for the next one, without needing to
 // regenerate or re-allot anything.
+export interface EndOfVotingBlockers {
+  unallotted: OfficerCode[]; // never named -- must be deleted
+  open: OfficerCode[]; // named, still polling -- must be closed, then sealed
+  unsealed: OfficerCode[]; // closed, not yet verified against the Paper List
+}
+
+// What still stands between this election and End of Voting. A re-polled
+// code doesn't count: it is already dead for good, and its fresh code is
+// held to the same rule as every other.
+export const endOfVotingBlockers = (electionType: ElectionType): EndOfVotingBlockers => {
+  const codes = dataStore.getOfficerCodes().filter((entry) => entry.electionType === electionType && !entry.repoll);
+  return {
+    unallotted: codes.filter((entry) => !entry.officerName.trim()),
+    open: codes.filter((entry) => entry.officerName.trim() && !entry.closedAt),
+    unsealed: codes.filter((entry) => entry.officerName.trim() && entry.closedAt && !entry.seal)
+  };
+};
+
+const listCodes = (codes: OfficerCode[]): string => {
+  const shown = codes
+    .slice(0, 10)
+    .map((entry) => `${entry.code}${entry.officerName.trim() ? ` (${entry.officerName.trim()})` : ''}`)
+    .join(', ');
+  return codes.length > 10 ? `${shown} and ${codes.length - 10} more` : shown;
+};
+
+const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+export const describeEndOfVotingBlockers = ({ unallotted, open, unsealed }: EndOfVotingBlockers): string => {
+  const steps: string[] = [];
+  if (unallotted.length > 0) {
+    steps.push(`delete ${plural(unallotted.length, 'unallotted code')} (${listCodes(unallotted)})`);
+  }
+  if (open.length > 0) {
+    steps.push(`close ${plural(open.length, 'booth')} that ${open.length === 1 ? 'is' : 'are'} still polling, then Verify & Seal ${open.length === 1 ? 'it' : 'them'} (${listCodes(open)})`);
+  }
+  if (unsealed.length > 0) {
+    steps.push(`Verify & Seal ${plural(unsealed.length, 'closed booth')} (${listCodes(unsealed)})`);
+  }
+  return (
+    `The election can't be closed yet. Every code must be either deleted, or closed and verified & sealed. Still to do: ${steps.join('; ')}. ` +
+    'All of this is on the Polling Officer Codes tab (Dwarka and AN).'
+  );
+};
+
 export const closeRecording = async (clientId: string | undefined): Promise<ElectionRun> => {
   const run = dataStore.getCurrentRun();
   if (!run) {
     throw new BadRequestError('No recording is currently active.');
   }
 
-  // Every booth that received votes must have been checked against its
-  // Paper List and sealed (Officer Codes tab, "Verify & Seal") before the
-  // election can be declared closed. A booth with no votes (e.g. an absent
-  // teacher) needs no check; a re-polled code's votes no longer count, so
-  // only its new code needs sealing.
-  const unsealed = dataStore
-    .getOfficerCodes()
-    .filter((entry) => entry.electionType === run.electionType && !entry.repoll && !entry.seal)
-    .filter((entry) => dataStore.countCountedVotesByOfficerCode(entry.code) > 0);
-  if (unsealed.length > 0) {
-    const listed = unsealed
-      .slice(0, 10)
-      .map((entry) => `${entry.code}${entry.officerName ? ` (${entry.officerName})` : ''}`)
-      .join(', ');
-    const more = unsealed.length > 10 ? ` and ${unsealed.length - 10} more` : '';
-    throw new ConflictError(
-      `${unsealed.length} booth${unsealed.length === 1 ? ' has' : 's have'} not been verified and sealed yet: ${listed}${more}. ` +
-        'Close each booth, check its count against the Paper List, and press Verify & Seal (or Order Re-poll) on the Polling Officer Codes tab first.',
-      'BOOTHS_NOT_SEALED',
-      { unsealedCodes: unsealed.map((entry) => entry.code) }
-    );
+  // One rule, decided 2026-10-01 so it is easy to remember and explain:
+  // every code of this election (both branches) must either no longer
+  // exist, or be closed AND verified against its Paper List and sealed --
+  // including a booth that cast no votes (sealed with a Paper List of 0).
+  // This also means End of Voting can't be pressed by mistake while any
+  // booth is still polling, which matters because a closed election can't
+  // be reopened. See endOfVotingBlockers.
+  const blockers = endOfVotingBlockers(run.electionType);
+  if (blockers.unallotted.length + blockers.open.length + blockers.unsealed.length > 0) {
+    throw new ConflictError(describeEndOfVotingBlockers(blockers), 'BOOTHS_NOT_READY', {
+      unallottedCodes: blockers.unallotted.map((entry) => entry.code),
+      openCodes: blockers.open.map((entry) => entry.code),
+      unsealedCodes: blockers.unsealed.map((entry) => entry.code)
+    });
   }
 
   const totalVotes = dataStore.getCountedVotes().filter((vote) => vote.electionType === run.electionType).length;

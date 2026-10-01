@@ -294,6 +294,39 @@ describe('AdminLandingPage tabs', () => {
     confirmSpy.mockRestore();
   });
 
+  it('Dashboard: shows what is left before End of Voting, and a ready line once everything is sealed', async () => {
+    mockApi.verifyAdminSecret.mockResolvedValue(undefined);
+    mockApi.getPollStatus.mockResolvedValue({
+      poll: { activeElectionType: 'school', settings: { isOpen: false, allowRevote: false } }
+    });
+    mockApi.getResults.mockResolvedValue({ results: [], totalVotes: 0 });
+    mockApi.getCurrentRun.mockResolvedValue({
+      run: { id: 'run-1', electionType: 'school', name: 'Test', status: 'running', startedAt: 1, startedBy: 'x' }
+    });
+    const seal = { sealedAt: 1, sealedBy: 'x', paperListCount: 0, appCount: 0 };
+    mockApi.getOfficerCodes.mockResolvedValue({
+      codes: [
+        { code: 'SPARE1', officerName: '', electionType: 'school', createdAt: 1, voteCount: 0 },
+        { code: 'OPEN01', officerName: 'A', electionType: 'school', createdAt: 1, voteCount: 3, branch: 'AN' },
+        { code: 'OPEN02', officerName: 'B', electionType: 'school', createdAt: 1, voteCount: 0 },
+        { code: 'SHUT01', officerName: 'C', electionType: 'school', createdAt: 1, voteCount: 0, closedAt: 2 },
+        { code: 'DONE01', officerName: 'D', electionType: 'school', createdAt: 1, voteCount: 0, closedAt: 2, seal },
+        { code: 'HOUSE1', officerName: 'E', electionType: 'house', house: 'Anand', createdAt: 1, voteCount: 0 }
+      ]
+    });
+    mockApi.getArchivesList.mockResolvedValue({ archives: [] });
+
+    try {
+      await unlockAsAdmin();
+      const todo = await screen.findByLabelText('Before End of Voting');
+      expect(todo).toHaveTextContent('Booths still polling — close, then Verify & Seal: 2');
+      expect(todo).toHaveTextContent('Closed booths waiting for Verify & Seal: 1');
+      expect(todo).toHaveTextContent('Unallotted codes to delete: 1');
+    } finally {
+      mockApi.getCurrentRun.mockResolvedValue({ run: null });
+    }
+  });
+
   it('shows all 5 School Elections posts together in one live results grid', async () => {
     mockApi.verifyAdminSecret.mockResolvedValue(undefined);
     mockApi.getPollStatus.mockResolvedValue({

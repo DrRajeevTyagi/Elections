@@ -232,6 +232,19 @@ officerCodesRouter.put(
     const { code } = req.params;
     const { officerName, phone } = req.body as { officerName?: string; phone?: unknown };
     const parsedPhone = parsePhone(phone, code);
+    // A booth that has cast votes or been sealed keeps an officer's name:
+    // blanking it would make it "unallotted" (to be deleted, per the End of
+    // Voting rule in runService.endOfVotingBlockers) while it can't be
+    // deleted -- leaving the election impossible to close. The name can
+    // still be corrected, just not erased.
+    if (typeof officerName === 'string' && !officerName.trim()) {
+      const existing = dataStore.findOfficerCode(code);
+      if (existing && (existing.seal || dataStore.countVotesByOfficerCode(existing.code) > 0)) {
+        throw new ConflictError(
+          `Booth ${existing.code} has already been used${existing.seal ? ' and sealed' : ''}, so its officer's name can be corrected but not removed.`
+        );
+      }
+    }
     // Matching is case-insensitive (see datastore.ts's codesMatch), so no
     // case normalization is needed here.
     const updated = dataStore.updateOfficerCode(code, {
@@ -275,6 +288,11 @@ officerCodesRouter.post(
     }
     if (entry.seal) {
       throw new ConflictError(`Booth ${entry.code} is already sealed.`);
+    }
+    // One path per code (see runService.endOfVotingBlockers): a code never
+    // allotted to anyone is deleted, not sealed.
+    if (!entry.officerName.trim()) {
+      throw new ConflictError(`Code ${entry.code} was never allotted to a polling officer -- delete it instead of sealing it.`);
     }
     if (entry.repoll) {
       throw new ConflictError(`A re-poll was ordered at booth ${entry.code} -- check and seal its new code ${entry.repoll.replacementCode} instead.`);
