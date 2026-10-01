@@ -37,7 +37,7 @@ Each step has a one-line **Say:** cue — the point staff should take away — s
 
 ### Act 1 — Only one person controls the election
 
-1. **Single-terminal lock.** Log in to the super admin from one device, then log in again from a second device. The second login shows an "already open on another device" prompt with a **Take Over** option — confirm it, and the first device is logged out. Entering the secret on a second device does **not** silently evict the first; someone has to deliberately take over.
+1. **Single-terminal lock.** Log in to the super admin from one device, then log in again from a second device. The second login shows an "in use on another device" message with an **Ask for Control** button. Press it: the first device gets an Allow / Deny popup. **Deny** — the second device is told "Request refused" and the first stays in control. Ask again and **Allow** — the second device is in, and the first is signed out within a few seconds. Entering the secret on a second device never evicts the first on its own.
    **Say:** *Only one terminal can control the election at a time, and taking control from someone else is a deliberate act act that gets recorded in the log.(only if voting is going on).*
 2. Log back in on the main device and carry on from there.
 

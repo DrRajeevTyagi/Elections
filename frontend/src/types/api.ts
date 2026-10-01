@@ -106,6 +106,32 @@ export interface BulkAllotResponse {
   codes: BulkAllotedCode[];
 }
 
+// Asking the device in control of the admin console to hand over (see
+// backend services/adminSessionService.ts).
+export type TakeoverStatus = 'pending' | 'approved' | 'denied' | 'expired' | 'cancelled';
+
+export interface TakeoverRequestInfo {
+  id: string;
+  label?: string;
+  createdAt: number;
+  expiresAt: number;
+  status: TakeoverStatus;
+}
+
+export interface PendingTakeoverRequest {
+  id: string;
+  label?: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
+// errorDetails on an ADMIN_SESSION_CONFLICT login error.
+export interface AdminSessionConflictDetails {
+  holderLabel?: string;
+  activeSince?: number;
+  takeableAt?: number;
+}
+
 export type RunStatus = 'running' | 'closed';
 
 export interface ElectionRun {

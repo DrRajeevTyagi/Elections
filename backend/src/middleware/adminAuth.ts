@@ -40,7 +40,7 @@ const checkSessionHolder: RequestHandler = (req, _res, next) => {
   const clientId = req.header(CLIENT_ID_HEADER);
   if (!clientId || !adminSessionService.touch(clientId)) {
     throw new UnauthorizedError(
-      'This admin console is no longer the active session -- it was taken over from another device. Please log in again.',
+      'This terminal is no longer in control of the election -- control was handed to another device. Log in again to ask for it back.',
       'ADMIN_SESSION_LOST'
     );
   }

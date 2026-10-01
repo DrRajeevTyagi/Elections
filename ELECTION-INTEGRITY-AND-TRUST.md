@@ -49,7 +49,17 @@ Two design principles run through every item below:
 Election Commissioner at a time. If someone else tries to log in as super admin,
 the real Election Commissioner should know about it.
 
-**Current behavior in the code:** There is already a single-slot session lock
+> **Update 2026-10-01 — friendly vs hostile takeover is now built.** The forced
+> takeover is gone. A second device can only *ask* for control; the device in
+> control gets an Allow / Deny popup (with a sound and a flashing tab title)
+> and stays in control unless it allows. An unanswered request expires after 1
+> minute. The one exception: a device in control that has been silent for 3+
+> minutes (crashed, closed, flat battery) can be replaced by a new login
+> without asking. Every request, approval, refusal and expiry is in the
+> Activity Log. See [adminSessionService.ts](backend/src/services/adminSessionService.ts).
+> The analysis below describes the behaviour *before* this change.
+
+**Behavior before 2026-10-01:** There was already a single-slot session lock
 ([adminSessionService.ts](backend/src/services/adminSessionService.ts)) — logging
 in from a second device requires an explicit "force takeover"
 (`x-admin-force: true`), which immediately evicts whoever held the slot. But the

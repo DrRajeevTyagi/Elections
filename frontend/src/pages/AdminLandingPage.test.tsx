@@ -26,7 +26,12 @@ const mockApi = vi.hoisted(() => ({
   getRuns: vi.fn().mockResolvedValue({ runs: [] }),
   searchRunLog: vi.fn().mockResolvedValue({ entries: [] }),
   startRecording: vi.fn(),
-  closeRecording: vi.fn()
+  closeRecording: vi.fn(),
+  getAdminSessionStatus: vi.fn().mockResolvedValue({ pendingRequest: null }),
+  requestAdminTakeover: vi.fn(),
+  getAdminTakeoverRequest: vi.fn(),
+  cancelAdminTakeover: vi.fn(),
+  respondToAdminTakeover: vi.fn()
 }));
 
 vi.mock('../services/api', () => mockApi);
@@ -38,6 +43,30 @@ const unlockAsAdmin = async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Unlock Admin Dashboard' }));
   await screen.findByText('Poll Controls');
 };
+
+describe('AdminLandingPage login while another device is in control', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+  });
+
+  it('offers to ask the device in control, instead of a forced takeover', async () => {
+    mockApi.verifyAdminSecret.mockRejectedValue(
+      Object.assign(new Error('The admin console is in use on Laptop A (since 9:05:00 AM).'), {
+        errorCode: 'ADMIN_SESSION_CONFLICT',
+        errorDetails: { holderLabel: 'Laptop A' }
+      })
+    );
+    render(<AdminLandingPage />);
+    await screen.findByText('Admin Login');
+    fireEvent.change(screen.getByPlaceholderText('Enter admin secret'), { target: { value: 'testadmin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock Admin Dashboard' }));
+
+    expect(await screen.findByText(/in use on Laptop A/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ask for Control' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Take Over/ })).not.toBeInTheDocument();
+  });
+});
 
 describe('AdminLandingPage tabs', () => {
   afterEach(() => {

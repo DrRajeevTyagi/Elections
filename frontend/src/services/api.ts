@@ -19,7 +19,9 @@ import type {
   SetElectionTypeRequest,
   ElectionRun,
   BulkAllotment,
-  BulkAllotResponse
+  BulkAllotResponse,
+  PendingTakeoverRequest,
+  TakeoverRequestInfo
 } from '../types/api';
 import type { ElectionType } from '../types/election';
 import type { Branch, HouseId } from '../types/election';
@@ -115,8 +117,8 @@ const getDeviceTag = (): string => {
 
 // Set by AdminLandingPage (and ReportPage) so the response interceptor
 // below can force a logout the moment any admin request comes back
-// rejected because this tab lost the single-admin-console slot -- i.e. it
-// was taken over from another device (the slot never expires on its own).
+// rejected because this tab lost the single-admin-console slot -- i.e.
+// control was handed to another device (see components/AdminTakeover.tsx).
 let onAdminSessionLost: (() => void) | null = null;
 export const setAdminSessionLostHandler = (handler: (() => void) | null): void => {
   onAdminSessionLost = handler;
@@ -138,6 +140,10 @@ api.interceptors.response.use(
     // built-in error.code (e.g. "ERR_BAD_REQUEST").
     if (typeof serverCode === 'string') {
       error.errorCode = serverCode;
+    }
+    const serverDetails = error?.response?.data?.details;
+    if (serverDetails && typeof serverDetails === 'object') {
+      error.errorDetails = serverDetails;
     }
     if (serverCode === 'ADMIN_SESSION_LOST') {
       onAdminSessionLost?.();
@@ -184,20 +190,60 @@ export const getPollStatus = async (): Promise<PollResponse> => {
   return response.data;
 };
 
-// `force` deliberately evicts another terminal that currently holds the
-// single admin-console slot -- see ADMIN_SESSION_CONFLICT handling in
-// AdminLandingPage. Only pass it after the user has explicitly confirmed
-// a takeover. The device tag (see getDeviceTag above) is sent automatically
-// as the session's label, so the Activity Log and takeover messages have
-// something more readable than a raw client id, with no login-screen field
-// to fill in.
-export const verifyAdminSecret = async (adminSecret: string, force = false): Promise<void> => {
+// Fails with errorCode ADMIN_SESSION_CONFLICT (and errorDetails naming the
+// device in control) when another live device holds the admin console --
+// see requestAdminTakeover below for asking it to hand over. The device tag
+// (see getDeviceTag above) is sent automatically as the session's label, so
+// the Activity Log and takeover messages have something more readable than
+// a raw client id, with no login-screen field to fill in.
+export const verifyAdminSecret = async (adminSecret: string): Promise<void> => {
   await api.post('/admin/verify', { label: getDeviceTag() }, {
-    headers: {
-      'x-admin-secret': adminSecret,
-      ...(force ? { 'x-admin-force': 'true' } : {})
-    }
+    headers: { 'x-admin-secret': adminSecret }
   });
+};
+
+// ---- Handing over control (see backend adminSessionService.ts) ----
+
+// The asking device: create a request, then check on it until answered.
+export const requestAdminTakeover = async (adminSecret: string): Promise<TakeoverRequestInfo> => {
+  const response = await api.post<{ request: TakeoverRequestInfo }>(
+    '/admin/takeover-requests',
+    { label: getDeviceTag() },
+    { headers: { 'x-admin-secret': adminSecret } }
+  );
+  return response.data.request;
+};
+
+export const getAdminTakeoverRequest = async (adminSecret: string, requestId: string): Promise<TakeoverRequestInfo> => {
+  const response = await api.get<{ request: TakeoverRequestInfo }>(`/admin/takeover-requests/${requestId}`, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data.request;
+};
+
+export const cancelAdminTakeover = async (adminSecret: string, requestId: string): Promise<void> => {
+  await api.delete(`/admin/takeover-requests/${requestId}`, {
+    headers: { 'x-admin-secret': adminSecret }
+  }).catch(() => {
+    // Best-effort -- an unanswered request expires on its own anyway.
+  });
+};
+
+// The device in control: checked every few seconds -- this is also what
+// tells the server it is still alive.
+export const getAdminSessionStatus = async (adminSecret: string): Promise<{ pendingRequest: PendingTakeoverRequest | null }> => {
+  const response = await api.get<{ pendingRequest: PendingTakeoverRequest | null }>('/admin/session-status', {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data;
+};
+
+export const respondToAdminTakeover = async (adminSecret: string, requestId: string, allow: boolean): Promise<void> => {
+  await api.post(
+    `/admin/takeover-requests/${requestId}/respond`,
+    { allow },
+    { headers: { 'x-admin-secret': adminSecret } }
+  );
 };
 
 // Frees this terminal's hold on the admin-console slot immediately -- since

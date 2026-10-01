@@ -5,11 +5,13 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   let status = 500;
   let message = 'Internal Server Error';
   let code: string | undefined;
+  let details: Record<string, unknown> | undefined;
 
   if (err instanceof HttpError) {
     status = err.status;
     message = err.message;
     code = err.code;
+    details = err.details;
   } else if (typeof err === 'object' && err !== null) {
     if ('status' in err && typeof err.status === 'number') {
       status = err.status;
@@ -19,5 +21,5 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     }
   }
 
-  res.status(status).json(code ? { error: message, code } : { error: message });
+  res.status(status).json({ error: message, ...(code ? { code } : {}), ...(details ? { details } : {}) });
 };

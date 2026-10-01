@@ -160,7 +160,12 @@ Manages elections for **3 house-level posts**:
 ### Polling Officer Codes
 - **📋 Bulk Allot from List**: upload a teacher list (Excel) — name, WhatsApp
   number, School duty, House duty — and a named code is created for every duty in
-  one go, with a WhatsApp link per teacher to send it
+  one go; each teacher's number is saved with their code
+- **📲 Send Codes on WhatsApp**: sends from the saved list any time (e.g. the
+  evening before). "Send Next" opens the WhatsApp app with the next teacher's
+  message ready; one message per teacher carries both their School and House
+  codes; each one is ticked as sent (with Undo) so sending resumes where it
+  stopped; teachers with no number are listed with a box to add one
 - **Generate codes**: for House (the same number for all 8 houses, or top up one
   house) or for School posts, into the selected branch. Each is a random
   6-character lowercase code (confusable characters `i`, `l`, `o`, `0`, `1`
@@ -260,7 +265,14 @@ the device currently holding the admin console.
 
 #### Admin
 - `POST /api/admin/verify` — check the admin secret and claim the admin console
-  (`x-admin-force: true` takes it over from another device)
+  (refused with `ADMIN_SESSION_CONFLICT` while another live device holds it; a
+  device silent for 3+ minutes is replaced without asking)
+- `POST /api/admin/takeover-requests` — ask the device in control to hand over
+  (secret only); `GET`/`DELETE /api/admin/takeover-requests/:id` — check on or
+  withdraw that request
+- `GET /api/admin/session-status` — the device in control checks in every few
+  seconds; returns any request waiting for its answer (admin)
+- `POST /api/admin/takeover-requests/:id/respond` — Allow / Deny (admin)
 - `POST /api/admin/logout` — release the admin console
 - `GET /api/admin/storage-health` — whether the last save succeeded, and when (admin)
 
