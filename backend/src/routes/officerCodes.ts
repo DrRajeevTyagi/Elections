@@ -2,10 +2,10 @@ import { Router } from 'express';
 import { requireAdminSession } from '../middleware/adminAuth.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { logAction } from '../services/auditLogService.js';
+import { logAction, resolveActor } from '../services/auditLogService.js';
 import { BadRequestError, ConflictError } from '../utils/httpError.js';
 import { isValidHouseId, isValidBranch } from '../config/posts.js';
-import type { ElectionType, HouseId } from '../types/election.js';
+import type { ElectionType, HouseId, RepollReason } from '../types/election.js';
 
 export const officerCodesRouter = Router();
 
@@ -38,9 +38,11 @@ officerCodesRouter.get(
   '/',
   asyncHandler((_req, res) => {
     const codes = dataStore.getOfficerCodes();
+    // voteCount is the votes that count -- 0 for a re-polled booth, whose
+    // set-aside votes are in entry.repoll.cancelledVoteCount instead.
     const codesWithCounts = codes.map((entry) => ({
       ...entry,
-      voteCount: dataStore.countVotesByOfficerCode(entry.code)
+      voteCount: dataStore.countCountedVotesByOfficerCode(entry.code)
     }));
     res.json({ codes: codesWithCounts });
   })
@@ -231,10 +233,90 @@ officerCodesRouter.put(
   })
 );
 
+const REPOLL_REASONS: RepollReason[] = ['irregularity', 'disruption', 'count-mismatch', 'other'];
+
+// Re-polling at one booth -- ordered by the Chief Election Commissioner when
+// an irregularity, a disruption or a vote-count mismatch is found there.
+// Every vote cast under this code stops counting (kept on record, never
+// deleted), the code is dead for good, and a fresh code is issued for the
+// same election/house/branch -- to the same teacher or a different one --
+// so the booth can vote again. Only while that election is running.
+officerCodesRouter.post(
+  '/:code/repoll',
+  asyncHandler(async (req, res) => {
+    const entry = dataStore.findOfficerCode(req.params.code);
+    if (!entry) {
+      throw new BadRequestError('Code not found');
+    }
+    const { reason, note, officerName, phone } = req.body as {
+      reason?: unknown;
+      note?: unknown;
+      officerName?: unknown;
+      phone?: unknown;
+    };
+    if (typeof reason !== 'string' || !REPOLL_REASONS.includes(reason as RepollReason)) {
+      throw new BadRequestError('Choose a reason for the re-poll');
+    }
+    const trimmedNote = typeof note === 'string' ? note.trim() : '';
+    if (reason === 'other' && !trimmedNote) {
+      throw new BadRequestError('Describe the reason for the re-poll');
+    }
+    if (trimmedNote.length > 500) {
+      throw new BadRequestError('Keep the note under 500 characters');
+    }
+    if (entry.repoll) {
+      throw new ConflictError(`A re-poll was already ordered for ${entry.code} -- its new code is ${entry.repoll.replacementCode}.`);
+    }
+    const run = dataStore.getCurrentRun();
+    if (!run || run.electionType !== entry.electionType) {
+      throw new ConflictError('A re-poll can only be ordered while that election is running.');
+    }
+
+    // Same teacher by default (keeping their WhatsApp number); a different
+    // teacher if a name is given.
+    const newName = typeof officerName === 'string' ? officerName.trim() : '';
+    const sameTeacher = !newName || newName.toLowerCase() === entry.officerName.trim().toLowerCase();
+    const replacementName = sameTeacher ? entry.officerName.trim() : newName;
+    if (!replacementName) {
+      throw new BadRequestError('Enter the name of the teacher who will run the re-poll');
+    }
+    const parsedPhone = parsePhone(phone, replacementName);
+    const replacementPhone = parsedPhone || (sameTeacher ? entry.phone : undefined);
+
+    const clientId = req.header('x-admin-client-id');
+    const result = dataStore.orderRepoll(
+      entry.code,
+      { orderedBy: resolveActor(clientId), reason: reason as RepollReason, note: trimmedNote, runId: run.id },
+      { officerName: replacementName, phone: replacementPhone }
+    );
+    if (!result) {
+      throw new ConflictError('A re-poll was already ordered for this code.');
+    }
+    await logAction(
+      clientId,
+      'officerCode.repoll',
+      {
+        code: result.original.code,
+        officerName: result.original.officerName,
+        reason,
+        note: trimmedNote,
+        cancelledVoteCount: result.original.repoll?.cancelledVoteCount ?? 0,
+        replacementCode: result.replacement.code,
+        replacementOfficerName: result.replacement.officerName
+      },
+      result.original.branch
+    );
+    res.status(201).json({ code: result.original, replacement: result.replacement });
+  })
+);
+
 officerCodesRouter.post(
   '/:code/reopen',
   asyncHandler(async (req, res) => {
     const { code } = req.params;
+    if (dataStore.findOfficerCode(code)?.repoll) {
+      throw new ConflictError('A re-poll was ordered at this booth, so this code can never be reopened. Use its new code instead.');
+    }
     const updated = dataStore.reopenOfficerCode(code);
     if (!updated) {
       throw new BadRequestError('Code not found');
@@ -290,6 +372,10 @@ officerCodesRouter.delete(
     // differently-cased path param) so this always matches the exact string
     // stored on votes -- see kiosk.ts activate, which records votes under
     // officerCode.code, not whatever case the voter/officer typed.
+    // Both sides of a re-poll are part of the permanent record of it.
+    if (entry.repoll || entry.replacesCode) {
+      throw new ConflictError(`Code ${entry.code} is part of a re-poll record and cannot be deleted.`);
+    }
     const voteCount = dataStore.countVotesByOfficerCode(entry.code);
     if (voteCount > 0) {
       throw new ConflictError(

@@ -83,6 +83,30 @@ export interface OfficerCode {
   runId?: string;
   phone?: string; // WhatsApp number, digits with country code
   sentAt?: number; // when last marked as sent on WhatsApp
+  // Set once a re-poll was ordered at this booth -- its votes no longer
+  // count (voteCount is 0) and the code can never be used again.
+  repoll?: RepollRecord;
+  // On the fresh code issued for a re-poll: the code it replaces.
+  replacesCode?: string;
+}
+
+export type RepollReason = 'irregularity' | 'disruption' | 'count-mismatch' | 'other';
+
+export const REPOLL_REASON_LABELS: Record<RepollReason, string> = {
+  irregularity: 'Irregularity at the booth',
+  disruption: 'Physical disruption',
+  'count-mismatch': 'Vote count mismatch',
+  other: 'Other'
+};
+
+export interface RepollRecord {
+  orderedAt: number;
+  orderedBy: string;
+  reason: RepollReason;
+  note: string;
+  cancelledVoteCount: number;
+  replacementCode: string;
+  runId?: string;
 }
 
 // "Bulk Allot from List" (Officer Codes tab) -- see utils/bulkAllot.ts for
@@ -197,8 +221,13 @@ export interface ArchivedCandidateResult {
 export interface ArchivedOfficerCode {
   code: string;
   officerName: string;
-  voteCount: number;
+  voteCount: number; // votes that count -- 0 for a re-polled booth
   branch?: Branch;
+  cancelledVoteCount?: number;
+  repollReason?: RepollReason;
+  repollNote?: string;
+  replacementCode?: string;
+  replacesCode?: string;
 }
 
 export interface ElectionReport {

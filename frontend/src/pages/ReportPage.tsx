@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { getArchive, getCurrentReport } from '../services/api';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
 import { POST_NAMES, SCHOOL_POST_IDS } from '../constants/posts';
+import { REPOLL_REASON_LABELS } from '../types/api';
 import type { ArchivedCandidateResult, ArchivedOfficerCode, ElectionReport } from '../types/api';
 import type { Branch, HouseId, PostId } from '../types/election';
 import './ReportPage.css';
@@ -15,31 +16,53 @@ export const formatTimestamp = (timestamp: number): string => new Date(timestamp
 
 // Shared with TurnoutReportPage -- the separate, officer-turnout-only report
 // reachable from the Polling Officer Codes tab.
+// A re-polled booth shows 0 votes counted, with a line under it saying how
+// many were cancelled, why, and which code ran the re-poll.
 export const OfficerTurnoutTable = ({ officerCodes }: { officerCodes: ArchivedOfficerCode[] }): JSX.Element => (
-  <table className="report-table">
-    <thead>
-      <tr>
-        <th>Code</th>
-        <th>Officer Name</th>
-        <th>Votes Cast</th>
-      </tr>
-    </thead>
-    <tbody>
-      {officerCodes.length === 0 ? (
+  <>
+    <table className="report-table">
+      <thead>
         <tr>
-          <td colSpan={3} className="report-empty">No polling officer codes were generated</td>
+          <th>Code</th>
+          <th>Officer Name</th>
+          <th>Votes Cast</th>
         </tr>
-      ) : (
-        officerCodes.map((entry) => (
-          <tr key={entry.code}>
-            <td>{entry.code}</td>
-            <td>{entry.officerName || <em>(unnamed)</em>}</td>
-            <td className="report-votes">{entry.voteCount}</td>
+      </thead>
+      <tbody>
+        {officerCodes.length === 0 ? (
+          <tr>
+            <td colSpan={3} className="report-empty">No polling officer codes were generated</td>
           </tr>
-        ))
-      )}
-    </tbody>
-  </table>
+        ) : (
+          officerCodes.map((entry) => (
+            <tr key={entry.code}>
+              <td>
+                {entry.code}
+                {entry.replacesCode && <div className="report-repoll-note">Re-poll of {entry.replacesCode}</div>}
+              </td>
+              <td>
+                {entry.officerName || <em>(unnamed)</em>}
+                {entry.replacementCode && (
+                  <div className="report-repoll-note">
+                    Re-polled: {entry.cancelledVoteCount ?? 0} vote{entry.cancelledVoteCount === 1 ? '' : 's'} cancelled.
+                    Reason: {entry.repollReason ? REPOLL_REASON_LABELS[entry.repollReason] : 'not given'}
+                    {entry.repollNote ? ` -- ${entry.repollNote}` : ''}. New code: {entry.replacementCode}.
+                  </div>
+                )}
+              </td>
+              <td className="report-votes">{entry.voteCount}</td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+    {officerCodes.some((entry) => entry.replacementCode) && (
+      <p className="report-meta">
+        Votes from a re-polled booth were cancelled by order of the Chief Election Commissioner and are not counted
+        in any result above. They are kept on record.
+      </p>
+    )}
+  </>
 );
 
 interface GroupedPost {

@@ -1,13 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Candidate, ElectionArchive, OfficerCode, PollState, StoredVote } from '../types/election.js';
 
+const getVotes = vi.fn<[], StoredVote[]>();
+const countVotesByOfficerCode = vi.fn<[string], number>();
+
 const mockedDataStore = {
-  getVotes: vi.fn<[], StoredVote[]>(),
+  getVotes,
+  // No re-polls in these tests, so every vote counts.
+  getCountedVotes: vi.fn(() => getVotes()),
   getCandidates: vi.fn<[], Candidate[]>(),
   getPollState: vi.fn<[], PollState>(),
   getArchives: vi.fn<[], ElectionArchive[]>(),
   getOfficerCodes: vi.fn<[], OfficerCode[]>(),
-  countVotesByOfficerCode: vi.fn<[string], number>(),
+  countVotesByOfficerCode,
+  countCountedVotesByOfficerCode: vi.fn((code: string) => countVotesByOfficerCode(code)),
   addArchive: vi.fn(),
   renameArchive: vi.fn()
 };
@@ -61,6 +67,37 @@ describe('resultsService', () => {
     const headBoyResults = results.find((group) => group.post === 'HB');
     const hb1 = headBoyResults?.candidates.find((item) => item.candidate.id === 'hb-1');
     expect(hb1?.total).toBe(0);
+  });
+
+  it('counts only the votes the store says count (a re-polled booth\'s are left out)', async () => {
+    mockedDataStore.getCountedVotes.mockReturnValueOnce([
+      { id: 'vote-3', timestamp: 3, electionType: 'school', selections: { HB: 'hb-2', HG: 'hg-1', SSC: 'ssc-1', SRC: 'src-1', SCC: 'scc-1' } }
+    ] as StoredVote[]);
+    const { getResults } = await import('./resultsService.js');
+    const headBoy = getResults().find((group) => group.post === 'HB');
+    expect(headBoy?.candidates.map((item) => item.total)).toEqual([0, 1]);
+  });
+
+  it('records a re-polled booth in the saved report: 0 votes counted, the cancelled count, reason and new code', async () => {
+    mockedDataStore.getOfficerCodes.mockReturnValue([
+      {
+        code: 'old111',
+        officerName: 'Jane',
+        electionType: 'school',
+        createdAt: 1,
+        repoll: { orderedAt: 5, orderedBy: 'Admin', reason: 'count-mismatch', note: 'register says 10', cancelledVoteCount: 12, replacementCode: 'new999' }
+      },
+      { code: 'new999', officerName: 'Jane', electionType: 'school', createdAt: 5, replacesCode: 'old111' }
+    ]);
+    mockedDataStore.countCountedVotesByOfficerCode.mockImplementation((code: string) => (code === 'old111' ? 0 : 4));
+
+    const { buildElectionSnapshot } = await import('./resultsService.js');
+    const snapshot = buildElectionSnapshot();
+
+    expect(snapshot?.officerCodes).toEqual([
+      expect.objectContaining({ code: 'old111', voteCount: 0, cancelledVoteCount: 12, repollReason: 'count-mismatch', repollNote: 'register says 10', replacementCode: 'new999' }),
+      expect.objectContaining({ code: 'new999', voteCount: 4, replacesCode: 'old111' })
+    ]);
   });
 
   describe('getTotalVotes', () => {

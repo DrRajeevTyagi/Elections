@@ -73,6 +73,8 @@ export const SendCodesPanel = ({ adminSecret, branch, officerCodes, onClose, onC
   const groups = useMemo(() => {
     const codes = officerCodes
       .filter((entry) => (entry.branch ?? 'dwarka') === branch)
+      // A re-polled booth's code no longer works -- never send it.
+      .filter((entry) => !entry.repoll)
       .filter((entry) => {
         const isHouse = entry.electionType === 'house' || Boolean(entry.house);
         return dutyFilter === 'all' || (dutyFilter === 'house') === isHouse;

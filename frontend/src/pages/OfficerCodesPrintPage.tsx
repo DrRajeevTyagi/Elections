@@ -91,7 +91,9 @@ export const OfficerCodesPrintPage = (): JSX.Element => {
   // Codes generated before the branch field existed have no `branch` set --
   // treat that the same way the backend defaults it, so old Dwarka codes
   // still show up here instead of vanishing off the roster.
-  const branchCodes = codes.filter((entry) => (entry.branch ?? 'dwarka') === branch);
+  // A re-polled booth's code no longer works, so it isn't handed out -- its
+  // new code is on the list instead.
+  const branchCodes = codes.filter((entry) => (entry.branch ?? 'dwarka') === branch && !entry.repoll);
   const groups = groupOfficerCodesByHouse(branchCodes);
   const unallotedCount = branchCodes.filter((entry) => !entry.officerName.trim()).length;
 

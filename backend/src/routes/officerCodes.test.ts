@@ -29,6 +29,8 @@ const mockedDataStore = {
   deleteOfficerCode: vi.fn(),
   updateOfficerCode: vi.fn<unknown[], OfficerCode | undefined>(),
   markOfficerCodesSent: vi.fn<unknown[], OfficerCode[]>(() => []),
+  orderRepoll: vi.fn<unknown[], { original: OfficerCode; replacement: OfficerCode } | undefined>(),
+  countCountedVotesByOfficerCode: vi.fn<[string], number>(() => 0),
   reopenOfficerCode: vi.fn(),
   closeOfficerCode: vi.fn<[string], OfficerCode | undefined>(),
   generateOfficerCodes: vi.fn<unknown[], OfficerCode[]>(() => []),
@@ -365,6 +367,106 @@ describe('PUT /api/officer-codes/:code', () => {
 
     expect(response.status).toBe(400);
     expect(mockedDataStore.updateOfficerCode).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/officer-codes/:code/repoll', () => {
+  const usedCode: OfficerCode = { ...baseCode, officerName: 'Jane', everNamed: true, phone: '919876543210', branch: 'dwarka' };
+  const repollResult = (replacementName = 'Jane') => ({
+    original: {
+      ...usedCode,
+      closedAt: Date.now(),
+      repoll: { orderedAt: Date.now(), orderedBy: 'actor-1', reason: 'count-mismatch' as const, note: '', cancelledVoteCount: 12, replacementCode: 'new999', runId: 'run-1' }
+    },
+    replacement: { ...usedCode, code: 'new999', officerName: replacementName, replacesCode: 'ABC123' }
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDataStore.getCurrentRun.mockReturnValue(runningSchoolRun);
+    mockedDataStore.findOfficerCode.mockReturnValue({ ...usedCode });
+    mockedDataStore.orderRepoll.mockReturnValue(repollResult());
+  });
+
+  it('orders a re-poll for the same teacher, keeping their number, and logs it', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp())
+      .post('/api/officer-codes/ABC123/repoll')
+      .set('x-admin-client-id', 'admin-tab-1')
+      .send({ reason: 'count-mismatch', note: ' Register shows 10, app shows 12 ' });
+
+    expect(response.status).toBe(201);
+    expect(response.body.replacement.code).toBe('new999');
+    expect(mockedDataStore.orderRepoll).toHaveBeenCalledWith(
+      'ABC123',
+      { orderedBy: 'admin-tab-1', reason: 'count-mismatch', note: 'Register shows 10, app shows 12', runId: 'run-1' },
+      { officerName: 'Jane', phone: '919876543210' }
+    );
+    expect(mockedDataStore.appendLogEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'officerCode.repoll',
+        details: expect.objectContaining({ code: 'ABC123', cancelledVoteCount: 12, replacementCode: 'new999' })
+      })
+    );
+  });
+
+  it('gives the new code to a different teacher, without the old teacher\'s number', async () => {
+    mockedDataStore.orderRepoll.mockReturnValue(repollResult('Priya'));
+    const { createApp } = await import('../app.js');
+    await request(createApp())
+      .post('/api/officer-codes/ABC123/repoll')
+      .send({ reason: 'irregularity', officerName: 'Priya' })
+      .expect(201);
+
+    expect(mockedDataStore.orderRepoll).toHaveBeenCalledWith('ABC123', expect.anything(), { officerName: 'Priya', phone: undefined });
+  });
+
+  it('refuses when that election is not running (e.g. after it was closed)', async () => {
+    mockedDataStore.getCurrentRun.mockReturnValue(undefined);
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/ABC123/repoll').send({ reason: 'disruption' });
+
+    expect(response.status).toBe(409);
+    expect(mockedDataStore.orderRepoll).not.toHaveBeenCalled();
+  });
+
+  it('refuses a code from the other election type', async () => {
+    mockedDataStore.findOfficerCode.mockReturnValue({ ...usedCode, electionType: 'house', house: 'Anand' });
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/ABC123/repoll').send({ reason: 'disruption' });
+
+    expect(response.status).toBe(409);
+  });
+
+  it('refuses a second re-poll of the same code', async () => {
+    mockedDataStore.findOfficerCode.mockReturnValue(repollResult().original);
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/ABC123/repoll').send({ reason: 'disruption' });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toContain('new999');
+  });
+
+  it('needs a reason, and a note when the reason is "other"', async () => {
+    const { createApp } = await import('../app.js');
+    const noReason = await request(createApp()).post('/api/officer-codes/ABC123/repoll').send({});
+    const otherNoNote = await request(createApp()).post('/api/officer-codes/ABC123/repoll').send({ reason: 'other', note: '  ' });
+
+    expect(noReason.status).toBe(400);
+    expect(otherNoNote.status).toBe(400);
+    expect(mockedDataStore.orderRepoll).not.toHaveBeenCalled();
+  });
+
+  it('a re-polled code can never be reopened or deleted', async () => {
+    mockedDataStore.findOfficerCode.mockReturnValue(repollResult().original);
+    const { createApp } = await import('../app.js');
+    const reopen = await request(createApp()).post('/api/officer-codes/ABC123/reopen');
+    const remove = await request(createApp()).delete('/api/officer-codes/ABC123');
+
+    expect(reopen.status).toBe(409);
+    expect(remove.status).toBe(409);
+    expect(mockedDataStore.reopenOfficerCode).not.toHaveBeenCalled();
+    expect(mockedDataStore.deleteOfficerCode).not.toHaveBeenCalled();
   });
 });
 

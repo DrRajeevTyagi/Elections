@@ -21,7 +21,9 @@ import type {
   BulkAllotment,
   BulkAllotResponse,
   PendingTakeoverRequest,
-  TakeoverRequestInfo
+  TakeoverRequestInfo,
+  OfficerCode,
+  RepollReason
 } from '../types/api';
 import type { ElectionType } from '../types/election';
 import type { Branch, HouseId } from '../types/election';
@@ -367,6 +369,20 @@ export const closeOfficerCode = async (code: string, adminSecret: string): Promi
   await api.post(`/officer-codes/${code}/close`, undefined, {
     headers: { 'x-admin-secret': adminSecret }
   });
+};
+
+// Orders a re-poll at one booth: its votes stop counting and a fresh code
+// is issued. `officerName`/`phone` only when a different teacher will run
+// the re-poll; omitted, the same teacher (and number) is kept.
+export const orderRepoll = async (
+  code: string,
+  order: { reason: RepollReason; note: string; officerName?: string; phone?: string },
+  adminSecret: string
+): Promise<{ code: OfficerCode; replacement: OfficerCode }> => {
+  const response = await api.post<{ code: OfficerCode; replacement: OfficerCode }>(`/officer-codes/${code}/repoll`, order, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data;
 };
 
 // Send Codes screen -- `sent: false` is "Undo".

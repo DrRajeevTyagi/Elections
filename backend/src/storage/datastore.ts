@@ -5,7 +5,7 @@ import { Firestore } from '@google-cloud/firestore';
 import { env } from '../config/env.js';
 import { DEFAULT_CANDIDATES } from '../config/posts.js';
 import { generateUniqueCodes } from '../utils/officerCode.js';
-import { Candidate, PollState, StoredVote, ElectionType, OfficerCode, ElectionArchive, HouseId, Branch, ElectionRun, LogEntry } from '../types/election.js';
+import { Candidate, PollState, StoredVote, ElectionType, OfficerCode, ElectionArchive, HouseId, Branch, ElectionRun, LogEntry, RepollRecord } from '../types/election.js';
 
 // Single document holds candidates/pollState/officerCodes/archives. This
 // keeps the in-memory, synchronous DataStore API unchanged for those; only
@@ -647,8 +647,69 @@ export class DataStore {
     this.queueVoteDeletion(removedIds);
   }
 
+  // Every vote cast under this code, including any set aside by a re-poll.
   countVotesByOfficerCode(code: string): number {
     return this.votes.filter((vote) => vote.officerCode === code).length;
+  }
+
+  private repolledCodeSet(): Set<string> {
+    return new Set(this.data.officerCodes.filter((entry) => entry.repoll).map((entry) => entry.code.toLowerCase()));
+  }
+
+  // The votes that count: every vote except those cast at a booth where a
+  // re-poll was ordered. Those stay stored (see getVotes) as the record of
+  // what happened -- they are only left out here. Everything that shows a
+  // result or a total reads this, not getVotes.
+  getCountedVotes(): StoredVote[] {
+    const repolled = this.repolledCodeSet();
+    if (repolled.size === 0) {
+      return this.getVotes();
+    }
+    return this.getVotes().filter((vote) => !vote.officerCode || !repolled.has(vote.officerCode.toLowerCase()));
+  }
+
+  // Votes from this code that count -- 0 for a re-polled booth.
+  countCountedVotesByOfficerCode(code: string): number {
+    const entry = this.data.officerCodes.find((item) => codesMatch(item.code, code));
+    return entry?.repoll ? 0 : this.countVotesByOfficerCode(entry?.code ?? code);
+  }
+
+  // Re-polling at one booth, in a single persist: the old code is marked
+  // re-polled (its votes stop counting) and closed for good, and a fresh
+  // code is issued for the same election/house/branch/run.
+  orderRepoll(
+    code: string,
+    order: Omit<RepollRecord, 'orderedAt' | 'replacementCode' | 'cancelledVoteCount'>,
+    replacement: { officerName: string; phone?: string }
+  ): { original: OfficerCode; replacement: OfficerCode } | undefined {
+    const entry = this.data.officerCodes.find((item) => codesMatch(item.code, code));
+    if (!entry || entry.repoll) {
+      return undefined;
+    }
+    const [newCode] = generateUniqueCodes(1, this.data.officerCodes.map((item) => item.code));
+    const now = Date.now();
+    const fresh: OfficerCode = {
+      code: newCode,
+      officerName: replacement.officerName,
+      everNamed: true,
+      electionType: entry.electionType,
+      house: entry.house,
+      createdAt: now,
+      branch: entry.branch,
+      runId: entry.runId,
+      phone: replacement.phone,
+      replacesCode: entry.code
+    };
+    entry.repoll = {
+      ...order,
+      orderedAt: now,
+      cancelledVoteCount: this.countVotesByOfficerCode(entry.code),
+      replacementCode: newCode
+    };
+    entry.closedAt = entry.closedAt ?? now;
+    this.data.officerCodes.push(fresh);
+    this.queuePersist();
+    return { original: { ...entry, repoll: { ...entry.repoll } }, replacement: { ...fresh } };
   }
 
   getOfficerCodes(): OfficerCode[] {
@@ -708,8 +769,9 @@ export class DataStore {
   // allotment carry forward, only the "this booth is done for the day" flag
   // resets, same as votes reset to zero for a new run.
   reopenOfficerCodesByType(electionType: ElectionType): void {
+    // A re-polled code stays closed for good, in every later election too.
     this.data.officerCodes = this.data.officerCodes.map((entry) =>
-      entry.electionType === electionType ? { ...entry, closedAt: undefined } : entry
+      entry.electionType === electionType && !entry.repoll ? { ...entry, closedAt: undefined } : entry
     );
     this.queuePersist();
   }
@@ -734,10 +796,15 @@ export class DataStore {
     return { ...entry };
   }
 
+  // Callers must refuse a re-polled code first (see routes/officerCodes.ts);
+  // this leaves one closed regardless, as a second line of defence.
   reopenOfficerCode(code: string): OfficerCode | undefined {
     const entry = this.data.officerCodes.find((item) => codesMatch(item.code, code));
     if (!entry) {
       return undefined;
+    }
+    if (entry.repoll) {
+      return { ...entry };
     }
     entry.closedAt = undefined;
     this.queuePersist();

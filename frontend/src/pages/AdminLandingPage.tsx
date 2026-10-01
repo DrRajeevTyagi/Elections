@@ -45,6 +45,8 @@ import { StartElectionWizard } from '../components/StartElectionWizard';
 import { BulkAllotCodesModal } from '../components/BulkAllotCodesModal';
 import { SendCodesPanel } from '../components/SendCodesPanel';
 import { TakeoverPrompt, TakeoverRequestBox } from '../components/AdminTakeover';
+import { RepollDialog } from '../components/RepollDialog';
+import { REPOLL_REASON_LABELS } from '../types/api';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
 import { POST_NAMES } from '../constants/posts';
 import { POST_COLORS } from '../constants/postColors';
@@ -135,6 +137,11 @@ export const AdminLandingPage = (): JSX.Element => {
   const [officerCodesLoading, setOfficerCodesLoading] = useState(false);
   const [showBulkAllot, setShowBulkAllot] = useState(false);
   const [showSendCodes, setShowSendCodes] = useState(false);
+  // Re-polling (Officer Codes tab): the booth whose dialog is open, and the
+  // last re-poll ordered -- kept on screen (not a 5-second message) since
+  // the new code still has to be sent to the teacher.
+  const [repollTarget, setRepollTarget] = useState<OfficerCode | null>(null);
+  const [repollNotice, setRepollNotice] = useState<{ oldCode: string; replacement: OfficerCode } | null>(null);
   const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
   const [archives, setArchives] = useState<ArchiveSummary[]>([]);
   const [archiveNameDrafts, setArchiveNameDrafts] = useState<Record<string, string>>({});
@@ -1652,6 +1659,47 @@ export const AdminLandingPage = (): JSX.Element => {
           />
         )}
 
+        {repollTarget && (
+          <RepollDialog
+            adminSecret={adminSecret}
+            entry={repollTarget}
+            onClose={() => setRepollTarget(null)}
+            onOrdered={(replacement) => {
+              setRepollNotice({ oldCode: repollTarget.code, replacement });
+              setRepollTarget(null);
+              void loadOfficerCodes(false);
+              void refreshVoteCounts();
+            }}
+          />
+        )}
+
+        {repollNotice && (
+          <div
+            role="status"
+            style={{ padding: '1rem', backgroundColor: '#f0fdf4', border: '2px solid #16a34a', borderRadius: '8px', marginBottom: '1rem' }}
+          >
+            <p style={{ margin: 0, fontWeight: 700 }}>
+              ✓ Re-poll ordered at booth {repollNotice.oldCode}. Its votes no longer count.
+            </p>
+            <p style={{ margin: '0.4rem 0 0 0', overflowWrap: 'anywhere' }}>
+              New code for the re-poll:{' '}
+              <strong style={{ fontFamily: 'monospace', fontSize: '1.15rem' }}>{repollNotice.replacement.code}</strong>
+              {' '}&mdash; {repollNotice.replacement.officerName}.{' '}
+              {repollNotice.replacement.phone
+                ? 'Send it from 📲 Send Codes on WhatsApp.'
+                : 'No WhatsApp number on file -- give it to the teacher directly, or add their number in 📲 Send Codes.'}
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+              <button className="button" style={{ backgroundColor: '#16a34a' }} onClick={() => setShowSendCodes(true)}>
+                📲 Send Codes on WhatsApp
+              </button>
+              <button className="button" style={{ backgroundColor: '#6b7280' }} onClick={() => setRepollNotice(null)}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
         {showSendCodes && (
           <SendCodesPanel
             adminSecret={adminSecret}
@@ -1787,16 +1835,30 @@ export const AdminLandingPage = (): JSX.Element => {
                   </tr>
                   {group.codes.map((entry) => {
                     const isClosed = Boolean(entry.closedAt);
+                    const isRepolled = Boolean(entry.repoll);
+                    // Only while this code's own election is being recorded,
+                    // and only for a booth actually allotted to someone.
+                    const canRepoll =
+                      !isRepolled &&
+                      currentRun?.status === 'running' &&
+                      currentRun.electionType === (entry.electionType ?? (entry.house ? 'house' : 'school')) &&
+                      Boolean(entry.officerName.trim());
                     return (
                       <tr
                         key={entry.code}
                         style={{
                           borderBottom: '1px solid #f3f4f6',
-                          backgroundColor: isClosed ? '#fef2f2' : undefined
+                          backgroundColor: isRepolled ? '#f3f4f6' : isClosed ? '#fef2f2' : undefined,
+                          color: isRepolled ? '#6b7280' : undefined
                         }}
                       >
                         <td style={{ padding: '0.5rem', fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.05em' }}>
-                          {entry.code}
+                          <span style={{ textDecoration: isRepolled ? 'line-through' : undefined }}>{entry.code}</span>
+                          {entry.replacesCode && (
+                            <div style={{ fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600, color: '#7c3aed', letterSpacing: 0 }}>
+                              Re-poll of {entry.replacesCode}
+                            </div>
+                          )}
                         </td>
                         <td style={{ padding: '0.5rem' }}>
                           <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -1819,16 +1881,44 @@ export const AdminLandingPage = (): JSX.Element => {
                             </button>
                           </div>
                         </td>
-                        <td style={{ padding: '0.5rem' }}>{entry.voteCount}</td>
                         <td style={{ padding: '0.5rem' }}>
-                          {isClosed ? (
+                          {entry.voteCount}
+                          {entry.repoll && (
+                            <div style={{ fontSize: '0.8rem', color: '#b91c1c', fontWeight: 600 }}>
+                              {entry.repoll.cancelledVoteCount} cancelled
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: '0.5rem' }}>
+                          {entry.repoll ? (
+                            <span
+                              style={{ color: '#7c3aed', fontWeight: 700 }}
+                              title={`${REPOLL_REASON_LABELS[entry.repoll.reason]}${entry.repoll.note ? ` -- ${entry.repoll.note}` : ''} (ordered ${formatTimestamp(entry.repoll.orderedAt)})`}
+                            >
+                              RE-POLLED &rarr; {entry.repoll.replacementCode}
+                            </span>
+                          ) : isClosed ? (
                             <span style={{ color: '#dc2626', fontWeight: 700 }}>CLOSED</span>
                           ) : (
                             <span style={{ color: '#16a34a', fontWeight: 600 }}>Open</span>
                           )}
                         </td>
                         <td style={{ padding: '0.5rem' }}>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          {isRepolled ? (
+                            <span style={{ fontSize: '0.8rem' }}>{REPOLL_REASON_LABELS[entry.repoll!.reason]}</span>
+                          ) : (
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            {canRepoll && (
+                              <button
+                                className="button"
+                                style={{ backgroundColor: '#7c3aed', opacity: officerCodesLoading ? 0.5 : 1 }}
+                                disabled={officerCodesLoading}
+                                onClick={() => setRepollTarget(entry)}
+                                title="Cancel every vote cast at this booth and issue a new code so it votes again"
+                              >
+                                Re-poll
+                              </button>
+                            )}
                             {isClosed ? (
                               <button
                                 className="button"
@@ -1849,15 +1939,19 @@ export const AdminLandingPage = (): JSX.Element => {
                                 Close
                               </button>
                             )}
-                            <button
-                              className="button"
-                              style={{ backgroundColor: '#dc2626', opacity: officerCodesLoading ? 0.5 : 1 }}
-                              disabled={officerCodesLoading}
-                              onClick={() => handleDeleteOfficerCode(entry.code)}
-                            >
-                              Delete
-                            </button>
+                            {/* A re-poll's new code is part of the permanent re-poll record. */}
+                            {!entry.replacesCode && (
+                              <button
+                                className="button"
+                                style={{ backgroundColor: '#dc2626', opacity: officerCodesLoading ? 0.5 : 1 }}
+                                disabled={officerCodesLoading}
+                                onClick={() => handleDeleteOfficerCode(entry.code)}
+                              >
+                                Delete
+                              </button>
+                            )}
                           </div>
+                          )}
                         </td>
                       </tr>
                     );

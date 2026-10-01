@@ -6,14 +6,19 @@ import type { Candidate, ElectionArchive, OfficerCode, PollState, StoredVote } f
 // per-branch split: both used to always return Dwarka + AN merged together
 // with no way to print one branch's results alone.
 
+const getVotes = vi.fn<[], StoredVote[]>();
+
 const mockedDataStore = {
-  getVotes: vi.fn<[], StoredVote[]>(),
+  getVotes,
+  // No re-polls in these tests, so every vote counts.
+  getCountedVotes: vi.fn(() => getVotes()),
   getCandidates: vi.fn<[], Candidate[]>(),
   getPollState: vi.fn<[], PollState>(),
   getArchives: vi.fn<[], ElectionArchive[]>(() => []),
   getArchive: vi.fn<[string], ElectionArchive | undefined>(),
   getOfficerCodes: vi.fn<[], OfficerCode[]>(),
   countVotesByOfficerCode: vi.fn<[string], number>(() => 0),
+  countCountedVotesByOfficerCode: vi.fn<[string], number>(() => 0),
   addArchive: vi.fn(),
   renameArchive: vi.fn()
 };

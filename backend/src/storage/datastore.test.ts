@@ -471,4 +471,70 @@ describe('DataStore -- election runs and the append-only action log (ROADMAP.md 
       expect(store.findOfficerCode(created[1].code)?.sentAt).toEqual(expect.any(Number));
     });
   });
+
+  // Re-polling at a booth: its votes stop counting but are never deleted,
+  // and a fresh code is issued for the same election/house/branch.
+  describe('orderRepoll', () => {
+    const setUp = async () => {
+      const store = await importFreshDataStore();
+      await store.init();
+      const [booth, other] = store.bulkAllotOfficerCodes([
+        { officerName: 'Mrs. Sharma', electionType: 'house', house: 'Anand', branch: 'AN', runId: 'run-1', phone: '919876543210' },
+        { officerName: 'Mr. Rao', electionType: 'house', house: 'Anand', branch: 'AN', runId: 'run-1' }
+      ]);
+      await store.addVote(sel({ HC: 'c1' }), 'house', 'Anand', booth.code, 'AN');
+      await store.addVote(sel({ HC: 'c1' }), 'house', 'Anand', booth.code, 'AN');
+      await store.addVote(sel({ HC: 'c2' }), 'house', 'Anand', other.code, 'AN');
+      return { store, booth, other };
+    };
+
+    it('sets the booth\'s votes aside without deleting them', async () => {
+      const { store, booth, other } = await setUp();
+
+      const result = store.orderRepoll(booth.code, { orderedBy: 'Admin', reason: 'count-mismatch', note: '2 extra', runId: 'run-1' }, { officerName: 'Mrs. Sharma', phone: '919876543210' });
+
+      expect(result?.original.repoll).toMatchObject({ reason: 'count-mismatch', cancelledVoteCount: 2, replacementCode: result?.replacement.code });
+      expect(store.getVotes()).toHaveLength(3);
+      expect(store.getCountedVotes().map((vote) => vote.officerCode)).toEqual([other.code]);
+      expect(store.countVotesByOfficerCode(booth.code)).toBe(2);
+      expect(store.countCountedVotesByOfficerCode(booth.code)).toBe(0);
+      expect(store.countCountedVotesByOfficerCode(other.code)).toBe(1);
+    });
+
+    it('issues a fresh code for the same election, house, branch and run, and closes the old one', async () => {
+      const { store, booth } = await setUp();
+
+      const result = store.orderRepoll(booth.code, { orderedBy: 'Admin', reason: 'disruption', note: '' }, { officerName: 'Ms. Iyer' });
+
+      expect(result?.replacement).toMatchObject({
+        officerName: 'Ms. Iyer',
+        everNamed: true,
+        electionType: 'house',
+        house: 'Anand',
+        branch: 'AN',
+        runId: 'run-1',
+        replacesCode: booth.code
+      });
+      expect(result?.replacement.code).not.toBe(booth.code);
+      expect(store.findOfficerCode(booth.code)?.closedAt).toEqual(expect.any(Number));
+    });
+
+    it('can only be ordered once per code', async () => {
+      const { store, booth } = await setUp();
+      store.orderRepoll(booth.code, { orderedBy: 'Admin', reason: 'irregularity', note: '' }, { officerName: 'Mrs. Sharma' });
+      expect(store.orderRepoll(booth.code, { orderedBy: 'Admin', reason: 'irregularity', note: '' }, { officerName: 'Mrs. Sharma' })).toBeUndefined();
+    });
+
+    it('keeps a re-polled code closed, even when a new election reopens every booth', async () => {
+      const { store, booth, other } = await setUp();
+      store.closeOfficerCode(other.code);
+      store.orderRepoll(booth.code, { orderedBy: 'Admin', reason: 'irregularity', note: '' }, { officerName: 'Mrs. Sharma' });
+
+      store.reopenOfficerCode(booth.code);
+      store.reopenOfficerCodesByType('house');
+
+      expect(store.findOfficerCode(booth.code)?.closedAt).toEqual(expect.any(Number));
+      expect(store.findOfficerCode(other.code)?.closedAt).toBeUndefined();
+    });
+  });
 });

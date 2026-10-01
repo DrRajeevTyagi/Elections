@@ -25,6 +25,8 @@ const mockedDataStore = {
     updater({ activeElectionType: 'school', settings: { isOpen: false, allowRevote: false } })
   ),
   getVotes: vi.fn<[], StoredVote[]>(() => []),
+  getCountedVotes: vi.fn<[], StoredVote[]>(() => []),
+  countCountedVotesByOfficerCode: vi.fn<[string], number>(() => 0),
   getOfficerCodes: vi.fn<[], OfficerCode[]>(() => []),
   resetVotesByType: vi.fn(),
   reopenOfficerCodesByType: vi.fn(),

@@ -7,7 +7,7 @@ import type { Branch, HouseId, VoteSubmission } from '../types/election.js';
 import { requireKioskSession } from '../middleware/kioskSession.js';
 import { kioskService } from '../services/kioskService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { BadRequestError, HttpError } from '../utils/httpError.js';
+import { BadRequestError, ForbiddenError, HttpError } from '../utils/httpError.js';
 
 // `branch` comes from the kiosk session (server-derived from the officer
 // code used to activate, not client input -- see routes/kiosk.ts activate)
@@ -69,6 +69,16 @@ votesRouter.post(
 
     if (pollState.activeElectionType === 'house' && !house) {
       throw new BadRequestError('Please select a house before submitting a vote for house elections.');
+    }
+
+    // A ballot opened just before a re-poll was ordered at this booth must
+    // not slip through afterwards (it wouldn't count anyway -- see
+    // dataStore.getCountedVotes -- but the voter should be told, not
+    // shown a misleading confirmation).
+    if (officerCode && dataStore.findOfficerCode(officerCode)?.repoll) {
+      throw new ForbiddenError(
+        'The Election Commission ordered a re-poll at this booth, so this ballot was not recorded. Please wait for the polling officer to start the re-poll with the new code.'
+      );
     }
 
     // Validated before the one-time token is marked used, so a rejected

@@ -26,6 +26,14 @@ kioskRouter.post(
       throw new UnauthorizedError('Incorrect officer code. Please check the code with the election administrator and try again.');
     }
 
+    // Checked before closedAt (a re-polled code is closed too) so the
+    // officer is told why and what to do.
+    if (officerCode.repoll) {
+      throw new ForbiddenError(
+        'The Election Commission ordered a re-poll at this booth, so this code no longer works. A new code has been issued for the re-poll -- ask the election administrator for it.'
+      );
+    }
+
     if (officerCode.closedAt) {
       // Doesn't say WHO closed it -- could be the officer's own "Close
       // Polling at This Booth," or an admin closing it directly from the

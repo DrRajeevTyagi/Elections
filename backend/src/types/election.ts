@@ -85,6 +85,28 @@ export interface OfficerCode {
   // Cleared again by "Undo". Lets sending resume where it stopped after a
   // refresh or the next morning.
   sentAt?: number;
+  // Set when the Chief Election Commissioner ordered a re-poll at this
+  // booth (see routes/officerCodes.ts POST /:code/repoll). Every vote cast
+  // under this code is then left out of all results -- the votes
+  // themselves are never deleted or changed -- and the code can never
+  // activate a ballot again. Permanent: never cleared.
+  repoll?: RepollRecord;
+  // On the fresh code issued for a re-poll: the code it replaces.
+  replacesCode?: string;
+}
+
+export type RepollReason = 'irregularity' | 'disruption' | 'count-mismatch' | 'other';
+
+export interface RepollRecord {
+  orderedAt: number;
+  orderedBy: string; // actor label -- see LogEntry
+  reason: RepollReason;
+  note: string;
+  // How many votes were set aside (frozen at the moment of the order --
+  // no more can be added, the code is dead from then on).
+  cancelledVoteCount: number;
+  replacementCode: string;
+  runId?: string;
 }
 
 export type RunStatus = 'running' | 'closed';
@@ -169,8 +191,15 @@ export interface ArchivedCandidateResult {
 export interface ArchivedOfficerCode {
   code: string;
   officerName: string;
+  // Votes that COUNT -- always 0 for a re-polled booth, whose votes are
+  // reported separately in cancelledVoteCount.
   voteCount: number;
   branch?: Branch;
+  cancelledVoteCount?: number;
+  repollReason?: RepollReason;
+  repollNote?: string;
+  replacementCode?: string;
+  replacesCode?: string;
 }
 
 export interface ElectionArchive {

@@ -202,6 +202,51 @@ describe('AdminLandingPage tabs', () => {
     confirmSpy.mockRestore();
   });
 
+  it('Officer Codes tab: Re-poll is offered only for booths of the election being recorded; a re-polled booth shows its new code', async () => {
+    mockApi.verifyAdminSecret.mockResolvedValue(undefined);
+    mockApi.getPollStatus.mockResolvedValue({
+      poll: { activeElectionType: 'school', settings: { isOpen: true, allowRevote: false } }
+    });
+    mockApi.getResults.mockResolvedValue({ results: [], totalVotes: 0 });
+    mockApi.getCurrentRun.mockResolvedValue({
+      run: { id: 'run-1', electionType: 'school', name: 'Test', status: 'running', startedAt: 1, startedBy: 'x' }
+    });
+    mockApi.getOfficerCodes.mockResolvedValue({
+      codes: [
+        { code: 'SCH001', officerName: 'Mrs. Sharma', electionType: 'school', createdAt: 1, voteCount: 12 },
+        { code: 'HSE001', officerName: 'Mr. Rao', electionType: 'house', house: 'Anand', createdAt: 2, voteCount: 0 },
+        {
+          code: 'OLD001',
+          officerName: 'Ms. Iyer',
+          electionType: 'school',
+          createdAt: 3,
+          voteCount: 0,
+          closedAt: 4,
+          repoll: { orderedAt: 4, orderedBy: 'x', reason: 'disruption', note: '', cancelledVoteCount: 7, replacementCode: 'NEW001' }
+        },
+        { code: 'NEW001', officerName: 'Ms. Iyer', electionType: 'school', createdAt: 4, voteCount: 0, replacesCode: 'OLD001' }
+      ]
+    });
+    mockApi.getArchivesList.mockResolvedValue({ archives: [] });
+
+    try {
+      await unlockAsAdmin();
+      fireEvent.click(screen.getByRole('button', { name: /Polling Officer Codes/ }));
+      await screen.findByText('SCH001');
+
+      // SCH001 and NEW001 (School, election running) -- not the House code, not the re-polled one.
+      await waitFor(() => expect(screen.getAllByRole('button', { name: 'Re-poll' })).toHaveLength(2));
+      expect(screen.getByText(/RE-POLLED/)).toHaveTextContent('NEW001');
+      expect(screen.getByText('7 cancelled')).toBeInTheDocument();
+      expect(screen.getByText('Re-poll of OLD001')).toBeInTheDocument();
+
+      fireEvent.click(screen.getAllByRole('button', { name: 'Re-poll' })[0]);
+      expect(await screen.findByRole('dialog')).toHaveTextContent('This cancels all 12 votes cast at booth SCH001');
+    } finally {
+      mockApi.getCurrentRun.mockResolvedValue({ run: null });
+    }
+  });
+
   it('shows all 5 School Elections posts together in one live results grid', async () => {
     mockApi.verifyAdminSecret.mockResolvedValue(undefined);
     mockApi.getPollStatus.mockResolvedValue({

@@ -113,7 +113,7 @@ export const closeRecording = async (clientId: string | undefined): Promise<Elec
     throw new BadRequestError('No recording is currently active.');
   }
 
-  const totalVotes = dataStore.getVotes().filter((vote) => vote.electionType === run.electionType).length;
+  const totalVotes = dataStore.getCountedVotes().filter((vote) => vote.electionType === run.electionType).length;
 
   archiveCurrentElection(run.name);
   const archive = dataStore

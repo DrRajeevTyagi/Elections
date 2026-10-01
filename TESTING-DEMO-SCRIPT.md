@@ -100,6 +100,8 @@ Each step has a one-line **Say:** cue — the point staff should take away — s
 30. **Close a booth — both ways.** Have an officer use "Close Polling at This Booth" on their code, then try to activate with it again — refused. Reopen it from the admin Codes tab. Then show the admin's own **Close** button on that same code (next to Delete) doing the same thing directly, for when a teacher can't reach a kiosk to close their own booth. Reopen it again.
     **Say:** *That's how an officer signs off at the end of the day, or how you can do it for them, and how you undo it if it was a mistake.*
 31. **Delete a no-show's code.** Give a code to a teacher on the roster, name it, then delete it without it ever being used — confirm this now succeeds, since a code is only permanent once it's actually cast a vote.
+
+31a. **Order a re-poll.** Cast a few votes through one booth's code and note the live results. In the Codes tab press **Re-poll** on that code, choose "Vote count mismatch", add a note, and type CONFIRM. **Show:** the live results drop by exactly that booth's votes; the code row reads "RE-POLLED → (new code)" with "N cancelled"; trying to activate with the old code is refused with a re-poll message; the new code appears in **📲 Send Codes**, votes normally, and its votes count. **Say:** *The cancelled votes aren't deleted — they're kept as evidence — they just never count. And the old code can never be switched back on.*
     **Say:** *A whole staff list gets a code each. Some won't show up — deleting theirs is routine, not a red flag.*
 32. **End of Voting** for House.
 

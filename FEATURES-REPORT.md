@@ -175,6 +175,14 @@ Manages elections for **3 house-level posts**:
   against it
 - **Close / Reopen** a code directly from this tab (same effect as the officer's
   own "Close polling at this booth")
+- **Re-poll** a booth (only while its election is running): the Chief Election
+  Commissioner picks a reason (irregularity, disruption, vote-count mismatch,
+  other), adds a note, sees how many votes will be cancelled and types CONFIRM.
+  Every vote from that booth stops counting everywhere — results, totals, turnout,
+  saved reports — but is kept on record, never deleted. The old code is dead for
+  good (can't be reopened, deleted or used to vote), and a fresh code is issued
+  to the same or a different teacher, ready to send from Send Codes. Reports show
+  "Re-polled: N votes cancelled, reason, new code". Logged in the Activity Log
 - **Delete a code**: allowed only if no vote has been cast under it; otherwise
   close it instead
 - **Live "Votes Cast" column**, refreshed every 3 seconds while polling is open

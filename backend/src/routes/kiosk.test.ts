@@ -26,6 +26,26 @@ describe('POST /api/kiosk/activate', () => {
     mockedDataStore.countVotesByOfficerCode.mockReturnValue(0);
   });
 
+  it('rejects a code whose booth was ordered to re-poll, saying why', async () => {
+    mockedDataStore.findOfficerCode.mockReturnValue({
+      code: 'ABC123',
+      officerName: 'Jane',
+      electionType: 'school',
+      createdAt: Date.now(),
+      closedAt: Date.now(),
+      repoll: { orderedAt: Date.now(), orderedBy: 'Admin', reason: 'disruption', note: '', cancelledVoteCount: 5, replacementCode: 'new999' }
+    });
+    mockedDataStore.getPollState.mockReturnValue({ activeElectionType: 'school', settings: { isOpen: true, allowRevote: false } });
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/kiosk/activate').send({ secret: 'abc123' });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toContain('re-poll');
+    // The new code is only given to the officer through the administrator.
+    expect(response.body.error).not.toContain('new999');
+  });
+
   it('rejects a School Elections code outright while House Elections are active', async () => {
     const schoolCode: OfficerCode = {
       code: 'ABC123',

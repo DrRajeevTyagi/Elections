@@ -52,13 +52,17 @@ const countVotes = (votes: StoredVote[], electionType: ElectionType, house?: Hou
 // votes is deleted, since a deleted candidate's selections drop out of the
 // sum entirely. This is what both the live dashboard and the archived/
 // report totals should use instead.
+//
+// Every count in this file reads dataStore.getCountedVotes(), which leaves
+// out votes from a booth where a re-poll was ordered -- those votes are kept
+// on record but never count towards any result or total.
 export const getTotalVotes = (branch?: Branch, electionType?: ElectionType): number => {
   const resolvedType = electionType ?? getPollState().activeElectionType;
   if (!resolvedType) {
     return 0;
   }
   return dataStore
-    .getVotes()
+    .getCountedVotes()
     .filter((vote) => vote.electionType === resolvedType && (!branch || vote.branch === branch)).length;
 };
 
@@ -73,7 +77,7 @@ export const getResults = (house?: HouseId, branch?: Branch, electionType?: Elec
     return []; // No active election, and no explicit type asked for
   }
 
-  const votes = dataStore.getVotes();
+  const votes = dataStore.getCountedVotes();
   const tally = countVotes(votes, resolvedType, house, branch);
 
   // Filter candidates by election type and optionally house/branch
@@ -117,7 +121,7 @@ export const buildElectionSnapshot = (name?: string): ElectionArchive | null => 
     return null;
   }
 
-  const votes = dataStore.getVotes();
+  const votes = dataStore.getCountedVotes();
   const tally = countVotes(votes, electionType);
   const candidates = dataStore.getCandidates().filter((c) => c.electionType === electionType);
 
@@ -140,8 +144,17 @@ export const buildElectionSnapshot = (name?: string): ElectionArchive | null => 
     .map((entry) => ({
       code: entry.code,
       officerName: entry.officerName,
-      voteCount: dataStore.countVotesByOfficerCode(entry.code),
-      branch: entry.branch
+      voteCount: dataStore.countCountedVotesByOfficerCode(entry.code),
+      branch: entry.branch,
+      ...(entry.repoll
+        ? {
+            cancelledVoteCount: entry.repoll.cancelledVoteCount,
+            repollReason: entry.repoll.reason,
+            repollNote: entry.repoll.note,
+            replacementCode: entry.repoll.replacementCode
+          }
+        : {}),
+      ...(entry.replacesCode ? { replacesCode: entry.replacesCode } : {})
     }));
 
   const totalVotes = getTotalVotes();
@@ -237,7 +250,9 @@ export const isCurrentElectionAlreadyArchived = (): boolean => {
     return false;
   }
 
-  const votes = dataStore.getVotes().filter((vote) => vote.electionType === electionType);
+  // Counted votes, so a re-poll ordered after the last save (which changes
+  // the result without adding a vote) still makes this election need saving again.
+  const votes = dataStore.getCountedVotes().filter((vote) => vote.electionType === electionType);
   const mostRecent = dataStore
     .getArchives()
     .filter((archive) => archive.electionType === electionType)

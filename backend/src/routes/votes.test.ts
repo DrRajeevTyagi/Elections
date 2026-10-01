@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Candidate, PollState } from '../types/election.js';
+import type { Candidate, OfficerCode, PollState } from '../types/election.js';
 
 // Regression test for a real incident: a ballot activated with an AN
 // officer code showed candidates from BOTH Dwarka and AN mixed together for
@@ -15,7 +15,8 @@ const mockedDataStore = {
   getPollState: vi.fn<[], PollState>(),
   getCandidates: vi.fn<[], Candidate[]>(),
   addVote: vi.fn(),
-  countVotesByOfficerCode: vi.fn<[string], number>()
+  countVotesByOfficerCode: vi.fn<[string], number>(),
+  findOfficerCode: vi.fn<[string], OfficerCode | undefined>(() => undefined)
 };
 
 vi.mock('../storage/datastore.js', () => ({
@@ -116,6 +117,30 @@ describe('POST /api/votes -- branch integrity', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error).toContain('Invalid candidate selected');
+    expect(mockedDataStore.addVote).not.toHaveBeenCalled();
+  });
+
+  it('refuses a ballot opened just before a re-poll was ordered at that booth', async () => {
+    mockedKioskService.getActiveSession.mockReturnValue({
+      token: 'tok', activatedAt: Date.now(), house: 'Satya', officerCode: 'AN01', branch: 'AN'
+    });
+    mockedDataStore.findOfficerCode.mockReturnValueOnce({
+      code: 'AN01',
+      officerName: 'Jane',
+      electionType: 'house',
+      house: 'Satya',
+      createdAt: Date.now(),
+      repoll: { orderedAt: Date.now(), orderedBy: 'Admin', reason: 'irregularity', note: '', cancelledVoteCount: 3, replacementCode: 'new999' }
+    });
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp())
+      .post('/api/votes')
+      .set('x-kiosk-token', 'tok')
+      .send({ selections: { HC: 'an-hc-1', HCC: 'an-hcc-1', HSC: 'an-hsc-1' } });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toContain('re-poll');
     expect(mockedDataStore.addVote).not.toHaveBeenCalled();
   });
 });
