@@ -197,6 +197,14 @@
   border: 1px solid #fca5a5 !important;
 }
 
+/* Their white background overrides .button:disabled, so show "can't use
+   this now" by fading instead. */
+.codes-quiet-btn:disabled,
+.codes-danger-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .codes-list {
   background: #ffffff;
   border: 1px solid #e2e8f0;

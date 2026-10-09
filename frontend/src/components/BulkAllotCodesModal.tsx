@@ -142,7 +142,7 @@ export const BulkAllotCodesModal = ({ adminSecret, branch, onClose, onAllotted, 
   return (
     <div style={{ padding: '1.25rem', backgroundColor: '#f3f4f6', borderRadius: '8px', border: '2px solid #3b82f6', marginBottom: '1.5rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-        <h3 style={{ margin: 0 }}>📋 Bulk Allot from List -- {branch === 'AN' ? 'AN' : 'Dwarka'}</h3>
+        <h3 style={{ margin: 0 }}>Upload Teacher List -- {branch === 'AN' ? 'AN' : 'Dwarka'}</h3>
         <button type="button" className="button" style={{ backgroundColor: '#6b7280' }} onClick={onClose}>
           Close
         </button>
@@ -275,7 +275,7 @@ export const BulkAllotCodesModal = ({ adminSecret, branch, onClose, onAllotted, 
             WhatsApp number saved. Nothing has been sent yet.
           </p>
           <p style={{ margin: '0 0 1rem 0' }}>
-            Send them now or any time later (e.g. the evening before) from <strong>📲 Send Codes on WhatsApp</strong>.
+            Send them now or any time later (e.g. the evening before) with <strong>Send Codes</strong> (Polling Officer Codes, step 1).
           </p>
           <button className="button" style={{ backgroundColor: '#16a34a' }} onClick={onOpenSendCodes}>
             📲 Go to Send Codes

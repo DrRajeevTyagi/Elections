@@ -279,7 +279,7 @@ export const SendCodesPanel = ({ adminSecret, branch, officerCodes, onClose, onC
       </details>
 
       {withPhone.length === 0 ? (
-        <p>No named codes with a WhatsApp number for {branchName} yet. Use 📋 Bulk Allot from List to load the teacher list.</p>
+        <p>No named codes with a WhatsApp number for {branchName} yet. Use Upload Teacher List (step 1) to load the teacher list.</p>
       ) : (
         <div style={{ maxHeight: '480px', overflow: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -348,7 +348,7 @@ export const SendCodesPanel = ({ adminSecret, branch, officerCodes, onClose, onC
           <strong>No WhatsApp number ({withoutPhone.length})</strong>
           <p style={{ fontSize: '0.85rem', color: '#92400e', margin: '0.25rem 0 0.75rem 0' }}>
             Type a 10-digit mobile number and Save to add them to the list above &mdash; or hand them a printed slip
-            (🖨️ Print Code List).
+            (Print Code List, step 1).
           </p>
           {withoutPhone.map((group) => (
             <div key={group.key} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>

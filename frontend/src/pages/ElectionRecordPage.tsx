@@ -25,6 +25,8 @@ import './ReportPage.css';
 
 const isValidBranch = (value: string | null): value is Branch => value === 'dwarka' || value === 'AN';
 const branchLabel = (branch: Branch | undefined): string => (branch === 'AN' ? 'AN' : 'Dwarka');
+// Dwarka first, as everywhere else in the app.
+const branchRank = (branch: Branch | undefined): number => (branch === 'AN' ? 1 : 0);
 const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 const BRANCH_VIEWS: Array<{ value: Branch | undefined; label: string }> = [
@@ -161,7 +163,7 @@ export const ElectionRecordPage = (): JSX.Element => {
       .sort(
         (a, b) =>
           houseOrder(a) - houseOrder(b) ||
-          branchLabel(a.branch).localeCompare(branchLabel(b.branch)) ||
+          branchRank(a.branch) - branchRank(b.branch) ||
           (a.officerName || '~').localeCompare(b.officerName || '~')
       );
     const ordered: ArchivedOfficerCode[] = [];

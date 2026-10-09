@@ -792,7 +792,7 @@ export const AdminLandingPage = (): JSX.Element => {
   const handleStartFreshDuties = async (electionType: ElectionType) => {
     const kind = electionType === 'house' ? 'House' : 'School';
     const confirmed = window.confirm(
-      `Start allotting duties for a fresh ${kind} Election?\n\nEvery existing ${kind} Elections code, in both Dwarka and AN, turns WHITE: usable again, not sent, not ready. Their "sent" and "ready" marks from before are cleared. Re-polled codes stay cancelled.\n\nDo this before sending codes for the new election.`
+      `Reset colours to white for ${kind} Elections?\n\nEvery existing ${kind} Elections code, in both Dwarka and AN, turns WHITE: usable again, not sent, not ready. Their "sent" and "ready" marks from before are cleared. Re-polled codes stay cancelled.\n\nDo this before sending codes for the new election.`
     );
     if (!confirmed) {
       return;
@@ -801,7 +801,7 @@ export const AdminLandingPage = (): JSX.Element => {
       setOfficerCodesLoading(true);
       setError(null);
       const count = await startFreshDuties(electionType, adminSecret);
-      setMessage(`${count} ${kind} Elections code${count === 1 ? '' : 's'} reset to white for a fresh election.`);
+      setMessage(`${count} ${kind} Elections code${count === 1 ? '' : 's'} reset to white, ready for a new election.`);
       await loadOfficerCodes();
     } catch (freshError) {
       setError(freshError instanceof Error ? freshError.message : 'Failed to start fresh duties');
@@ -1747,8 +1747,8 @@ export const AdminLandingPage = (): JSX.Element => {
               <strong style={{ fontFamily: 'monospace', fontSize: '1.15rem' }}>{repollNotice.replacement.code}</strong>
               {' '}&mdash; {repollNotice.replacement.officerName}.{' '}
               {repollNotice.replacement.phone
-                ? 'Send it from 📲 Send Codes on WhatsApp.'
-                : 'No WhatsApp number on file -- give it to the teacher directly, or add their number in 📲 Send Codes.'}
+                ? 'Send it with Send Codes.'
+                : 'No WhatsApp number on file -- give it to the teacher directly, or add their number in Send Codes.'}
             </p>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
               <button className="button" style={{ backgroundColor: '#16a34a' }} onClick={() => setShowSendCodes(true)}>

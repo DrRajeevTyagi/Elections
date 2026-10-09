@@ -73,16 +73,17 @@ export const OfficerCodesTab = (props: OfficerCodesTabProps): JSX.Element => {
   const runningType = currentRun?.status === 'running' ? currentRun.electionType : null;
 
   const [election, setElection] = useState<ElectionType>(runningType ?? 'school');
-  // Follow the election that starts running, unless the admin picked one.
+  // null = automatic: Election day while this election runs, else step 1.
+  const [chosenStep, setChosenStep] = useState<Step | null>(null);
+  // When an election starts (or ends), show it, on its automatic step.
   useEffect(() => {
     if (runningType) {
       setElection(runningType);
     }
+    setChosenStep(null);
   }, [runningType]);
   const running = runningType === election;
 
-  // null = automatic: Election day while this election runs, else step 1.
-  const [chosenStep, setChosenStep] = useState<Step | null>(null);
   const step: Step = chosenStep ?? (running ? 'day' : 'before');
   const [filter, setFilter] = useState<Filter>('all');
   const [editing, setEditing] = useState<{ code: string; name: string } | null>(null);
