@@ -3,6 +3,7 @@ import { requireAdminSession } from '../middleware/adminAuth.js';
 import { dataStore } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { logAction, resolveActor } from '../services/auditLogService.js';
+import { votesByCandidateForCode } from '../services/resultsService.js';
 import { BadRequestError, ConflictError } from '../utils/httpError.js';
 import { isValidHouseId, isValidBranch } from '../config/posts.js';
 import type { ElectionType, HouseId, RepollReason } from '../types/election.js';
@@ -351,6 +352,22 @@ officerCodesRouter.post(
   })
 );
 
+// What one booth's votes gave each candidate -- shown in the Order Re-poll
+// window before it is confirmed, so the Chief Election Commissioner sees
+// exactly what will be taken back off each candidate's count.
+officerCodesRouter.get(
+  '/:code/vote-breakdown',
+  asyncHandler((req, res) => {
+    const entry = dataStore.findOfficerCode(req.params.code);
+    if (!entry) {
+      throw new BadRequestError('Code not found');
+    }
+    // A re-polled code's breakdown was frozen when the re-poll was ordered.
+    const breakdown = entry.repoll ? entry.repoll.cancelledByCandidate ?? [] : votesByCandidateForCode(entry.code);
+    res.json({ breakdown });
+  })
+);
+
 const REPOLL_REASONS: RepollReason[] = ['irregularity', 'disruption', 'count-mismatch', 'other'];
 
 // Re-polling at one booth -- ordered by the Chief Election Commissioner when
@@ -405,9 +422,12 @@ officerCodesRouter.post(
     const replacementPhone = parsedPhone || (sameTeacher ? entry.phone : undefined);
 
     const clientId = req.header('x-admin-client-id');
+    // Taken in the same synchronous step as the order itself, so no vote
+    // can land in between and be cancelled without appearing here.
+    const cancelledByCandidate = votesByCandidateForCode(entry.code);
     const result = dataStore.orderRepoll(
       entry.code,
-      { orderedBy: resolveActor(clientId), reason: reason as RepollReason, note: trimmedNote, runId: run.id },
+      { orderedBy: resolveActor(clientId), reason: reason as RepollReason, note: trimmedNote, runId: run.id, cancelledByCandidate },
       { officerName: replacementName, phone: replacementPhone }
     );
     if (!result) {
@@ -422,6 +442,8 @@ officerCodesRouter.post(
         reason,
         note: trimmedNote,
         cancelledVoteCount: result.original.repoll?.cancelledVoteCount ?? 0,
+        cancelledByCandidate,
+        house: result.original.house,
         replacementCode: result.replacement.code,
         replacementOfficerName: result.replacement.officerName
       },

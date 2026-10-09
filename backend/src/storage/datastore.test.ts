@@ -256,6 +256,33 @@ describe('DataStore -- removing officer codes between elections', () => {
     expect(stillStored).toHaveLength(0);
   });
 
+  // The whole point of a re-poll, end to end: the booth's votes come off
+  // every candidate's count, and the re-poll's own votes are added.
+  it("a re-poll takes the booth's votes back off each candidate and counts the re-poll's votes", async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    const [booth, otherBooth] = store.generateOfficerCodes(2, 'school');
+    const tally = () => {
+      const counts: Record<string, number> = {};
+      for (const vote of store.getCountedVotes()) {
+        counts[vote.selections.HB] = (counts[vote.selections.HB] ?? 0) + 1;
+      }
+      return counts;
+    };
+    for (const pick of ['asha', 'asha', 'asha', 'ravi']) {
+      await store.addVote(sel({ HB: pick }), 'school', undefined, booth.code);
+    }
+    await store.addVote(sel({ HB: 'ravi' }), 'school', undefined, otherBooth.code);
+    expect(tally()).toEqual({ asha: 3, ravi: 2 });
+
+    const { replacement } = store.orderRepoll(booth.code, { orderedBy: 'x', reason: 'disruption', note: '' }, { officerName: 'Jane' })!;
+    expect(tally()).toEqual({ ravi: 1 });
+
+    await store.addVote(sel({ HB: 'asha' }), 'school', undefined, replacement.code);
+    await store.addVote(sel({ HB: 'ravi' }), 'school', undefined, replacement.code);
+    expect(tally()).toEqual({ asha: 1, ravi: 2 });
+  });
+
   it('deleting an ordinary used code leaves its votes counting', async () => {
     const store = await importFreshDataStore();
     await store.init();

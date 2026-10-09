@@ -127,8 +127,20 @@ export interface RepollRecord {
   // How many votes were set aside (frozen at the moment of the order --
   // no more can be added, the code is dead from then on).
   cancelledVoteCount: number;
+  // What those cancelled votes had given each candidate, frozen at the
+  // moment of the order -- the exact amount taken back off each count.
+  // Missing on re-polls ordered before this was recorded (2026-10-09).
+  cancelledByCandidate?: CandidateVoteCount[];
   replacementCode: string;
   runId?: string;
+}
+
+// How many votes one candidate received at one booth.
+export interface CandidateVoteCount {
+  post: PostId;
+  candidateId: string;
+  name: string; // as it was at the time -- kept even if the candidate is later renamed or removed
+  count: number;
 }
 
 export type RunStatus = 'running' | 'closed';
@@ -218,6 +230,7 @@ export interface ArchivedOfficerCode {
   voteCount: number;
   branch?: Branch;
   cancelledVoteCount?: number;
+  cancelledByCandidate?: CandidateVoteCount[];
   repollReason?: RepollReason;
   repollNote?: string;
   replacementCode?: string;

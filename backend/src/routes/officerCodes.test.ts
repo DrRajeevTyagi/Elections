@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ElectionRun, OfficerCode } from '../types/election.js';
+import type { Candidate, ElectionRun, OfficerCode, StoredVote } from '../types/election.js';
 
 // Regression tests for two integrity rules decided 2026-09-22:
 // 1. A code cannot activate a ballot until it has been allotted to a named
@@ -40,7 +40,10 @@ const mockedDataStore = {
   bulkAllotOfficerCodes: vi.fn<unknown[], OfficerCode[]>(() => []),
   getOfficerCodes: vi.fn<[], OfficerCode[]>(() => []),
   getCurrentRun: vi.fn<[], ElectionRun | undefined>(() => undefined),
-  appendLogEntry: vi.fn()
+  appendLogEntry: vi.fn(),
+  // Read by resultsService.votesByCandidateForCode (re-poll breakdown).
+  getVotes: vi.fn<[], StoredVote[]>(() => []),
+  getCandidates: vi.fn<[], Candidate[]>(() => [])
 };
 
 vi.mock('../storage/datastore.js', () => ({
@@ -471,7 +474,7 @@ describe('POST /api/officer-codes/:code/repoll', () => {
     expect(response.body.replacement.code).toBe('new999');
     expect(mockedDataStore.orderRepoll).toHaveBeenCalledWith(
       'ABC123',
-      { orderedBy: 'admin-tab-1', reason: 'count-mismatch', note: 'Register shows 10, app shows 12', runId: 'run-1' },
+      { orderedBy: 'admin-tab-1', reason: 'count-mismatch', note: 'Register shows 10, app shows 12', runId: 'run-1', cancelledByCandidate: [] },
       { officerName: 'Jane', phone: '919876543210' }
     );
     expect(mockedDataStore.appendLogEntry).toHaveBeenCalledWith(
@@ -491,6 +494,35 @@ describe('POST /api/officer-codes/:code/repoll', () => {
       .expect(201);
 
     expect(mockedDataStore.orderRepoll).toHaveBeenCalledWith('ABC123', expect.anything(), { officerName: 'Priya', phone: undefined });
+  });
+
+  it('freezes what the cancelled votes gave each candidate into the re-poll, and shows it beforehand', async () => {
+    mockedDataStore.getCandidates.mockReturnValue([
+      { id: 'hb-1', name: 'Asha', post: 'HB', electionType: 'school' },
+      { id: 'hb-2', name: 'Ravi', post: 'HB', electionType: 'school' }
+    ]);
+    mockedDataStore.getVotes.mockReturnValue([
+      { id: 'v1', timestamp: 1, electionType: 'school', officerCode: 'ABC123', selections: { HB: 'hb-1' } },
+      { id: 'v2', timestamp: 2, electionType: 'school', officerCode: 'ABC123', selections: { HB: 'hb-1' } },
+      { id: 'v3', timestamp: 3, electionType: 'school', officerCode: 'ABC123', selections: { HB: 'hb-2' } },
+      { id: 'v4', timestamp: 4, electionType: 'school', officerCode: 'other1', selections: { HB: 'hb-2' } }
+    ] as StoredVote[]);
+    const expected = [
+      { post: 'HB', candidateId: 'hb-1', name: 'Asha', count: 2 },
+      { post: 'HB', candidateId: 'hb-2', name: 'Ravi', count: 1 }
+    ];
+    const { createApp } = await import('../app.js');
+
+    const preview = await request(createApp()).get('/api/officer-codes/ABC123/vote-breakdown');
+    expect(preview.status).toBe(200);
+    expect(preview.body.breakdown).toEqual(expected);
+
+    await request(createApp()).post('/api/officer-codes/ABC123/repoll').send({ reason: 'disruption' }).expect(201);
+    expect(mockedDataStore.orderRepoll).toHaveBeenCalledWith(
+      'ABC123',
+      expect.objectContaining({ cancelledByCandidate: expected }),
+      expect.anything()
+    );
   });
 
   it('refuses when that election is not running (e.g. after it was closed)', async () => {

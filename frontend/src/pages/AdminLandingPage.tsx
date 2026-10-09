@@ -1148,6 +1148,18 @@ export const AdminLandingPage = (): JSX.Element => {
   );
   const dutyCounts = useMemo(() => countDutyStatuses(branchOfficerCodes), [branchOfficerCodes]);
 
+  // Re-polls behind the Live Results on screen (this branch and election
+  // type). Only the latest election's: Start re-tags every code of that type
+  // with the new run, while a re-poll keeps the run it was ordered in -- so
+  // the two match only for a re-poll from the latest election.
+  const resultsRepolls = useMemo(
+    () =>
+      branchOfficerCodes.filter(
+        (entry) => entry.repoll && entry.electionType === selectedElectionType && entry.repoll.runId === entry.runId
+      ),
+    [branchOfficerCodes, selectedElectionType]
+  );
+
   // The running election's End of Voting checklist, both branches together
   // (the server enforces the same rule -- see utils/dutyStatus.ts).
   const endOfVotingTodo = useMemo(() => {
@@ -1671,6 +1683,21 @@ export const AdminLandingPage = (): JSX.Element => {
             </button>
           </div>
         </div>
+        {resultsRepolls.length > 0 && (
+          <p
+            role="note"
+            style={{ margin: '0 0 0.5rem 0', padding: '0.4rem 0.6rem', backgroundColor: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: '6px', fontSize: '0.85rem', overflowWrap: 'anywhere' }}
+          >
+            Includes {resultsRepolls.length} re-poll{resultsRepolls.length === 1 ? '' : 's'}:{' '}
+            {resultsRepolls
+              .map(
+                (entry) =>
+                  `${entry.repoll!.cancelledVoteCount} vote${entry.repoll!.cancelledVoteCount === 1 ? '' : 's'} cancelled at ${entry.branch === 'AN' ? 'AN' : 'Dwarka'} booth ${entry.code}${entry.house ? ` (${entry.house} House)` : ''}`
+              )
+              .join('; ')}
+            . Those votes are not counted; the re-poll&apos;s own votes are.
+          </p>
+        )}
 
         {selectedElectionType === 'house' && houseGroupedResults ? (
           <div className="live-house-grid">
@@ -1829,13 +1856,16 @@ export const AdminLandingPage = (): JSX.Element => {
           />
         )}
 
-        {repollNotice && (
+        {/* Only on the re-polled booth's own branch tab, so it can't be
+            mistaken for a re-poll in the other branch. */}
+        {repollNotice && (repollNotice.replacement.branch ?? 'dwarka') === selectedBranch && (
           <div
             role="status"
             style={{ padding: '1rem', backgroundColor: '#f0fdf4', border: '2px solid #16a34a', borderRadius: '8px', marginBottom: '1rem' }}
           >
             <p style={{ margin: 0, fontWeight: 700 }}>
-              ✓ Re-poll ordered at booth {repollNotice.oldCode}. Its votes no longer count.
+              ✓ Re-poll ordered at {repollNotice.replacement.branch === 'AN' ? 'AN' : 'Dwarka'} booth {repollNotice.oldCode}
+              {repollNotice.replacement.house ? ` (${repollNotice.replacement.house} House)` : ''}. Its votes no longer count.
             </p>
             <p style={{ margin: '0.4rem 0 0 0', overflowWrap: 'anywhere' }}>
               New code for the re-poll:{' '}

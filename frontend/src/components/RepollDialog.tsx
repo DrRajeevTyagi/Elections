@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { orderRepoll } from '../services/api';
+import { useEffect, useState } from 'react';
+import { getVoteBreakdown, orderRepoll } from '../services/api';
+import { CancelledVotesList } from './CancelledVotesList';
 import { normalizeIndianPhone } from '../utils/bulkAllot';
 import { REPOLL_REASON_LABELS } from '../types/api';
-import type { OfficerCode, RepollReason } from '../types/api';
+import type { CandidateVoteCount, OfficerCode, RepollReason } from '../types/api';
 
 // "Order Re-poll" (Officer Codes tab) -- the Chief Election Commissioner
 // cancelling every vote cast at one booth and issuing a fresh code so the
@@ -29,8 +30,29 @@ export const RepollDialog = ({ adminSecret, entry, onClose, onOrdered }: RepollD
   const [confirmText, setConfirmText] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // What this booth's votes gave each candidate -- exactly what will be
+  // taken back off each count. null while loading (or if it failed).
+  const [breakdown, setBreakdown] = useState<CandidateVoteCount[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getVoteBreakdown(entry.code, adminSecret)
+      .then((result) => {
+        if (!cancelled) {
+          setBreakdown(result);
+        }
+      })
+      .catch(() => {
+        // The order itself doesn't depend on this -- the total in the
+        // warning below is still shown.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [entry.code, adminSecret]);
 
   const booth = entry.house ? `${entry.house} House` : 'School';
+  const branchName = entry.branch === 'AN' ? 'AN' : 'Dwarka';
   const votes = entry.voteCount;
 
   const handleSubmit = async () => {
@@ -90,7 +112,7 @@ export const RepollDialog = ({ adminSecret, entry, onClose, onOrdered }: RepollD
       <div style={{ backgroundColor: '#ffffff', color: '#111827', borderRadius: '12px', padding: '1.5rem', maxWidth: '520px', width: '100%', border: '3px solid #dc2626', maxHeight: '100%', overflowY: 'auto' }}>
         <h2 id="repoll-title" style={{ marginTop: 0 }}>Order Re-poll</h2>
         <p style={{ margin: '0 0 1rem 0', overflowWrap: 'anywhere' }}>
-          Booth <strong style={{ fontFamily: 'monospace' }}>{entry.code}</strong> &mdash; {booth} &mdash;{' '}
+          <strong>{branchName}</strong> &mdash; booth <strong style={{ fontFamily: 'monospace' }}>{entry.code}</strong> &mdash; {booth} &mdash;{' '}
           {entry.officerName || <em>unnamed</em>}
         </p>
 
@@ -158,6 +180,12 @@ export const RepollDialog = ({ adminSecret, entry, onClose, onOrdered }: RepollD
           <p style={{ margin: 0, fontWeight: 700 }}>
             This cancels all {votes} vote{votes === 1 ? '' : 's'} cast at booth {entry.code}. This cannot be undone.
           </p>
+          {breakdown && breakdown.length > 0 && (
+            <div style={{ margin: '0.4rem 0 0 0', fontSize: '0.9rem' }}>
+              These will be taken off each candidate&apos;s count:
+              <CancelledVotesList breakdown={breakdown} />
+            </div>
+          )}
           <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.9rem' }}>
             The votes are kept on record but will no longer count in any result. Code {entry.code} stops working for
             good, and a new code is issued for the re-poll. Everyone who voted at this booth must vote again.

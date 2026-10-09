@@ -115,8 +115,19 @@ export interface RepollRecord {
   reason: RepollReason;
   note: string;
   cancelledVoteCount: number;
+  // What the cancelled votes had given each candidate -- missing on
+  // re-polls ordered before this was recorded.
+  cancelledByCandidate?: CandidateVoteCount[];
   replacementCode: string;
   runId?: string;
+}
+
+// How many votes one candidate received at one booth.
+export interface CandidateVoteCount {
+  post: PostId;
+  candidateId: string;
+  name: string;
+  count: number;
 }
 
 // "Bulk Allot from List" (Officer Codes tab) -- see utils/bulkAllot.ts for
@@ -234,6 +245,7 @@ export interface ArchivedOfficerCode {
   voteCount: number; // votes that count -- 0 for a re-polled booth
   branch?: Branch;
   cancelledVoteCount?: number;
+  cancelledByCandidate?: CandidateVoteCount[];
   repollReason?: RepollReason;
   repollNote?: string;
   replacementCode?: string;

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type {
+  CandidateVoteCount,
   ActivateRequest,
   ActivateResponse,
   ArchiveReportResponse,
@@ -374,6 +375,15 @@ export const closeOfficerCode = async (code: string, adminSecret: string): Promi
 // Orders a re-poll at one booth: its votes stop counting and a fresh code
 // is issued. `officerName`/`phone` only when a different teacher will run
 // the re-poll; omitted, the same teacher (and number) is kept.
+// What one booth's votes gave each candidate -- shown in the Order Re-poll
+// window before confirming.
+export const getVoteBreakdown = async (code: string, adminSecret: string): Promise<CandidateVoteCount[]> => {
+  const response = await api.get<{ breakdown: CandidateVoteCount[] }>(`/officer-codes/${code}/vote-breakdown`, {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data.breakdown;
+};
+
 export const orderRepoll = async (
   code: string,
   order: { reason: RepollReason; note: string; officerName?: string; phone?: string },

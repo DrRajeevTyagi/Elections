@@ -1,10 +1,11 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RepollDialog } from './RepollDialog';
-import type { OfficerCode } from '../types/api';
+import type { CandidateVoteCount, OfficerCode } from '../types/api';
 
 const mockApi = vi.hoisted(() => ({
-  orderRepoll: vi.fn()
+  orderRepoll: vi.fn(),
+  getVoteBreakdown: vi.fn((): Promise<CandidateVoteCount[]> => Promise.resolve([]))
 }));
 
 vi.mock('../services/api', () => mockApi);
@@ -38,6 +39,17 @@ describe('RepollDialog', () => {
   it('warns with the exact number of votes that will be cancelled', () => {
     renderDialog();
     expect(screen.getByText(/This cancels all 42 votes cast at booth abc123/)).toBeInTheDocument();
+  });
+
+  it('names the branch, and shows what will be taken off each candidate', async () => {
+    mockApi.getVoteBreakdown.mockResolvedValueOnce([
+      { post: 'HC', candidateId: 'c1', name: 'Asha', count: 30 },
+      { post: 'HC', candidateId: 'c2', name: 'Ravi', count: 12 }
+    ]);
+    renderDialog();
+    expect(screen.getByText('Dwarka')).toBeInTheDocument();
+    expect(await screen.findByText(/Asha −30, Ravi −12/)).toBeInTheDocument();
+    expect(mockApi.getVoteBreakdown).toHaveBeenCalledWith('abc123', 'secret');
   });
 
   it('stays locked until CONFIRM is typed', () => {

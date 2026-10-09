@@ -9,7 +9,8 @@ import {
   HouseId,
   ElectionArchive,
   ArchivedCandidateResult,
-  Branch
+  Branch,
+  CandidateVoteCount
 } from '../types/election.js';
 import { getPollState } from './voteService.js';
 
@@ -41,6 +42,28 @@ const countVotes = (votes: StoredVote[], electionType: ElectionType, house?: Hou
     }
   }
   return tally;
+};
+
+// Every vote cast under one officer code, broken down by candidate, in
+// post order and highest count first. Shown before a re-poll is ordered
+// (exactly what will be taken back off each candidate) and frozen into the
+// re-poll record itself -- see routes/officerCodes.ts. Reads every stored
+// vote for the code, so it is only meaningful for a code not yet re-polled.
+export const votesByCandidateForCode = (code: string): CandidateVoteCount[] => {
+  const wanted = code.toLowerCase();
+  const votes = dataStore.getVotes().filter((vote) => vote.officerCode?.toLowerCase() === wanted);
+  if (votes.length === 0) {
+    return [];
+  }
+  const tally = countVotes(votes, votes[0].electionType);
+  const names = new Map(dataStore.getCandidates().map((candidate) => [candidate.id, candidate.name]));
+  const postOrder: PostId[] = votes[0].electionType === 'school' ? SCHOOL_POST_IDS : HOUSE_POST_IDS;
+  return [...tally.entries()]
+    .map(([key, count]) => {
+      const [post, candidateId] = key.split(':') as [PostId, string];
+      return { post, candidateId, name: names.get(candidateId) ?? 'Removed candidate', count };
+    })
+    .sort((a, b) => postOrder.indexOf(a.post) - postOrder.indexOf(b.post) || b.count - a.count || a.name.localeCompare(b.name));
 };
 
 // The one authoritative count of ballots cast for the active election --
@@ -149,6 +172,7 @@ export const buildElectionSnapshot = (name?: string): ElectionArchive | null => 
       ...(entry.repoll
         ? {
             cancelledVoteCount: entry.repoll.cancelledVoteCount,
+            ...(entry.repoll.cancelledByCandidate ? { cancelledByCandidate: entry.repoll.cancelledByCandidate } : {}),
             repollReason: entry.repoll.reason,
             repollNote: entry.repoll.note,
             replacementCode: entry.repoll.replacementCode

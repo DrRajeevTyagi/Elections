@@ -32,7 +32,9 @@ const mockApi = vi.hoisted(() => ({
   getAdminTakeoverRequest: vi.fn(),
   cancelAdminTakeover: vi.fn(),
   respondToAdminTakeover: vi.fn(),
-  startFreshDuties: vi.fn()
+  startFreshDuties: vi.fn(),
+  removeAllOfficerCodes: vi.fn(),
+  getVoteBreakdown: vi.fn(() => Promise.resolve([]))
 }));
 
 vi.mock('../services/api', () => mockApi);
