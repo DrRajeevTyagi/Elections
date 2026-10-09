@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AdminLandingPage } from './AdminLandingPage';
 
@@ -110,7 +110,7 @@ describe('AdminLandingPage tabs', () => {
     // ("Election History" is checked as a heading, not by text, since that
     // string is also the always-visible tab button's label.)
     expect(screen.getByText('Poll Controls')).toBeInTheDocument();
-    expect(screen.queryByText('Generate codes for House Elections')).not.toBeInTheDocument();
+    expect(screen.queryByText('Upload the teacher list')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Election History' })).not.toBeInTheDocument();
     // Manage Candidates and Results Overview were moved/removed from the
     // Dashboard tab (see MULTI-BRANCH-EXPANSION-PLAN.md / TESTING-DEMO-SCRIPT.md)
@@ -147,17 +147,20 @@ describe('AdminLandingPage tabs', () => {
 
     // Switch to Officer Codes tab.
     fireEvent.click(screen.getByRole('button', { name: /Polling Officer Codes/ }));
-    await screen.findByText('Generate codes for House Elections');
-    expect(screen.getByText('Generate codes for School Posts')).toBeInTheDocument();
-    // Codes loaded from the mock are grouped by house.
-    await waitFor(() => expect(screen.getByText('Anand House (1)')).toBeInTheDocument());
-    expect(screen.getByText('School Posts (1)')).toBeInTheDocument();
+    await screen.findByText('Upload the teacher list');
+    // One election at a time: School first (nothing is running), then House,
+    // whose codes are grouped by house.
+    await waitFor(() => expect(screen.getByText('School Posts (1)')).toBeInTheDocument());
+    expect(screen.queryByText('Anand House (1)')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'House' }));
+    expect(screen.getByText('Anand House (1)')).toBeInTheDocument();
+    expect(screen.queryByText('School Posts (1)')).not.toBeInTheDocument();
     expect(screen.queryByText('Poll Controls')).not.toBeInTheDocument();
 
     // Switch to Election History tab.
     fireEvent.click(screen.getByRole('button', { name: 'Election History' }));
     await screen.findByText('No past elections have been archived yet.');
-    expect(screen.queryByText('Generate codes for House Elections')).not.toBeInTheDocument();
+    expect(screen.queryByText('Upload the teacher list')).not.toBeInTheDocument();
 
     // And back to Dashboard.
     fireEvent.click(screen.getByRole('button', { name: 'Dashboard' }));
@@ -165,7 +168,7 @@ describe('AdminLandingPage tabs', () => {
     expect(screen.queryByText('No past elections have been archived yet.')).not.toBeInTheDocument();
   });
 
-  it('Officer Codes tab: an open code shows Close (not Reopen); a closed one shows Reopen (not Close)', async () => {
+  it('Officer Codes tab, Election day: an open booth shows Close Booth; a closed one shows Reopen', async () => {
     mockApi.verifyAdminSecret.mockResolvedValue(undefined);
     mockApi.getPollStatus.mockResolvedValue({
       poll: { activeElectionType: 'school', settings: { isOpen: false, allowRevote: false } }
@@ -181,23 +184,18 @@ describe('AdminLandingPage tabs', () => {
 
     await unlockAsAdmin();
     fireEvent.click(screen.getByRole('button', { name: /Polling Officer Codes/ }));
+    // Nothing is running, so it opens on step 1; go to Election day.
+    await screen.findByText('Upload the teacher list');
+    fireEvent.click(screen.getByRole('tab', { name: /Election day/ }));
     await screen.findByText('OPEN01');
-    screen.getByText('SHUT01');
 
-    // Admin can close the still-open code directly from here, without
+    // Admin can close the still-open booth directly from here, without
     // opening a kiosk tab and entering the code there.
-    const closeButtons = screen.getAllByRole('button', { name: 'Close' });
+    const closeButtons = screen.getAllByRole('button', { name: 'Close Booth' });
     expect(closeButtons).toHaveLength(1);
-    const reopenButtons = screen.getAllByRole('button', { name: 'Reopen' });
-    expect(reopenButtons).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Reopen' })).toHaveLength(1);
 
     mockApi.closeOfficerCode.mockResolvedValue(undefined);
-    mockApi.getOfficerCodes.mockResolvedValue({
-      codes: [
-        { code: 'OPEN01', officerName: 'Mrs. Sharma', createdAt: 1, voteCount: 0, closedAt: Date.now() },
-        { code: 'SHUT01', officerName: 'Mr. Rao', createdAt: 2, voteCount: 0, closedAt: Date.now() }
-      ]
-    });
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.click(closeButtons[0]);
 
@@ -205,7 +203,7 @@ describe('AdminLandingPage tabs', () => {
     confirmSpy.mockRestore();
   });
 
-  it('Officer Codes tab: Re-poll is offered only for booths of the election being recorded; a re-polled booth shows its new code', async () => {
+  it('Officer Codes tab: opens on Election day while that election runs; Re-poll only for its booths; a re-polled booth shows its new code', async () => {
     mockApi.verifyAdminSecret.mockResolvedValue(undefined);
     mockApi.getPollStatus.mockResolvedValue({
       poll: { activeElectionType: 'school', settings: { isOpen: true, allowRevote: false } }
@@ -236,11 +234,15 @@ describe('AdminLandingPage tabs', () => {
       await unlockAsAdmin();
       fireEvent.click(screen.getByRole('button', { name: /Polling Officer Codes/ }));
       await screen.findByText('SCH001');
+      expect(screen.getByRole('tab', { name: /Election day/ })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getAllByText(/Before End of Voting/).length).toBeGreaterThan(0);
 
-      // SCH001 and NEW001 (School, election running) -- not the House code, not the re-polled one.
+      // SCH001 and NEW001 (School, running) -- not the re-polled one, and
+      // the House code isn't in the School view at all.
       await waitFor(() => expect(screen.getAllByRole('button', { name: 'Re-poll' })).toHaveLength(2));
-      expect(screen.getByText(/RE-POLLED/)).toHaveTextContent('NEW001');
-      expect(screen.getByText('7 cancelled')).toBeInTheDocument();
+      expect(screen.queryByText('HSE001')).not.toBeInTheDocument();
+      expect(screen.getByText('Re-polled → NEW001')).toBeInTheDocument();
+      expect(screen.getByText(/7 votes cancelled/)).toBeInTheDocument();
       expect(screen.getByText('Re-poll of OLD001')).toBeInTheDocument();
 
       fireEvent.click(screen.getAllByRole('button', { name: 'Re-poll' })[0]);
@@ -250,7 +252,7 @@ describe('AdminLandingPage tabs', () => {
     }
   });
 
-  it('Officer Codes tab: colours each code by duty status, counts them, filters "not ready yet", and starts fresh duties', async () => {
+  it('Officer Codes tab, step 1: colours and counts each code, filters by colour, edits a name, resets colours, removes all', async () => {
     mockApi.verifyAdminSecret.mockResolvedValue(undefined);
     mockApi.getPollStatus.mockResolvedValue({
       poll: { activeElectionType: null, settings: { isOpen: false, allowRevote: false } }
@@ -261,11 +263,13 @@ describe('AdminLandingPage tabs', () => {
         { code: 'FRESH1', officerName: 'A', electionType: 'school', createdAt: 1, voteCount: 0 },
         { code: 'SENT01', officerName: 'B', electionType: 'school', createdAt: 2, voteCount: 0, sentAt: 10 },
         { code: 'READY1', officerName: 'C', electionType: 'school', createdAt: 3, voteCount: 0, sentAt: 10, readyAt: 20 },
-        { code: 'OVER01', officerName: 'D', electionType: 'school', createdAt: 4, voteCount: 0, sentAt: 10, readyAt: 20, closedAt: 30 }
+        { code: 'OVER01', officerName: 'D', electionType: 'school', createdAt: 4, voteCount: 5, sentAt: 10, readyAt: 20, closedAt: 30 }
       ]
     });
     mockApi.getArchivesList.mockResolvedValue({ archives: [] });
     mockApi.startFreshDuties.mockResolvedValue(4);
+    mockApi.updateOfficerCode.mockResolvedValue(undefined);
+    mockApi.removeAllOfficerCodes.mockResolvedValue(4);
 
     await unlockAsAdmin();
     fireEvent.click(screen.getByRole('button', { name: /Polling Officer Codes/ }));
@@ -276,24 +280,36 @@ describe('AdminLandingPage tabs', () => {
     expect(dutyOf('SENT01')).toBe('sent');
     expect(dutyOf('READY1')).toBe('ready');
     expect(dutyOf('OVER01')).toBe('over');
+    expect(screen.getByText('3 of 4')).toBeInTheDocument(); // sent (or already ready) so far
 
-    const summary = screen.getByLabelText('Duty status summary');
-    expect(summary).toHaveTextContent('Ready: 1');
-    expect(summary).toHaveTextContent('Sent -- not ready yet: 1');
-    expect(summary).toHaveTextContent('Not sent: 1');
-    expect(summary).toHaveTextContent('Polling closed: 1');
-
-    fireEvent.click(screen.getByLabelText('Not ready yet only'));
-    expect(screen.getByText('FRESH1')).toBeInTheDocument();
+    // Tapping a colour count shows just those codes.
+    fireEvent.click(screen.getByRole('button', { name: 'Sent, not ready 1' }));
     expect(screen.getByText('SENT01')).toBeInTheDocument();
+    expect(screen.queryByText('FRESH1')).not.toBeInTheDocument();
     expect(screen.queryByText('READY1')).not.toBeInTheDocument();
-    expect(screen.queryByText('OVER01')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Left from last election 1' }));
+    expect(screen.getByText('OVER01')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'All 4' }));
+
+    // Names are changed one row at a time, with Edit.
+    const freshRow = screen.getByText('FRESH1').closest('tr') as HTMLElement;
+    fireEvent.click(within(freshRow).getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Teacher for code FRESH1'), { target: { value: 'Anil' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mockApi.updateOfficerCode).toHaveBeenCalledWith('FRESH1', { officerName: 'Anil' }, 'testadmin'));
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    fireEvent.click(screen.getByRole('button', { name: /Start Allotting Duties for a Fresh Election/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'School Elections' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Colours to White' }));
     await waitFor(() => expect(mockApi.startFreshDuties).toHaveBeenCalledWith('school', 'testadmin'));
     confirmSpy.mockRestore();
+
+    // Remove All needs CONFIRM typed first.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove All School Codes' }));
+    const removeButton = screen.getByRole('button', { name: 'Remove All 4 Codes' });
+    expect(removeButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Type CONFIRM to go ahead'), { target: { value: 'CONFIRM' } });
+    fireEvent.click(removeButton);
+    await waitFor(() => expect(mockApi.removeAllOfficerCodes).toHaveBeenCalledWith('school', 'testadmin'));
   });
 
   it('Dashboard: shows what is left before End of Voting, and a ready line once everything is sealed', async () => {
@@ -390,13 +406,14 @@ describe('AdminLandingPage tabs', () => {
     // Dashboard shows the election-in-progress banner.
     await screen.findByText(/ELECTION IN PROGRESS: Test Run/);
 
-    // Officer Codes tab: generation is prep work now, not tied to the
-    // active run's election type -- both House and School generation stay
-    // enabled no matter which type is currently running.
+    // Officer Codes tab, More: making codes is prep work, not tied to the
+    // running election -- it stays enabled for School and House alike.
     fireEvent.click(screen.getByRole('button', { name: /Polling Officer Codes/ }));
-    await screen.findByText('Generate codes for House Elections');
-    expect(screen.getByRole('button', { name: 'Generate for All 8 Houses' })).not.toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Generate School Codes' })).not.toBeDisabled();
+    fireEvent.click(await screen.findByRole('tab', { name: /More/ }));
+    expect(screen.getByRole('button', { name: 'Make Codes' })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'House' }));
+    expect(screen.getByLabelText('House')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Make Codes' })).not.toBeDisabled();
   });
 
   it('Activity Log "Who were the polling officers?" searches officerCode.name entries and shows the result', async () => {

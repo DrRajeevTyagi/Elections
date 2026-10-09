@@ -1,0 +1,421 @@
+/* Polling Officer Codes tab (OfficerCodesTab.tsx) -- the layout approved
+   2026-10-09: pick an election and a branch, then one of three steps. */
+
+.codes-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.codes-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+
+.codes-pickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+}
+
+.codes-picker-label {
+  font-size: 0.85rem;
+  color: #475569;
+  font-weight: 600;
+  margin-right: 0.4rem;
+}
+
+.codes-seg {
+  display: inline-flex;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+  vertical-align: middle;
+}
+
+.codes-seg button {
+  border: none;
+  background: none;
+  padding: 0.55rem 1.1rem;
+  font: inherit;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  min-height: 42px;
+}
+
+.codes-seg button[aria-pressed='true'] {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.codes-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.codes-step {
+  flex: 1 1 200px;
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  border: 2px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font: inherit;
+  cursor: pointer;
+}
+
+.codes-step.more {
+  flex: 0 1 180px;
+}
+
+.codes-step[aria-selected='true'] {
+  border-color: #1d4ed8;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.codes-step-num {
+  width: 30px;
+  height: 30px;
+  border-radius: 15px;
+  background: #e2e8f0;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.codes-step[aria-selected='true'] .codes-step-num {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.codes-step strong {
+  display: block;
+}
+
+.codes-step small {
+  font-size: 0.8rem;
+}
+
+.codes-note {
+  margin: 0;
+  padding: 0.7rem 1rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  color: #334155;
+}
+
+.codes-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.9rem;
+}
+
+.codes-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.codes-card h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.codes-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.codes-card .button {
+  align-self: flex-start;
+  margin-top: auto;
+}
+
+.codes-progress {
+  height: 10px;
+  background: #e2e8f0;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.codes-progress div {
+  height: 10px;
+  background: #1d4ed8;
+}
+
+.codes-fresh-start {
+  background: #ffffff;
+  border: 1px dashed #94a3b8;
+  border-radius: 14px;
+  padding: 0.9rem 1.1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.codes-fresh-start p {
+  margin: 0.25rem 0 0;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.codes-quiet-btn {
+  background: #ffffff !important;
+  color: #1f2937 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.codes-danger-btn {
+  background: #ffffff !important;
+  color: #991b1b !important;
+  border: 1px solid #fca5a5 !important;
+}
+
+.codes-list {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.codes-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.codes-list-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.codes-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.codes-chip {
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 2px solid #cbd5e1;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1f2937;
+  cursor: pointer;
+  min-height: 40px;
+}
+
+.codes-chip[aria-pressed='true'] {
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 1px #1d4ed8;
+  color: #1e3a8a;
+}
+
+.codes-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.codes-table th {
+  text-align: left;
+  font-size: 0.8rem;
+  color: #475569;
+  font-weight: 600;
+  padding: 0.55rem 0.6rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.codes-table td {
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid #eef2f7;
+  vertical-align: middle;
+}
+
+.codes-table .codes-group td {
+  background: #f1f5f9;
+  font-weight: 700;
+  color: #334155;
+}
+
+.codes-table .codes-right {
+  text-align: right;
+}
+
+.codes-code {
+  font-family: Consolas, 'Courier New', monospace;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.codes-sub {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #6d28d9;
+  letter-spacing: 0;
+  font-family: inherit;
+}
+
+.codes-pill {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.codes-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.codes-actions .button {
+  padding: 0.5rem 0.9rem;
+  font-size: 0.9rem;
+}
+
+.codes-link {
+  background: none;
+  border: none;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #1d4ed8;
+  cursor: pointer;
+  padding: 0.5rem;
+  min-height: 40px;
+}
+
+.codes-link.red {
+  color: #991b1b;
+}
+
+.codes-link.purple {
+  color: #6d28d9;
+}
+
+.codes-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.codes-checklist {
+  padding: 0.9rem 1.1rem;
+  border-radius: 14px;
+  border: 2px solid #fb923c;
+  background: #fff7ed;
+  color: #431407;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.codes-checklist.done {
+  border-color: #22c55e;
+  background: #f0fdf4;
+  color: #14532d;
+}
+
+.codes-checklist .codes-progress {
+  background: #fed7aa;
+}
+
+.codes-checklist .codes-progress div {
+  background: #c2410c;
+}
+
+.codes-checklist.done .codes-progress div {
+  background: #16a34a;
+}
+
+/* On a phone each row becomes a card: the code and status on top, then the
+   teacher, then the buttons, full width. */
+@media (max-width: 640px) {
+  .codes-table thead {
+    display: none;
+  }
+
+  .codes-table,
+  .codes-table tbody,
+  .codes-table tr,
+  .codes-table td {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .codes-table tr:not(.codes-group) {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    margin-bottom: 0.6rem;
+    padding: 0.4rem 0.2rem;
+    background: #ffffff;
+  }
+
+  .codes-table td {
+    border-bottom: none;
+    padding: 0.25rem 0.6rem;
+  }
+
+  .codes-table td[data-label]::before {
+    content: attr(data-label) ': ';
+    font-size: 0.8rem;
+    color: #64748b;
+    font-weight: 600;
+  }
+
+  .codes-table .codes-group td {
+    border-radius: 8px;
+    margin: 0.6rem 0 0.4rem;
+  }
+
+  .codes-table .codes-right {
+    text-align: left;
+  }
+
+  .codes-actions {
+    justify-content: flex-start;
+  }
+
+  .codes-actions .button {
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+}

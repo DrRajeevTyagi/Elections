@@ -48,15 +48,14 @@ import { BulkAllotCodesModal } from '../components/BulkAllotCodesModal';
 import { SendCodesPanel } from '../components/SendCodesPanel';
 import { TakeoverPrompt, TakeoverRequestBox } from '../components/AdminTakeover';
 import { RepollDialog } from '../components/RepollDialog';
+import { OfficerCodesTab } from '../components/OfficerCodesTab';
 import { describeLogEntry } from '../utils/logSentences';
 import { SealDialog } from '../components/SealDialog';
-import { countDutyStatuses, dutyStatus, DUTY_STYLES, endOfVotingChecklist } from '../utils/dutyStatus';
-import { REPOLL_REASON_LABELS } from '../types/api';
+import { endOfVotingChecklist } from '../utils/dutyStatus';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
 import { POST_NAMES } from '../constants/posts';
 import { POST_COLORS } from '../constants/postColors';
 import { HOUSE_COLORS } from '../constants/houseColors';
-import { groupOfficerCodesByHouse } from '../utils/officerCodeGroups';
 import './Page.css';
 import './admin.css';
 
@@ -136,9 +135,6 @@ export const AdminLandingPage = (): JSX.Element => {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [officerCodes, setOfficerCodes] = useState<OfficerCode[]>([]);
-  const [houseCodeCount, setHouseCodeCount] = useState('1');
-  const [schoolCodeCount, setSchoolCodeCount] = useState('1');
-  const [generateHouse, setGenerateHouse] = useState<HouseId | ''>('');
   const [officerCodesLoading, setOfficerCodesLoading] = useState(false);
   const [showBulkAllot, setShowBulkAllot] = useState(false);
   const [showSendCodes, setShowSendCodes] = useState(false);
@@ -148,15 +144,8 @@ export const AdminLandingPage = (): JSX.Element => {
   const [repollTarget, setRepollTarget] = useState<OfficerCode | null>(null);
   const [repollNotice, setRepollNotice] = useState<{ oldCode: string; replacement: OfficerCode } | null>(null);
   // Duty colours (Officer Codes tab).
-  const [notReadyOnly, setNotReadyOnly] = useState(false);
   // "Verify & Seal": the closed booth whose Paper List check is open.
   const [sealTarget, setSealTarget] = useState<OfficerCode | null>(null);
-  const [showFreshDuties, setShowFreshDuties] = useState(false);
-  // "Remove All Codes" panel: which election, and the typed CONFIRM.
-  const [showRemoveAll, setShowRemoveAll] = useState(false);
-  const [removeAllType, setRemoveAllType] = useState<ElectionType | ''>('');
-  const [removeAllConfirm, setRemoveAllConfirm] = useState('');
-  const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
   const [archives, setArchives] = useState<ArchiveSummary[]>([]);
   const [archiveNameDrafts, setArchiveNameDrafts] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'dashboard' | 'candidates' | 'results' | 'codes' | 'history' | 'log'>('dashboard');
@@ -286,9 +275,9 @@ export const AdminLandingPage = (): JSX.Element => {
     }
   }, [selectedBranch, selectedElectionType]);
 
-  // syncDrafts is false for the background 3-second poll, so it can refresh
-  // vote counts without clobbering officer names the admin is mid-typing.
-  const loadOfficerCodes = useCallback(async (syncDrafts: boolean = true) => {
+  // Safe to call from the background poll: a name being edited lives in the
+  // Polling Officer Codes tab's own state, so a reload never clobbers it.
+  const loadOfficerCodes = useCallback(async () => {
     const secret = sessionStorage.getItem('adminSecret');
     if (!secret) {
       return;
@@ -296,11 +285,6 @@ export const AdminLandingPage = (): JSX.Element => {
     try {
       const response = await getOfficerCodes(secret);
       setOfficerCodes(response.codes);
-      if (syncDrafts) {
-        setOfficerNameDrafts(
-          Object.fromEntries(response.codes.map((entry) => [entry.code, entry.officerName]))
-        );
-      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load officer codes');
     }
@@ -308,7 +292,7 @@ export const AdminLandingPage = (): JSX.Element => {
 
   // Used only by the 3-second background poll below. It updates vote totals
   // (candidate results + per-officer vote counts) and nothing else -- not
-  // pollStatus, not officer name drafts, not the global `loading` flag -- so
+  // pollStatus, not the global `loading` flag -- so
   // it can never interrupt an admin who is mid-edit elsewhere on this page.
   // Everything else (poll open/close, candidate add/edit/delete, code
   // generate/save/delete) reloads its own state explicitly after acting.
@@ -322,7 +306,7 @@ export const AdminLandingPage = (): JSX.Element => {
       // Silent: a background tick failing once isn't worth surfacing an
       // error banner for; the next tick retries automatically.
     }
-    await loadOfficerCodes(false);
+    await loadOfficerCodes();
   }, [loadOfficerCodes, selectedBranch, selectedElectionType]);
 
   // Backs the Storage status indicator -- checked on a slower, steady
@@ -472,68 +456,32 @@ export const AdminLandingPage = (): JSX.Element => {
     void runLogSearch(next);
   };
 
-  // Generates the same number of house-bound codes for every one of the 8
-  // houses in one go, instead of the admin having to repeat "Generate" 8 times.
-  const handleGenerateHouseCodesForAll = async () => {
-    const perHouseCount = Number(houseCodeCount);
-    if (!Number.isInteger(perHouseCount) || perHouseCount < 1 || perHouseCount > 200) {
+  // "Make blank codes by hand" (Polling Officer Codes → More): for one
+  // house, all 8 houses (the same number each), or School Elections.
+  const handleGenerateCodes = async (electionType: ElectionType, count: number, house: HouseId | 'all' | undefined) => {
+    if (!Number.isInteger(count) || count < 1 || count > 200) {
       setError('Enter a number of codes between 1 and 200.');
       return;
     }
+    const branchLabel = selectedBranch === 'AN' ? 'AN' : 'Dwarka';
     try {
       setOfficerCodesLoading(true);
       setError(null);
-      for (const houseId of HOUSE_IDS) {
-        await generateOfficerCodes(perHouseCount, adminSecret, houseId, selectedBranch);
+      if (electionType === 'school') {
+        await generateOfficerCodes(count, adminSecret, undefined, selectedBranch);
+        setMessage(`Made ${count} new School Elections code${count === 1 ? '' : 's'} (${branchLabel}).`);
+      } else if (house === 'all' || house === undefined) {
+        for (const houseId of HOUSE_IDS) {
+          await generateOfficerCodes(count, adminSecret, houseId, selectedBranch);
+        }
+        setMessage(`Made ${count} new code${count === 1 ? '' : 's'} for each of the 8 houses (${branchLabel}).`);
+      } else {
+        await generateOfficerCodes(count, adminSecret, house, selectedBranch);
+        setMessage(`Made ${count} new code${count === 1 ? '' : 's'} for ${house} House (${branchLabel}).`);
       }
-      setMessage(`Generated ${perHouseCount} code${perHouseCount === 1 ? '' : 's'} for each of the 8 houses (${selectedBranch === 'AN' ? 'AN' : 'Dwarka'}).`);
       await loadOfficerCodes();
     } catch (generateError) {
-      setError(generateError instanceof Error ? generateError.message : 'Failed to generate codes for all houses');
-    } finally {
-      setOfficerCodesLoading(false);
-    }
-  };
-
-  // Tops up a single house (e.g. a code was lost) without regenerating for
-  // every house.
-  const handleGenerateSingleHouseCodes = async () => {
-    if (!generateHouse) {
-      setError('Choose a house first.');
-      return;
-    }
-    const count = Number(houseCodeCount);
-    if (!Number.isInteger(count) || count < 1 || count > 200) {
-      setError('Enter a number of codes between 1 and 200.');
-      return;
-    }
-    try {
-      setOfficerCodesLoading(true);
-      setError(null);
-      await generateOfficerCodes(count, adminSecret, generateHouse, selectedBranch);
-      setMessage(`Generated ${count} new code${count === 1 ? '' : 's'} for ${generateHouse} House (${selectedBranch === 'AN' ? 'AN' : 'Dwarka'}).`);
-      await loadOfficerCodes();
-    } catch (generateError) {
-      setError(generateError instanceof Error ? generateError.message : 'Failed to generate codes');
-    } finally {
-      setOfficerCodesLoading(false);
-    }
-  };
-
-  const handleGenerateSchoolCodes = async () => {
-    const count = Number(schoolCodeCount);
-    if (!Number.isInteger(count) || count < 1 || count > 200) {
-      setError('Enter a number of codes between 1 and 200.');
-      return;
-    }
-    try {
-      setOfficerCodesLoading(true);
-      setError(null);
-      await generateOfficerCodes(count, adminSecret, undefined, selectedBranch);
-      setMessage(`Generated ${count} new school code${count === 1 ? '' : 's'} (${selectedBranch === 'AN' ? 'AN' : 'Dwarka'}).`);
-      await loadOfficerCodes();
-    } catch (generateError) {
-      setError(generateError instanceof Error ? generateError.message : 'Failed to generate codes');
+      setError(generateError instanceof Error ? generateError.message : 'Failed to make codes');
     } finally {
       setOfficerCodesLoading(false);
     }
@@ -598,16 +546,17 @@ export const AdminLandingPage = (): JSX.Element => {
     }
   };
 
-  const handleSaveOfficerName = async (code: string) => {
-    const officerName = officerNameDrafts[code] ?? '';
+  const handleSaveOfficerName = async (code: string, officerName: string): Promise<boolean> => {
     try {
       setOfficerCodesLoading(true);
       setError(null);
       await updateOfficerCode(code, { officerName }, adminSecret);
       setMessage(`Saved name for code ${code}.`);
       await loadOfficerCodes();
+      return true;
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Failed to save officer name');
+      return false;
     } finally {
       setOfficerCodesLoading(false);
     }
@@ -835,7 +784,7 @@ export const AdminLandingPage = (): JSX.Element => {
       return;
     }
     const intervalId = setInterval(() => {
-      void loadOfficerCodes(false);
+      void loadOfficerCodes();
     }, 5000);
     return () => clearInterval(intervalId);
   }, [authenticated, activeTab, electionRunning, loadOfficerCodes]);
@@ -853,7 +802,6 @@ export const AdminLandingPage = (): JSX.Element => {
       setError(null);
       const count = await startFreshDuties(electionType, adminSecret);
       setMessage(`${count} ${kind} Elections code${count === 1 ? '' : 's'} reset to white for a fresh election.`);
-      setShowFreshDuties(false);
       await loadOfficerCodes();
     } catch (freshError) {
       setError(freshError instanceof Error ? freshError.message : 'Failed to start fresh duties');
@@ -862,26 +810,19 @@ export const AdminLandingPage = (): JSX.Element => {
     }
   };
 
-  const closeRemoveAll = () => {
-    setShowRemoveAll(false);
-    setRemoveAllType('');
-    setRemoveAllConfirm('');
-  };
-
-  const handleRemoveAllCodes = async () => {
-    if (!removeAllType || removeAllConfirm.trim() !== 'CONFIRM') {
-      return;
-    }
-    const kind = removeAllType === 'house' ? 'House' : 'School';
+  // "Remove All Codes" -- the tab has already asked for CONFIRM.
+  const handleRemoveAllCodes = async (electionType: ElectionType): Promise<boolean> => {
+    const kind = electionType === 'house' ? 'House' : 'School';
     try {
       setOfficerCodesLoading(true);
       setError(null);
-      const count = await removeAllOfficerCodes(removeAllType, adminSecret);
+      const count = await removeAllOfficerCodes(electionType, adminSecret);
       setMessage(`Removed ${count} ${kind} Elections code${count === 1 ? '' : 's'} (Dwarka and AN). The list is ready for a new teacher list.`);
-      closeRemoveAll();
       await loadOfficerCodes();
+      return true;
     } catch (removeError) {
       setError(removeError instanceof Error ? removeError.message : 'Failed to remove the codes');
+      return false;
     } finally {
       setOfficerCodesLoading(false);
     }
@@ -1152,7 +1093,6 @@ export const AdminLandingPage = (): JSX.Element => {
     () => officerCodes.filter((entry) => (entry.branch ?? 'dwarka') === selectedBranch),
     [officerCodes, selectedBranch]
   );
-  const dutyCounts = useMemo(() => countDutyStatuses(branchOfficerCodes), [branchOfficerCodes]);
 
   // Re-polls behind the Live Results on screen (this branch and election
   // type). Only the latest election's: Start re-tags every code of that type
@@ -1180,18 +1120,6 @@ export const AdminLandingPage = (): JSX.Element => {
     };
     return { ...counts, done: counts.unallotted + counts.open + counts.unsealed === 0 };
   }, [officerCodes, currentRun]);
-
-  const groupedOfficerCodes = useMemo(() => {
-    // "Not ready yet" -- who still needs chasing: allotted codes that were
-    // never sent, or sent but never entered on a kiosk.
-    const shown = notReadyOnly
-      ? branchOfficerCodes.filter((entry) => {
-          const status = dutyStatus(entry);
-          return (status === 'fresh' || status === 'sent') && entry.officerName.trim();
-        })
-      : branchOfficerCodes;
-    return groupOfficerCodesByHouse(shown);
-  }, [branchOfficerCodes, notReadyOnly]);
 
   // "Download Dwarka/AN Report" mirrors GET /report/current: the live
   // results while an election is running, or the final result of whichever
@@ -1759,65 +1687,6 @@ export const AdminLandingPage = (): JSX.Element => {
 
       {activeTab === 'codes' && (
       <div className="admin-panel">
-        {renderBranchToggle('codes')}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
-          <h2 style={{ margin: 0 }}>Polling Officer Codes</h2>
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <button
-              className="button"
-              onClick={() => setShowBulkAllot(true)}
-              disabled={showBulkAllot}
-              style={{ backgroundColor: '#7c3aed', opacity: showBulkAllot ? 0.5 : 1 }}
-              title={
-                showBulkAllot
-                  ? 'Already open below -- use its own Close button to dismiss'
-                  : 'Generate and name codes for a whole teacher list at once, from an Excel file'
-              }
-            >
-              📋 Bulk Allot from List
-            </button>
-            <button
-              className="button"
-              onClick={() => setShowSendCodes(true)}
-              disabled={showSendCodes}
-              style={{ backgroundColor: '#16a34a', opacity: showSendCodes ? 0.5 : 1 }}
-              title={
-                showSendCodes
-                  ? 'Already open below -- use its own Close button to dismiss'
-                  : 'Send each teacher their code on WhatsApp, one click per teacher'
-              }
-            >
-              📲 Send Codes on WhatsApp
-            </button>
-            <button
-              className="button"
-              onClick={() => window.open(`/admin/report/officer-codes/${selectedBranch}`, '_blank')}
-              style={{ backgroundColor: '#0f766e' }}
-              title={`Open a printable ${selectedBranch === 'AN' ? 'AN' : 'Dwarka'} code-allotment list -- hand this to that branch's Election Head/Principal`}
-            >
-              🖨️ Print {selectedBranch === 'AN' ? 'AN' : 'Dwarka'} Code List
-            </button>
-            <button
-              className="button"
-              onClick={() => window.open('/admin/report/turnout', '_blank')}
-              disabled={!pollStatus?.activeElectionType}
-              style={{ backgroundColor: '#4338ca', opacity: !pollStatus?.activeElectionType ? 0.5 : 1 }}
-              title={!pollStatus?.activeElectionType ? 'Select an election type first' : 'Open a printable turnout report in a new tab'}
-            >
-              🖨️ Print Officer Turnout
-            </button>
-            <button
-              className="button"
-              onClick={handleClearLockouts}
-              disabled={officerCodesLoading}
-              style={{ backgroundColor: '#b45309', opacity: officerCodesLoading ? 0.5 : 1 }}
-              title="Instantly un-block every device currently locked out for entering wrong officer codes"
-            >
-              🔓 Clear Code Lockouts
-            </button>
-          </div>
-        </div>
-
         {showBulkAllot && (
           <BulkAllotCodesModal
             adminSecret={adminSecret}
@@ -1839,7 +1708,7 @@ export const AdminLandingPage = (): JSX.Element => {
             onSealed={() => {
               setMessage(`Booth ${sealTarget.code} verified and sealed.`);
               setSealTarget(null);
-              void loadOfficerCodes(false);
+              void loadOfficerCodes();
             }}
             onOrderRepoll={() => {
               setRepollTarget(sealTarget);
@@ -1856,7 +1725,7 @@ export const AdminLandingPage = (): JSX.Element => {
             onOrdered={(replacement) => {
               setRepollNotice({ oldCode: repollTarget.code, replacement });
               setRepollTarget(null);
-              void loadOfficerCodes(false);
+              void loadOfficerCodes();
               void refreshVoteCounts();
             }}
           />
@@ -1898,444 +1767,29 @@ export const AdminLandingPage = (): JSX.Element => {
             branch={selectedBranch}
             officerCodes={officerCodes}
             onClose={() => setShowSendCodes(false)}
-            onChanged={() => loadOfficerCodes(false)}
+            onChanged={() => loadOfficerCodes()}
           />
         )}
 
-        <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '0.5rem', marginBottom: '1rem' }}>
-          Generate codes here, hand them out, then come back and type each officer's name against their code so
-          you know who has which one. This is prep work, same as adding candidates -- do it any time, before or
-          after starting the election process. Generating adds new codes to the list below &mdash; it never
-          replaces or removes existing ones.
-        </p>
-
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', marginBottom: '1.5rem' }}>
-          <div style={{ flex: '1 1 340px', padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
-            <label className="form-label" style={{ fontWeight: 600, display: 'block' }}>
-              Generate codes for House Elections
-            </label>
-            <p style={{ fontSize: '0.85rem', color: '#6b7280', margin: '0.25rem 0 0.75rem 0' }}>
-              Each code opens straight into its house's ballot on the kiosk &mdash; no house-selection step.
-            </p>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-              <div>
-                <label className="form-label" htmlFor="house-code-count">Codes per house</label>
-                <input
-                  id="house-code-count"
-                  className="form-input"
-                  type="number"
-                  min={1}
-                  max={200}
-                  value={houseCodeCount}
-                  onChange={(event) => setHouseCodeCount(event.target.value)}
-                  style={{ width: '120px' }}
-                />
-              </div>
-              <button
-                className="button"
-                onClick={handleGenerateHouseCodesForAll}
-                disabled={officerCodesLoading}
-              >
-                Generate for All 8 Houses
-              </button>
-            </div>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap', marginTop: '0.75rem' }}>
-              <div>
-                <label className="form-label" htmlFor="single-house">Or just one house</label>
-                <select
-                  id="single-house"
-                  className="form-input"
-                  value={generateHouse}
-                  onChange={(event) => setGenerateHouse(event.target.value as HouseId | '')}
-                  style={{ width: '160px' }}
-                >
-                  <option value="">Choose a house&hellip;</option>
-                  {HOUSE_IDS.map((houseId) => (
-                    <option key={houseId} value={houseId}>
-                      {houseId}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button
-                className="button"
-                style={{ backgroundColor: '#6b7280', opacity: officerCodesLoading || !generateHouse ? 0.5 : 1 }}
-                onClick={handleGenerateSingleHouseCodes}
-                disabled={officerCodesLoading || !generateHouse}
-                title={!generateHouse ? 'Choose a house first' : 'Add more codes to just this one house, e.g. to replace a lost code'}
-              >
-                Add to This House
-              </button>
-            </div>
-          </div>
-
-          <div style={{ flex: '1 1 260px', padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
-            <label className="form-label" style={{ fontWeight: 600, display: 'block' }}>
-              Generate codes for School Posts
-            </label>
-            <p style={{ fontSize: '0.85rem', color: '#6b7280', margin: '0.25rem 0 0.75rem 0' }}>
-              Not tied to any house &mdash; for Head Boy/Girl and other whole-school posts.
-            </p>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
-              <div>
-                <label className="form-label" htmlFor="school-code-count">Number of codes</label>
-                <input
-                  id="school-code-count"
-                  className="form-input"
-                  type="number"
-                  min={1}
-                  max={200}
-                  value={schoolCodeCount}
-                  onChange={(event) => setSchoolCodeCount(event.target.value)}
-                  style={{ width: '120px' }}
-                />
-              </div>
-              <button
-                className="button"
-                onClick={handleGenerateSchoolCodes}
-                disabled={officerCodesLoading}
-              >
-                Generate School Codes
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}
-        >
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }} aria-label="Duty status summary">
-            {(['ready', 'sent', 'fresh', 'over', 'sealed'] as const).map((status) => (
-              <span
-                key={status}
-                style={{
-                  padding: '0.25rem 0.6rem',
-                  borderRadius: '999px',
-                  border: `2px solid ${DUTY_STYLES[status].border}`,
-                  backgroundColor: DUTY_STYLES[status].background,
-                  color: DUTY_STYLES[status].text,
-                  fontWeight: 700,
-                  fontSize: '0.85rem'
-                }}
-              >
-                {DUTY_STYLES[status].label}: {dutyCounts[status]}
-              </span>
-            ))}
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <input type="checkbox" checked={notReadyOnly} onChange={(event) => setNotReadyOnly(event.target.checked)} />
-              Not ready yet only
-            </label>
-            <button
-              className="button"
-              style={{ backgroundColor: '#0f766e' }}
-              onClick={() => setShowFreshDuties((open) => !open)}
-              title="Turn all codes of one election back to white before allotting duties for a new election"
-            >
-              🔄 Start Allotting Duties for a Fresh Election
-            </button>
-            <button
-              className="button"
-              style={{ backgroundColor: '#991b1b' }}
-              onClick={() => (showRemoveAll ? closeRemoveAll() : setShowRemoveAll(true))}
-              title="Delete every code of one election, in both Dwarka and AN, to start from an empty list"
-            >
-              🗑 Remove All Codes
-            </button>
-          </div>
-        </div>
-
-        {showFreshDuties && (
-          <div style={{ padding: '1rem', backgroundColor: '#f0fdfa', border: '2px solid #0f766e', borderRadius: '8px', marginBottom: '1rem' }}>
-            <p style={{ margin: '0 0 0.75rem 0' }}>
-              Which election are you allotting duties for? All of its existing codes, in <strong>both Dwarka and AN</strong>,
-              turn white &mdash; usable, not sent, not ready.
-            </p>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              {(['school', 'house'] as const).map((type) => {
-                const running = currentRun?.status === 'running' && currentRun.electionType === type;
-                return (
-                  <button
-                    key={type}
-                    className="button"
-                    style={{ backgroundColor: '#0f766e', opacity: running || officerCodesLoading ? 0.5 : 1 }}
-                    disabled={running || officerCodesLoading}
-                    title={running ? 'This election is running right now' : undefined}
-                    onClick={() => void handleStartFreshDuties(type)}
-                  >
-                    {type === 'house' ? 'House Elections' : 'School Elections'}
-                  </button>
-                );
-              })}
-              <button className="button" style={{ backgroundColor: '#6b7280' }} onClick={() => setShowFreshDuties(false)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {showRemoveAll && (
-          <div style={{ padding: '1rem', backgroundColor: '#fef2f2', border: '2px solid #991b1b', borderRadius: '8px', marginBottom: '1rem' }}>
-            <p style={{ margin: '0 0 0.75rem 0' }}>
-              Which election&apos;s codes should be removed? <strong>Every</strong> code of that election, in{' '}
-              <strong>both Dwarka and AN</strong>, is deleted, so you can start again from an empty list. Past
-              elections in Election History are not affected.
-            </p>
-            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-              {(['school', 'house'] as const).map((type) => {
-                const running = currentRun?.status === 'running' && currentRun.electionType === type;
-                return (
-                  <label key={type} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', opacity: running ? 0.5 : 1 }}>
-                    <input
-                      type="radio"
-                      name="remove-all-type"
-                      disabled={running}
-                      checked={removeAllType === type}
-                      onChange={() => setRemoveAllType(type)}
-                    />
-                    {type === 'house' ? 'House Elections' : 'School Elections'}
-                    {running && ' (running now, so not allowed)'}
-                  </label>
-                );
-              })}
-            </div>
-            <label className="form-label" htmlFor="remove-all-confirm" style={{ display: 'block' }}>
-              Type CONFIRM to go ahead
-            </label>
-            <input
-              id="remove-all-confirm"
-              className="form-input"
-              autoComplete="off"
-              value={removeAllConfirm}
-              onChange={(event) => setRemoveAllConfirm(event.target.value)}
-              style={{ maxWidth: '220px' }}
-            />
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
-              <button
-                className="button"
-                style={{
-                  backgroundColor: '#991b1b',
-                  opacity: removeAllType && removeAllConfirm.trim() === 'CONFIRM' && !officerCodesLoading ? 1 : 0.5
-                }}
-                disabled={!removeAllType || removeAllConfirm.trim() !== 'CONFIRM' || officerCodesLoading}
-                onClick={() => void handleRemoveAllCodes()}
-              >
-                {removeAllType
-                  ? `Remove All ${officerCodes.filter((entry) => entry.electionType === removeAllType).length} ${removeAllType === 'house' ? 'House' : 'School'} Codes`
-                  : 'Remove All Codes'}
-              </button>
-              <button className="button" style={{ backgroundColor: '#6b7280' }} onClick={closeRemoveAll}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {officerCodes.length === 0 ? (
-          <p>No codes generated yet.</p>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '2px solid #e5e7eb' }}>
-                  <th style={{ padding: '0.5rem' }}>Code</th>
-                  <th style={{ padding: '0.5rem' }}>Officer Name</th>
-                  <th style={{ padding: '0.5rem' }}>Votes Cast</th>
-                  <th style={{ padding: '0.5rem' }}>Status</th>
-                  <th style={{ padding: '0.5rem' }}></th>
-                </tr>
-              </thead>
-              {groupedOfficerCodes.map((group) => (
-                <tbody key={group.label}>
-                  <tr>
-                    <td
-                      colSpan={5}
-                      style={{ padding: '0.5rem', fontWeight: 700, backgroundColor: '#eef2ff', color: '#3730a3' }}
-                    >
-                      {group.label} ({group.codes.length})
-                    </td>
-                  </tr>
-                  {group.codes.map((entry) => {
-                    const isClosed = Boolean(entry.closedAt);
-                    const isRepolled = Boolean(entry.repoll);
-                    // Only while this code's own election is being recorded,
-                    // and only for a booth actually allotted to someone.
-                    const isSealed = Boolean(entry.seal);
-                    const inRunningElection =
-                      currentRun?.status === 'running' &&
-                      currentRun.electionType === (entry.electionType ?? (entry.house ? 'house' : 'school'));
-                    const canRepoll = !isRepolled && !isSealed && inRunningElection && Boolean(entry.officerName.trim());
-                    // A closed booth of the running election waits for its
-                    // Paper List check.
-                    // An unnamed code is deleted instead (one path per code).
-                    const canSeal =
-                      !isRepolled && !isSealed && isClosed && inRunningElection && Boolean(entry.officerName.trim());
-                    const duty = dutyStatus(entry);
-                    const dutyStyle = DUTY_STYLES[duty];
-                    // Between elections every code can be deleted (the server
-                    // allows it once the code's election isn't running).
-                    const deleteButton = (
-                      <button
-                        className="button"
-                        style={{
-                          backgroundColor: '#dc2626',
-                          opacity: officerCodesLoading ? 0.5 : 1,
-                          marginTop: isRepolled || isSealed ? '0.4rem' : undefined
-                        }}
-                        disabled={officerCodesLoading}
-                        onClick={() => handleDeleteOfficerCode(entry.code)}
-                      >
-                        Delete
-                      </button>
-                    );
-                    return (
-                      <tr
-                        key={entry.code}
-                        data-duty={duty}
-                        style={{
-                          borderBottom: '1px solid #f3f4f6',
-                          backgroundColor: dutyStyle.background,
-                          color: isRepolled ? '#6b7280' : undefined
-                        }}
-                      >
-                        <td
-                          style={{
-                            padding: '0.5rem',
-                            fontFamily: 'monospace',
-                            fontWeight: 700,
-                            letterSpacing: '0.05em',
-                            borderLeft: `6px solid ${dutyStyle.border}`
-                          }}
-                        >
-                          <span style={{ textDecoration: isRepolled ? 'line-through' : undefined }}>{entry.code}</span>
-                          {entry.replacesCode && (
-                            <div style={{ fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600, color: '#7c3aed', letterSpacing: 0 }}>
-                              Re-poll of {entry.replacesCode}
-                            </div>
-                          )}
-                        </td>
-                        <td style={{ padding: '0.5rem' }}>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <input
-                              className="form-input"
-                              style={{ margin: 0 }}
-                              value={officerNameDrafts[entry.code] ?? ''}
-                              placeholder="Officer name"
-                              onChange={(event) =>
-                                setOfficerNameDrafts((prev) => ({ ...prev, [entry.code]: event.target.value }))
-                              }
-                            />
-                            <button
-                              className="button"
-                              style={{ backgroundColor: '#6b7280', flexShrink: 0, opacity: officerCodesLoading ? 0.5 : 1 }}
-                              disabled={officerCodesLoading}
-                              onClick={() => handleSaveOfficerName(entry.code)}
-                            >
-                              Save
-                            </button>
-                          </div>
-                        </td>
-                        <td style={{ padding: '0.5rem' }}>
-                          {entry.voteCount}
-                          {entry.repoll && (
-                            <div style={{ fontSize: '0.8rem', color: '#b91c1c', fontWeight: 600 }}>
-                              {entry.repoll.cancelledVoteCount} cancelled
-                            </div>
-                          )}
-                        </td>
-                        <td style={{ padding: '0.5rem' }}>
-                          {entry.repoll ? (
-                            <span
-                              style={{ color: '#7c3aed', fontWeight: 700 }}
-                              title={`${REPOLL_REASON_LABELS[entry.repoll.reason]}${entry.repoll.note ? ` -- ${entry.repoll.note}` : ''} (ordered ${formatTimestamp(entry.repoll.orderedAt)})`}
-                            >
-                              RE-POLLED &rarr; {entry.repoll.replacementCode}
-                            </span>
-                          ) : (
-                            <span style={{ color: dutyStyle.text, fontWeight: 700 }}>
-                              {duty === 'ready' && '✓ '}
-                              {dutyStyle.label}
-                              {duty === 'ready' && entry.readyAt && (
-                                <span style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600 }}>
-                                  since {new Date(entry.readyAt).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' })}
-                                </span>
-                              )}
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: '0.5rem' }}>
-                          {isRepolled ? (
-                            <>
-                              <span style={{ fontSize: '0.8rem', display: 'block' }}>{REPOLL_REASON_LABELS[entry.repoll!.reason]}</span>
-                              {!inRunningElection && deleteButton}
-                            </>
-                          ) : isSealed ? (
-                            <>
-                              <span style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block' }}>
-                                Paper List {entry.seal!.paperListCount} &middot; App {entry.seal!.appCount}
-                                <span style={{ display: 'block', fontWeight: 400 }}>sealed {formatTimestamp(entry.seal!.sealedAt)}</span>
-                              </span>
-                              {!inRunningElection && deleteButton}
-                            </>
-                          ) : (
-                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            {canSeal && (
-                              <button
-                                className="button"
-                                style={{ backgroundColor: '#1e293b', opacity: officerCodesLoading ? 0.5 : 1 }}
-                                disabled={officerCodesLoading}
-                                onClick={() => setSealTarget(entry)}
-                                title="Check this booth's vote count against the Paper List and seal it"
-                              >
-                                🔒 Verify &amp; Seal
-                              </button>
-                            )}
-                            {canRepoll && (
-                              <button
-                                className="button"
-                                style={{ backgroundColor: '#7c3aed', opacity: officerCodesLoading ? 0.5 : 1 }}
-                                disabled={officerCodesLoading}
-                                onClick={() => setRepollTarget(entry)}
-                                title="Cancel every vote cast at this booth and issue a new code so it votes again"
-                              >
-                                Re-poll
-                              </button>
-                            )}
-                            {isClosed ? (
-                              <button
-                                className="button"
-                                style={{ backgroundColor: '#16a34a', opacity: officerCodesLoading ? 0.5 : 1 }}
-                                disabled={officerCodesLoading}
-                                onClick={() => handleReopenOfficerCode(entry.code)}
-                              >
-                                Reopen
-                              </button>
-                            ) : (
-                              <button
-                                className="button"
-                                style={{ backgroundColor: '#ea580c', opacity: officerCodesLoading ? 0.5 : 1 }}
-                                disabled={officerCodesLoading}
-                                onClick={() => handleCloseOfficerCode(entry.code)}
-                                title="Close this booth without needing to open a kiosk tab and enter the code there"
-                              >
-                                Close
-                              </button>
-                            )}
-                            {/* A re-poll's new code is part of the permanent
-                                re-poll record while its election runs. */}
-                            {(!entry.replacesCode || !inRunningElection) && deleteButton}
-                          </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              ))}
-            </table>
-          </div>
-        )}
+        <OfficerCodesTab
+          officerCodes={officerCodes}
+          branch={selectedBranch}
+          onBranchChange={setSelectedBranch}
+          currentRun={currentRun}
+          busy={officerCodesLoading}
+          onOpenBulkAllot={() => setShowBulkAllot(true)}
+          onOpenSendCodes={() => setShowSendCodes(true)}
+          onSaveName={handleSaveOfficerName}
+          onDelete={(code) => void handleDeleteOfficerCode(code)}
+          onClose={(code) => void handleCloseOfficerCode(code)}
+          onReopen={(code) => void handleReopenOfficerCode(code)}
+          onSeal={setSealTarget}
+          onRepoll={setRepollTarget}
+          onFreshDuties={(type) => void handleStartFreshDuties(type)}
+          onRemoveAll={handleRemoveAllCodes}
+          onGenerate={(type, count, house) => void handleGenerateCodes(type, count, house)}
+          onClearLockouts={() => void handleClearLockouts()}
+        />
       </div>
       )}
 
