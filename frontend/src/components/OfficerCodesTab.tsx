@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { HOUSE_IDS } from '../constants/houses';
 import { REPOLL_REASON_LABELS } from '../types/api';
 import type { ElectionRun, OfficerCode } from '../types/api';
@@ -30,6 +31,10 @@ export interface OfficerCodesTabProps {
   busy: boolean;
   onOpenBulkAllot: () => void;
   onOpenSendCodes: () => void;
+  // The open Upload Teacher List or Send Codes box, if any, and which one.
+  // It is shown just below the step cards and scrolled to when it opens.
+  panel?: ReactNode;
+  panelKey?: string | null;
   // Resolves true once saved, so the row can leave edit mode.
   onSaveName: (code: string, officerName: string) => Promise<boolean>;
   onDelete: (code: string) => void;
@@ -90,6 +95,14 @@ export const OfficerCodesTab = (props: OfficerCodesTabProps): JSX.Element => {
   const [removeConfirm, setRemoveConfirm] = useState<string | null>(null);
   const [makeHouse, setMakeHouse] = useState<HouseId | 'all'>('all');
   const [makeCount, setMakeCount] = useState('1');
+
+  // Bring a box into view as it opens, so it never opens out of sight.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (props.panelKey) {
+      panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [props.panelKey]);
 
   useEffect(() => {
     setFilter('all');
@@ -344,6 +357,12 @@ export const OfficerCodesTab = (props: OfficerCodesTabProps): JSX.Element => {
     </button>
   );
 
+  const panelSlot = props.panel ? (
+    <div ref={panelRef} className="codes-panel">
+      {props.panel}
+    </div>
+  ) : null;
+
   return (
     <div className="codes-tab">
       <div className="codes-header">
@@ -387,34 +406,6 @@ export const OfficerCodesTab = (props: OfficerCodesTabProps): JSX.Element => {
               <>{electionName(election)} Elections are <strong>not running</strong>. Get the codes ready here, then start the election from the Dashboard.</>
             )}
           </p>
-
-          <div className="codes-cards">
-            <div className="codes-card">
-              <h3><span className="codes-step-num" style={{ background: '#1d4ed8', color: '#ffffff' }}>1</span>Upload the teacher list</h3>
-              <p>Every teacher on the list gets a code, with their name and WhatsApp number. One list per branch.</p>
-              <p><strong style={{ color: '#111827' }}>{plural(codes.length, 'code')}</strong> in {branchName(branch)} {electionName(election)} Elections</p>
-              <button className="button" disabled={busy} onClick={props.onOpenBulkAllot}>Upload Teacher List</button>
-            </div>
-            <div className="codes-card">
-              <h3><span className="codes-step-num" style={{ background: '#1d4ed8', color: '#ffffff' }}>2</span>Send codes on WhatsApp</h3>
-              <p>One message per teacher, with all their codes. Picks up where you stopped.</p>
-              <div className="codes-progress" aria-hidden="true">
-                <div style={{ width: `${named.length ? Math.round((sentCount / named.length) * 100) : 0}%` }} />
-              </div>
-              <p><strong style={{ color: '#111827' }}>{sentCount} of {named.length}</strong> sent</p>
-              <button className="button" disabled={busy} onClick={props.onOpenSendCodes}>Send Codes</button>
-            </div>
-            <div className="codes-card">
-              <h3><span className="codes-step-num" style={{ background: '#1d4ed8', color: '#ffffff' }}>3</span>Print the code list</h3>
-              <p>Who has which code, for the {branchName(branch)} Election Head.</p>
-              <button
-                className="button codes-quiet-btn"
-                onClick={() => window.open(`/admin/report/officer-codes/${branch}`, '_blank')}
-              >
-                Print {branchName(branch)} Code List
-              </button>
-            </div>
-          </div>
 
           <div className="codes-fresh-start">
             <div style={{ flex: '1 1 340px' }}>
@@ -469,6 +460,36 @@ export const OfficerCodesTab = (props: OfficerCodesTabProps): JSX.Element => {
             )}
           </div>
 
+          <div className="codes-cards">
+            <div className="codes-card">
+              <h3><span className="codes-step-num" style={{ background: '#1d4ed8', color: '#ffffff' }}>1</span>Upload the teacher list</h3>
+              <p>Every teacher on the list gets a code, with their name and WhatsApp number. One list per branch.</p>
+              <p><strong style={{ color: '#111827' }}>{plural(codes.length, 'code')}</strong> in {branchName(branch)} {electionName(election)} Elections</p>
+              <button className="button" disabled={busy} onClick={props.onOpenBulkAllot}>Upload Teacher List</button>
+            </div>
+            <div className="codes-card">
+              <h3><span className="codes-step-num" style={{ background: '#1d4ed8', color: '#ffffff' }}>2</span>Send codes on WhatsApp</h3>
+              <p>One message per teacher, with all their codes. Picks up where you stopped.</p>
+              <div className="codes-progress" aria-hidden="true">
+                <div style={{ width: `${named.length ? Math.round((sentCount / named.length) * 100) : 0}%` }} />
+              </div>
+              <p><strong style={{ color: '#111827' }}>{sentCount} of {named.length}</strong> sent</p>
+              <button className="button" disabled={busy} onClick={props.onOpenSendCodes}>Send Codes</button>
+            </div>
+            <div className="codes-card">
+              <h3><span className="codes-step-num" style={{ background: '#1d4ed8', color: '#ffffff' }}>3</span>Print the code list</h3>
+              <p>Who has which code, for the {branchName(branch)} Election Head.</p>
+              <button
+                className="button codes-quiet-btn"
+                onClick={() => window.open(`/admin/report/officer-codes/${branch}`, '_blank')}
+              >
+                Print {branchName(branch)} Code List
+              </button>
+            </div>
+          </div>
+
+          {panelSlot}
+
           {renderList(
             `Codes: ${branchName(branch)}, ${electionName(election)} Elections`,
             ['Code', 'Teacher', 'WhatsApp', 'Status', 'Change'],
@@ -510,6 +531,7 @@ export const OfficerCodesTab = (props: OfficerCodesTabProps): JSX.Element => {
               election from the Dashboard.
             </p>
           )}
+          {panelSlot}
           {renderList(`Booths: ${branchName(branch)}, ${electionName(election)} Elections`, ['Booth', 'Teacher', 'Votes', 'Status', 'Next step'], renderDayRow)}
           <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
             To correct a teacher&apos;s name, use step 1. It can be done at any time.
@@ -517,6 +539,7 @@ export const OfficerCodesTab = (props: OfficerCodesTabProps): JSX.Element => {
         </>
       )}
 
+      {step === 'more' && panelSlot}
       {step === 'more' && (
         <div className="codes-cards" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', alignItems: 'start' }}>
           <div className="codes-card">

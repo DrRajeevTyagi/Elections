@@ -138,6 +138,15 @@ export const AdminLandingPage = (): JSX.Element => {
   const [officerCodesLoading, setOfficerCodesLoading] = useState(false);
   const [showBulkAllot, setShowBulkAllot] = useState(false);
   const [showSendCodes, setShowSendCodes] = useState(false);
+  // Only one of the two boxes is open at a time.
+  const openBulkAllot = (): void => {
+    setShowSendCodes(false);
+    setShowBulkAllot(true);
+  };
+  const openSendCodes = (): void => {
+    setShowBulkAllot(false);
+    setShowSendCodes(true);
+  };
   // Re-polling (Officer Codes tab): the booth whose dialog is open, and the
   // last re-poll ordered -- kept on screen (not a 5-second message) since
   // the new code still has to be sent to the teacher.
@@ -1687,19 +1696,6 @@ export const AdminLandingPage = (): JSX.Element => {
 
       {activeTab === 'codes' && (
       <div className="admin-panel">
-        {showBulkAllot && (
-          <BulkAllotCodesModal
-            adminSecret={adminSecret}
-            branch={selectedBranch}
-            onClose={() => setShowBulkAllot(false)}
-            onAllotted={() => void loadOfficerCodes()}
-            onOpenSendCodes={() => {
-              setShowBulkAllot(false);
-              setShowSendCodes(true);
-            }}
-          />
-        )}
-
         {sealTarget && (
           <SealDialog
             adminSecret={adminSecret}
@@ -1751,7 +1747,7 @@ export const AdminLandingPage = (): JSX.Element => {
                 : 'No WhatsApp number on file -- give it to the teacher directly, or add their number in Send Codes.'}
             </p>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
-              <button className="button" style={{ backgroundColor: '#16a34a' }} onClick={() => setShowSendCodes(true)}>
+              <button className="button" style={{ backgroundColor: '#16a34a' }} onClick={openSendCodes}>
                 📲 Send Codes on WhatsApp
               </button>
               <button className="button" style={{ backgroundColor: '#6b7280' }} onClick={() => setRepollNotice(null)}>
@@ -1761,24 +1757,34 @@ export const AdminLandingPage = (): JSX.Element => {
           </div>
         )}
 
-        {showSendCodes && (
-          <SendCodesPanel
-            adminSecret={adminSecret}
-            branch={selectedBranch}
-            officerCodes={officerCodes}
-            onClose={() => setShowSendCodes(false)}
-            onChanged={() => loadOfficerCodes()}
-          />
-        )}
-
         <OfficerCodesTab
           officerCodes={officerCodes}
           branch={selectedBranch}
           onBranchChange={setSelectedBranch}
           currentRun={currentRun}
           busy={officerCodesLoading}
-          onOpenBulkAllot={() => setShowBulkAllot(true)}
-          onOpenSendCodes={() => setShowSendCodes(true)}
+          onOpenBulkAllot={openBulkAllot}
+          onOpenSendCodes={openSendCodes}
+          panelKey={showBulkAllot ? 'upload' : showSendCodes ? 'send' : null}
+          panel={
+            showBulkAllot ? (
+              <BulkAllotCodesModal
+                adminSecret={adminSecret}
+                branch={selectedBranch}
+                onClose={() => setShowBulkAllot(false)}
+                onAllotted={() => void loadOfficerCodes()}
+                onOpenSendCodes={openSendCodes}
+              />
+            ) : showSendCodes ? (
+              <SendCodesPanel
+                adminSecret={adminSecret}
+                branch={selectedBranch}
+                officerCodes={officerCodes}
+                onClose={() => setShowSendCodes(false)}
+                onChanged={() => loadOfficerCodes()}
+              />
+            ) : null
+          }
           onSaveName={handleSaveOfficerName}
           onDelete={(code) => void handleDeleteOfficerCode(code)}
           onClose={(code) => void handleCloseOfficerCode(code)}

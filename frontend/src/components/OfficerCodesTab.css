@@ -179,6 +179,15 @@
   justify-content: space-between;
 }
 
+/* The tab's own spacing applies; drop the boxes' own bottom margin. */
+.codes-panel > div {
+  margin-bottom: 0 !important;
+}
+
+.codes-panel {
+  scroll-margin-top: 1rem;
+}
+
 .codes-fresh-start p {
   margin: 0.25rem 0 0;
   color: #475569;
