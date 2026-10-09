@@ -58,7 +58,8 @@ Manages elections for **3 house-level posts**:
   from the officer code used to unlock the ballot, and is enforced by the server.
 - One election covers both branches at once (one Start, one End of Voting).
 - The admin dashboard has a **Dwarka / AN** toggle on Manage Candidates, Live
-  Results and Polling Officer Codes, and every report can be printed per branch.
+  Results and Polling Officer Codes, and every report and Election Record can be
+  printed per branch.
 
 ---
 
@@ -185,86 +186,116 @@ Manages elections for **3 house-level posts**:
   it never disturbs an admin who is mid-edit elsewhere); manual "Refresh" always
   available
 - **🖥️ Present Full Screen** — a clean projector view without the toggles
+- If a re-poll was ordered, a note under the header says so, e.g. *"Includes 1
+  re-poll: 14 votes cancelled at Dwarka booth ab12 (Anand House). Those votes are
+  not counted; the re-poll's own votes are."*
 
 ### Polling Officer Codes
 
-One code = one booth = one teacher in charge. Listed in the order they are used.
+One code = one booth = one teacher in charge.
 
-**Duty colours** — every code is coloured, with a summary line counting each
-colour, a **"Not ready yet only"** filter showing who still needs chasing, and
-the tab refreshing itself every 5 seconds (even before voting opens):
+**Layout** (redesigned 2026-10-09). At the top, choose the **Election (School /
+House)** and the **Branch (Dwarka / AN)** — only that election's codes are shown.
+Then one of three steps:
+
+| Step | What's on it |
+| --- | --- |
+| **1. Before the election** | Upload Teacher List · Send Codes (with "120 of 160 sent") · Print Code List · "Starting a new election?" (Reset Colours to White, Remove All Codes) · the code list |
+| **2. Election day** | The End of Voting checklist · every booth with its one next step: **Close Booth → Verify & Seal → Done**, and **Re-poll** beside it |
+| **More** | Make blank codes by hand · Clear Code Lockouts |
+
+The tab opens on **Election day** while that election is running, otherwise on
+step 1, and refreshes itself every 5 seconds. On a phone each row becomes a card.
+
+**Duty colours** — every code is coloured. The colour counts above each list are
+buttons: tap one (e.g. "Sent, not ready 12") to see just those codes.
 
 | Colour | Meaning |
 | --- | --- |
 | ⚪ White | Fresh duty — not sent yet |
 | 🟡 Yellow | Sent on WhatsApp — teacher hasn't entered it yet |
-| 🟢 Green | **Ready** — teacher entered the code on a kiosk ("Ready since 8:42") |
+| 🟢 Green | **Ready** — teacher entered the code on a kiosk |
 | 🔴 Red | **Polling closed** — waiting for the Paper List check (also every code after End of Voting) |
 | ⚪ 🔒 | **Sealed** — verified against the Paper List; final |
 | Grey | Re-polled — replaced by a fresh code, can never be used again |
 
-**Before the election**
-- **🔄 Start Allotting Duties for a Fresh Election**: pick School or House; every
-  existing code of that election, in both branches, turns white (usable, not
+**1. Before the election**
+- **Upload Teacher List**: an Excel list — name, WhatsApp number, School duty,
+  House duty — creates a named code for every duty in one go, saving each
+  teacher's number with their code. One list per branch.
+- **Send Codes**: sends from the saved list any time (e.g. the evening before).
+  **Send Next** opens the WhatsApp app on the computer with the next teacher's
+  message ready — press Enter in WhatsApp, come back, click again. One message per
+  teacher carries both their School and House codes. Each is ticked as sent (with
+  Undo), so sending resumes where it stopped, even the next day. A switch falls
+  back to WhatsApp Web (reusing one browser tab). Teachers with no valid number
+  are listed separately with a box to add one. The message wording can be edited.
+- **Print Dwarka/AN Code List**: a printable "who has which code" roster per
+  branch (re-polled codes are left off).
+- **Reset Colours to White** (was "Start Allotting Duties for a Fresh Election"):
+  every code of the chosen election, in both branches, turns white (usable, not
   sent, not ready, not sealed). Re-polled codes stay dead. Not allowed while that
   election is running. If forgotten, Start the Voting Process turns any leftover
   red codes white automatically (keeping that morning's green check-ins).
-- **📋 Bulk Allot from List**: upload a teacher list (Excel) — name, WhatsApp
-  number, School duty, House duty — and a named code is created for every duty in
-  one go; each teacher's number is saved with their code.
-- **Generate codes**: for House (the same number for all 8 houses, or top up one
-  house) or for School posts, into the selected branch. Each is a random
-  6-character lowercase code (confusable characters `i`, `l`, `o`, `0`, `1`
-  excluded; matching ignores capitals). **Generating always adds to the existing
-  list — it never replaces or clears previously generated codes.**
-- **Name a code**: a code cannot unlock a ballot until an officer's name is saved
-  against it.
-- **📲 Send Codes on WhatsApp**: sends from the saved list any time (e.g. the
-  evening before). **Send Next** opens the WhatsApp app on the computer with the
-  next teacher's message ready — press Enter in WhatsApp, come back, click again.
-  One message per teacher carries both their School and House codes. Each is
-  ticked as sent (with Undo), so sending resumes where it stopped, even the next
-  day. A switch falls back to WhatsApp Web (reusing one browser tab). Teachers
-  with no valid number are listed separately with a box to add one. The message
-  wording can be edited.
-- **🖨️ Print Dwarka/AN Code List**: a printable "who has which code" roster per
-  branch (re-polled codes are left off).
+- **Remove All Codes**: deletes **every** code of the chosen election, Dwarka and
+  AN together, after typing CONFIRM — a completely clean list before uploading a
+  new teacher list. Not allowed while that election is running. Past elections in
+  Election History are not affected.
+- **The code list**: code, teacher, WhatsApp number (last 4 digits), colour, and
+  **Edit** / **Delete** on each row. A name is changed with **Edit** (type, Save),
+  any time — even during the election. A code cannot unlock a ballot until an
+  officer's name is saved against it.
 
-**During the election**
-- **Live "Votes Cast" column** — only votes that count (a re-polled booth shows
-  0, with "N cancelled" under it).
-- **Close / Reopen** a booth directly from this tab (same effect as the officer's
-  own "Close polling at this booth"). A sealed or re-polled booth can't be reopened.
-- **🔒 Verify & Seal** (on each closed booth): the Chief Election Commissioner
-  types the number of voters on the printed **Paper List**. If it matches the
-  app's count for that booth, the booth is sealed for good (white, 🔒 Sealed,
-  "Paper List 38 · App 38") and can't be reopened, re-polled or deleted. If not,
-  sealing stays locked and the screen offers **Order Re-poll** instead. The server
-  re-checks the count at the moment of sealing. A booth that cast no votes is
-  sealed too, with a Paper List of 0. An unallotted (unnamed) code can't be
-  sealed — it is deleted instead.
+**2. Election day**
+- **The checklist** at the top: how many booths are still polling, how many are
+  closed and waiting for Verify & Seal, and unused codes to delete — Dwarka and
+  AN together — with a progress bar. Green once End of Voting can be pressed.
+- **Close Booth / Reopen** directly from here (same effect as the officer's own
+  "Close polling at this booth"). A sealed or re-polled booth can't be reopened.
+- **Verify & Seal** (on each closed booth): the Chief Election Commissioner types
+  the number of voters on the printed **Paper List**. If it matches the app's
+  count for that booth, the booth is sealed for good (🔒 Sealed · Paper List 38)
+  and can't be reopened or re-polled. If not, sealing stays locked and the screen
+  offers **Order Re-poll** instead. The server re-checks the count at the moment
+  of sealing. A booth that cast no votes is sealed too, with a Paper List of 0.
+  An unallotted (unnamed) code shows **Delete Unused Code** instead.
 - **Re-poll** a booth (only while its election is running, and not once sealed):
-  the Chief Election Commissioner picks a reason (irregularity, physical
-  disruption, vote-count mismatch, other), adds a note, sees exactly how many votes
-  will be cancelled and types CONFIRM.
-  - Every vote from that booth stops counting everywhere — results, totals,
-    turnout, saved reports — but is kept on record, never deleted.
-  - The old code is dead for good (can't be reopened, deleted or used to vote; a
-    ballot already open there is refused on Submit).
+  the window names the **branch, booth, house and teacher**, and lists exactly
+  what will be taken off each candidate (e.g. *"House Captain: Asha −30, Ravi
+  −12"*). The Chief Election Commissioner picks a reason (irregularity, physical
+  disruption, vote-count mismatch, other), adds a note and types CONFIRM.
+  - Every vote from that booth is taken off every candidate's count, everywhere —
+    results, totals, turnout, saved reports — but kept on record, never deleted.
+    The per-candidate breakdown is saved with the re-poll for the Election Record.
+  - The new code's votes are counted normally.
+  - The old code is dead for good (can't be reopened or used to vote; a ballot
+    already open there is refused on Submit).
   - A **fresh code** is issued with the same details (School/House, branch,
     house), to the same teacher (keeping their WhatsApp number) or a different
-    one. It starts white, and is sent from 📲 Send Codes like any other.
+    one. It starts white, and is sent from Send Codes like any other.
+  - The "Re-poll ordered" message names its branch and shows only on that
+    branch's tab.
   - Everyone who voted at that booth must vote again — votes are secret, so the
     app can't tell who they were.
-- **🖨️ Print Officer Turnout**: code, officer name and votes cast, while an
-  election is under way.
 
-**After the election**
-- Codes carry forward from one election to the next. At End of Voting every code
-  turns red; they become usable again with 🔄 Start Allotting Duties for a Fresh
-  Election, or automatically when the next election of that type is started.
-- **Delete a code**: allowed only if no vote has been cast under it, and never for
-  a sealed code or either side of a re-poll; otherwise close it instead.
+**More**
+- **Make blank codes by hand**: for one house, all 8 houses (the same number
+  each), or School — into the selected branch. Not normally needed, since
+  uploading the teacher list makes and names codes in one go. Each is a random
+  6-character lowercase code (confusable characters `i`, `l`, `o`, `0`, `1`
+  excluded; matching ignores capitals). Making codes always adds to the list.
+- **Clear Code Lockouts**: unblocks every device locked out for wrong codes.
+
+**Deleting codes** (rule changed 2026-10-09)
+- **While that election is running**, a code that has votes, a seal, or is part
+  of a re-poll can't be deleted — close it instead. An unused code can be.
+- **Before the election, or after End of Voting**, any code can be deleted,
+  including used, sealed and re-poll codes — End of Voting has already saved the
+  full record of every booth. Deleting a re-polled code also removes its cancelled
+  votes (they never counted; the saved record keeps how many there were).
+- Codes otherwise carry forward from one election to the next: at End of Voting
+  every code turns red, and becomes usable again with Reset Colours to White, or
+  automatically when the next election of that type is started.
 - Because each code is tied to one officer/station, votes can be traced back to a
   station for auditing without ever recording which voter cast which ballot.
 
@@ -274,12 +305,8 @@ the tab refreshing itself every 5 seconds (even before voting opens):
   most recently finished election once voting has ended. "Print / Save as PDF"
   uses the browser's own print dialog.
 - **Saved automatically at End of Voting**, under the election's own name: a full
-  snapshot of results **and** officer turnout. The turnout table notes each booth
-  "Verified against the Paper List (38) and sealed", and each re-polled booth
-  "Re-polled: N votes cancelled, reason, new code" (its new code is marked
-  "Re-poll of …").
-- Re-polled votes are kept until the next election of the same type is started;
-  after that, their counts and reasons survive only in the saved report.
+  snapshot of results **and** every booth (teacher, votes, Paper List, house,
+  re-polls with what each took off each candidate).
 - **📋 Save to Election History**: an optional mid-election checkpoint, without
   affecting any votes.
 - **Election History** tab lists every saved election (name, date, type, total
@@ -287,17 +314,42 @@ the tab refreshing itself every 5 seconds (even before voting opens):
   AN** for each — with an "Include polling officer turnout" tick box.
 - The Delete button is intentionally hidden; removing a test entry needs a developer.
 
+### Election Record (added 2026-10-09)
+One election's whole story on one printable page — **📜 Election Record** next to
+each election in Election History (only elections ended with End of Voting), and
+**📜 Election Record (not final yet)** for the one running now. View it for
+**Both branches**, **Dwarka** or **AN**.
+1. **Summary** — when it started and ended and who did it, votes counted (and
+   per branch), booths used and sealed, number of teachers, re-polls and how
+   many votes they cancelled.
+2. **Results** — the winner of every post (ties shown as ties), then every
+   candidate's count. Always one branch at a time: each branch elects its own.
+3. **Booth by booth** — code, teacher, votes counted, Paper List number, status
+   (Sealed / Closed / Re-polled), grouped by house for House Elections; each
+   re-poll's reason and what it took off each candidate, with its new code right
+   below it. (This replaces the old "Print Officer Turnout".)
+4. **What happened** — the Activity Log in plain sentences, in time order. Routine
+   per-teacher steps (allotting, sending, logins) are counted in one line, with
+   **Show every step** to list them.
+
+Older elections open too, but without booth houses or per-candidate re-poll
+breakdowns, which weren't saved before 2026-10-09.
+
 ### Activity Log
 - A permanent record of every admin action taken between Start the Voting Process
-  and End of Voting (code generation, naming, phone numbers, WhatsApp sent marks,
-  closing, reopening, deletion, **Verify & Seal** with both counts, **re-polls**
-  with reason and new code, fresh duties; pause and re-start; saves to history;
-  admin logins, **requests for control, approvals, refusals, expiries** and
-  takeovers), plus officers closing their own booths. Nothing in it can be edited
-  or deleted. Takeovers and refused requests are highlighted.
+  and End of Voting (code making, naming, phone numbers, WhatsApp sent marks,
+  closing, reopening, deletion, removing all codes, **Verify & Seal** with both
+  counts, **re-polls** with reason, breakdown and new code, colour resets; pause
+  and re-start; saves to history; admin logins, **requests for control,
+  approvals, refusals, expiries** and takeovers), plus officers closing their own
+  booths. Nothing in it can be edited or deleted. Takeovers and refused requests
+  are highlighted.
+- Every entry reads as a plain sentence, e.g. *"Rajeev verified booth ab12 (Mrs.
+  Sharma) against the Paper List and sealed it: Paper List 38, app 38."*
 - Click an election's name to see its log, or search by election, type, branch,
   code, actor or action. **👥 Who were the polling officers?** and **Admin actions
   only** are one-click filters.
+- Nothing is recorded between elections (e.g. codes deleted before Start).
 
 ---
 
@@ -378,7 +430,8 @@ the device currently holding the admin console.
 - `GET /api/election-runs` — every election, newest first
 - `POST /api/election-runs/start` — Start the Voting Process
 - `POST /api/election-runs/close` — End of Voting
-- `GET /api/election-runs/:id/log` — one election's Activity Log
+- `GET /api/election-runs/:id/record` — the Election Record: the election, its
+  results and booths (live while running), and its log (optional `branch`)
 - `GET /api/election-runs/log/search` — search the Activity Log
 
 #### Poll
@@ -414,16 +467,22 @@ the device currently holding the admin console.
 - `PUT /api/officer-codes/:code` — set an officer's name and/or WhatsApp number
 - `POST /api/officer-codes/mark-sent` — tick (or with `sent: false`, undo) codes
   as sent on WhatsApp
-- `POST /api/officer-codes/fresh-duties` — Start Allotting Duties for a Fresh
-  Election (`electionType`); refused while that election is running
+- `POST /api/officer-codes/fresh-duties` — Reset Colours to White
+  (`electionType`); refused while that election is running
+- `POST /api/officer-codes/remove-all` — Remove All Codes of one election, both
+  branches (`electionType`); refused while that election is running
+- `GET /api/officer-codes/:code/vote-breakdown` — what a booth's votes gave each
+  candidate (shown before a re-poll is confirmed)
 - `POST /api/officer-codes/:code/close` / `reopen` — reopen refused for a sealed
   or re-polled code
 - `POST /api/officer-codes/:code/seal` — Verify & Seal (`paperListCount`);
   refused unless the booth is closed and the count matches
 - `POST /api/officer-codes/:code/repoll` — Order Re-poll (`reason`, `note`,
-  optional `officerName`/`phone` for a different teacher); returns the fresh code
-- `DELETE /api/officer-codes/:code` — only if no votes were cast under it, and
-  not for a sealed code or either side of a re-poll
+  optional `officerName`/`phone` for a different teacher); saves the per-candidate
+  breakdown and returns the fresh code
+- `DELETE /api/officer-codes/:code` — while that election is running, only if no
+  votes were cast under it and it isn't sealed or part of a re-poll; otherwise
+  always (a re-polled code's cancelled votes are removed with it)
 
 #### Reports (all admin; optional `?branch=dwarka|AN`)
 - `GET /api/report/current` — live snapshot, or the last finished election
@@ -476,5 +535,6 @@ Found in the 2026-09-23 walkthrough; fixes pending. See ROLLOUT-CHECKLIST.md
 
 ---
 
-*Last updated: 2026-10-01, reflecting `main` — adds WhatsApp sending, Ask for
-Control, re-polling, duty colours, and Verify & Seal.*
+*Last updated: 2026-10-09 — adds the Election Record, plain-sentence Activity
+Log, re-poll breakdowns, Remove All Codes, deleting codes between elections, and
+the redesigned Polling Officer Codes tab.*

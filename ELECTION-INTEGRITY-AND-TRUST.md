@@ -26,6 +26,14 @@ the Status line on existing ones as they get designed and built.
   and "Start Allotting Duties for a Fresh Election". A review the same day fixed
   a gap that would have undermined item 4: a ballot opened before a booth was
   sealed could still be recorded after sealing — now refused.
+- 2026-10-09: from the trial feedback. **Item 3** — codes can now be deleted
+  between elections (protections apply only while their election runs), plus
+  Remove All Codes; deleting a re-polled code also removes its set-aside votes
+  so they can never start counting again. **Item 5** — the Activity Log reads in
+  plain sentences, and the new **Election Record** gives one election's whole
+  story on one page. **Item 13** — a re-poll's effect on each candidate is shown
+  before it's confirmed and saved with it; the "Re-poll ordered" message is now
+  tied to its branch.
 
 ## Why this document exists
 
@@ -351,6 +359,39 @@ when it was used, and more codes are permanent.**
   carry over, but a leftover code from a finished election can't vote until
   someone deliberately starts fresh duties.
 
+**Addendum (2026-10-09): codes can be cleared between elections.** Found in
+the trial: there was no way to start an election with a clean list. A used
+code could never be deleted, and because End of Voting deliberately leaves the
+last election's votes in place (until the next Start), every code used last
+time stayed "used" — the only way out was to run a dummy election first. Re-poll
+codes could never be removed at all, not even years later.
+- **The rule now protects only the election that is running.** While a code's
+  election is running, deletion is refused exactly as before (votes, a seal, or
+  either side of a re-poll). Before that election starts, or after End of
+  Voting, any code can be deleted. **Remove All Codes** deletes every code of
+  one election type, both branches together (both branches hold their
+  elections together this year), after typing CONFIRM; refused while that
+  election is running. "Fresh duties" was renamed **Reset Colours to White**.
+- **Why this doesn't weaken the evidence:** the protections exist so a code
+  can't vanish while its booth's count still matters. By the time End of
+  Voting has been pressed, every booth was either deleted or closed and sealed
+  against its Paper List (item 4), and the full record of every booth — votes,
+  Paper List, seal, re-poll reason and breakdown — is already saved in the
+  archive and shown in the Election Record (item 5 addendum). Deleting the
+  live code afterwards removes clutter, not evidence.
+- **Re-polled votes go with their code.** A re-polled code's set-aside votes
+  are kept out of every count only because that code marks them as cancelled.
+  If the code were deleted and its votes left behind, they would quietly start
+  counting again — so deleting a re-polled code also deletes those votes. They
+  never counted, and the archive keeps how many there were and what they gave
+  each candidate. Covered by a storage test.
+- **Named honestly:** nothing is logged between elections (item 11), so
+  deletions made before Start or after End of Voting leave no Activity Log
+  entry. The protection for a finished election is its archive and Election
+  Record, not the log. An archive can still be deleted by a developer (the
+  button is hidden), so item 8's independent backup remains the real safeguard
+  against that.
+
 ---
 
 ## 4. Electronic count must be reconciled against a signed physical count
@@ -551,6 +592,23 @@ count, new code and its officer); `officerCode.freshDuties`;
 refused requests are highlighted in the Activity Log tab. As before, nothing is
 logged outside an election in progress — so, for example, fresh duties pressed
 between elections leave no log entry.
+
+**Addendum (2026-10-09): a log people can read, and a record of the whole
+election.** The Election Commissioner found the log "not even understandable" —
+entries read like `officerCode.markSent code="ab12"` — and that there was no
+summary or whole picture of an election anywhere. Two changes, both reading
+from the same permanent data (nothing new is stored, nothing can be edited):
+- **Plain sentences.** Every log entry is now shown as a sentence, e.g.
+  *"Rajeev verified booth ab12 (Mrs. Sharma) against the Paper List and sealed
+  it: Paper List 38, app 38."* The stored action name is kept underneath (as a
+  tooltip, and for search).
+- **The Election Record** (`GET /election-runs/:id/record`; Election History →
+  📜 Election Record): one printable page per election — a summary (who
+  started and ended it, when, votes per branch, booths sealed, re-polls), the
+  results branch by branch, every booth with its Paper List, seal and re-poll
+  details, and the whole log in time order. Routine per-teacher steps are
+  counted rather than listed (one click lists them). For a running election
+  it's marked "not final yet". New action logged: `officerCode.removeAll`.
 
 ---
 
@@ -1122,25 +1180,32 @@ way to change the result.
   per-booth counts, End of Voting's saved report — reads only the votes that still
   count (`dataStore.getCountedVotes`). The set-aside votes stay stored until the
   next election of that type is started (which clears all of that type's votes,
-  as before); their count and reason survive permanently in the saved report.
+  as before) or, once the election has ended, the re-polled code is deleted
+  (item 3, 2026-10-09 addendum); their count, reason and per-candidate breakdown
+  survive permanently in the saved report.
 - **Deliberate, with a stated reason.** A reason must be chosen (irregularity,
   physical disruption, vote-count mismatch, other — a note is required for
   "other"), the exact number of votes to be cancelled is shown, and the word
-  CONFIRM must be typed.
+  CONFIRM must be typed. Since 2026-10-09 the window also names the **branch**,
+  booth, house and teacher, and lists exactly what will be taken off each
+  candidate.
 - **Only while it can matter.** Only while that booth's election is running, and
   never on a booth already sealed (item 4) — a sealed booth is final.
 - **The old code is dead for good.** It can't activate a ballot (the officer is
   told a re-poll was ordered), a ballot already open there is refused on Submit,
-  and it can't be reopened or deleted — not even in a later election.
+  and it can't be reopened, or deleted while its election runs. (Until
+  2026-10-09 it could never be deleted, even years later; see item 3.)
 - **A fresh code, with the same details** (election type, branch, house), to the
   same teacher (keeping their WhatsApp number) or a different one. It goes
   through the normal duty colours and must itself be verified and sealed before
   End of Voting.
-- **On the record, three times over:** the Activity Log (`officerCode.repoll` —
-  reason, note, cancelled count, new code and its officer), the Officer Codes tab
-  ("RE-POLLED → new code", "N cancelled"), and the saved Election History report
-  ("Re-polled: N votes cancelled. Reason: … New code: …"; the new code's row
-  marked "Re-poll of …").
+- **On the record, four times over:** the Activity Log (`officerCode.repoll` —
+  reason, note, cancelled count, per-candidate breakdown, house, new code and its
+  officer), the Officer Codes tab ("Re-polled → new code", "N votes cancelled"),
+  the saved Election History report, and the Election Record (the booth, its
+  reason, what it took off each candidate, and the new code right below it).
+  Live Results also carries a note while the election runs ("Includes 1
+  re-poll: N votes cancelled at … booth …").
 
 **What this does and doesn't guarantee:** it does not stop the Election
 Commissioner from ordering a re-poll for a bad reason — one superadmin still
@@ -1158,6 +1223,20 @@ again, managed physically by the teacher with the Paper List.
 **Status:** **Implemented (2026-10-01).** Covered by automated tests (backend
 routes, storage and results; the re-poll screen); not yet checked end to end in
 a real browser — see TESTING-DEMO-SCRIPT.md Part 2.
+
+**Addendum (2026-10-09): making the effect visible, and the trial's
+"both branches" report.** The counts were already corrected the moment a
+re-poll was ordered, but nothing showed it, so it looked as if it hadn't
+happened. Now the breakdown is shown beforehand, frozen into the re-poll
+record (`cancelledByCandidate`) and the archive, and a new end-to-end test
+runs a whole re-poll and checks each candidate's count drops by exactly the
+booth's votes and the new code's votes are added. In the trial a re-poll
+ordered in Dwarka appeared to apply in AN too. No path was found in the
+program for a re-poll to cross branches — every step acts on the one code
+chosen and copies that code's own branch — but the "Re-poll ordered" message
+stayed on screen when switching to the AN tab. It now names its branch and
+shows only on that branch's tab. (Reading the live Activity Log to confirm
+what happened in the trial is still pending.)
 
 ---
 

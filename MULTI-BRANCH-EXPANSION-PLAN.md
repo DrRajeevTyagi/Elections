@@ -34,6 +34,8 @@ document is superseded by it.
   Dwarka** and **View/Print AN**. The printable code list uses each branch's own
   letterhead; the results report says "Mount Carmel School — AN" / "— Dwarka";
   the officer turnout page still says only "Mount Carmel School" (see Open items).
+  The Election Record (2026-10-09) prints "Mount Carmel School, Dwarka" /
+  "Mount Carmel School, Anand Niketan" / "— Dwarka and AN".
 - **Features added 2026-10-01 all respect the branch:** Send Codes on WhatsApp
   works on the selected branch's codes and names the branch in each message;
   Start Allotting Duties for a Fresh Election resets one election type in
@@ -41,6 +43,18 @@ document is superseded by it.
   keeps the old code's branch and house; Verify & Seal is per booth, and End of
   Voting waits for every code **in both branches** to be deleted or sealed; the
   duty-colour summary counts the selected branch.
+- **Added 2026-10-09, also branch-aware:** the redesigned Polling Officer Codes
+  tab shows one election type and one branch at a time (its End of Voting
+  checklist still counts both branches together); **Remove All Codes** clears
+  one election type in **both** branches at once (both hold their elections
+  together this year — to be revisited after this year's election if branches
+  ever vote separately); the Order Re-poll window and the "Re-poll ordered"
+  message name the branch, and the message shows only on that branch's tab
+  (in the trial it stayed on screen after switching branch, which looked like a
+  re-poll in both); Live Results' re-poll note lists only the selected branch's
+  re-polls; the **Election Record** can be viewed for Dwarka, AN or both, and
+  in the both-branches view shows each branch's results separately (each
+  elects its own winners) — never one combined list.
 - **A real bug shipped and was fixed in this rollout:** the first backend
   branch-wiring pass missed the actual ballot (`GET /posts`) and vote
   validation, so an AN ballot could show and accept Dwarka candidates. Caught
@@ -133,6 +147,8 @@ As always, each phase gets typechecked/tested/built on both frontend and backend
   prints "Mount Carmel School — AN" / "— Dwarka", but not the full "Mount Carmel
   School, Anand Niketan" letterhead; TurnoutReportPage.tsx (the live "Print
   Officer Turnout" page) still prints only "Mount Carmel School". Both should
-  use the same `BRANCH_LETTERHEAD` wording as the code list.
+  use the same `BRANCH_LETTERHEAD` wording as the code list. (Since 2026-10-09
+  the Print Officer Turnout button is gone — the Election Record covers it —
+  so only ReportPage.tsx is still reachable from a button.)
 - Open Poll's candidate-coverage gate and per-branch archiving (see Progress
   above) — decide whether to make them branch-aware now that AN has real data.
