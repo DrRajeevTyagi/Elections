@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useKiosk } from '../context/KioskContext';
 import { CandidatePhoto } from '../components/CandidatePhoto';
 import { POST_NAMES } from '../constants/posts';
-import { playVoteBeep } from '../utils/beep';
+import { playSelectTick, playVoteBeep } from '../utils/beep';
 import type { PostCandidateGroup, PostId } from '../types/election';
 import './Page.css';
 import './Evm.css';
@@ -54,6 +54,7 @@ export const VotePage = (): JSX.Element => {
   const allSelected = useMemo(() => posts.every((group) => Boolean(selections[group.post])), [posts, selections]);
 
   const handleSelect = (post: PostId, candidateId: string) => {
+    playSelectTick();
     if (editingFromReview) {
       // Buffered only -- not written to `selections` until the voter
       // confirms with "Back to Review", so "Cancel" can discard it.
