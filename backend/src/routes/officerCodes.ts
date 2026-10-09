@@ -197,6 +197,28 @@ officerCodesRouter.post(
   })
 );
 
+// "Remove All Codes" (Officer Codes tab): deletes every code of one
+// election type, Dwarka and AN together (both branches hold their elections
+// together this year), so a new election starts from an empty list. Same
+// rule as deleting one code: refused only while that election is running.
+officerCodesRouter.post(
+  '/remove-all',
+  asyncHandler(async (req, res) => {
+    const { electionType } = req.body as { electionType?: unknown };
+    if (electionType !== 'school' && electionType !== 'house') {
+      throw new BadRequestError('Choose School or House elections');
+    }
+    if (dataStore.getCurrentRun()?.electionType === electionType) {
+      throw new ConflictError(
+        `${electionType === 'house' ? 'House' : 'School'} Elections are running right now. Codes can be removed only before an election, or after End of Voting.`
+      );
+    }
+    const count = dataStore.removeOfficerCodesByType(electionType);
+    await logAction(req.header('x-admin-client-id'), 'officerCode.removeAll', { electionType, count });
+    res.json({ count });
+  })
+);
+
 // Send Codes screen -- marks the codes in one WhatsApp message as sent (or,
 // with `sent: false`, undoes that). Takes a list because a teacher's School
 // and House codes go out together in a single message.
@@ -475,6 +497,22 @@ officerCodesRouter.delete(
     // differently-cased path param) so this always matches the exact string
     // stored on votes -- see kiosk.ts activate, which records votes under
     // officerCode.code, not whatever case the voter/officer typed.
+    //
+    // All of this protects only the election that is running right now
+    // (decided 2026-10-09). Once that election has ended -- or before the
+    // next one starts -- every code can be deleted, so each election can
+    // start from a clean list: End of Voting has already saved the full
+    // record of every booth (votes, seal, re-poll) in the archive. Votes
+    // from the last election are left in place until the next Start, on
+    // purpose (see runService.ts closeRecording), so without this a used
+    // code could never be deleted between elections.
+    const run = dataStore.getCurrentRun();
+    if (run?.electionType !== entry.electionType) {
+      dataStore.deleteOfficerCode(entry.code);
+      await logAction(req.header('x-admin-client-id'), 'officerCode.delete', { code: entry.code }, entry.branch);
+      res.status(204).send();
+      return;
+    }
     // Both sides of a re-poll are part of the permanent record of it.
     if (entry.repoll || entry.replacesCode) {
       throw new ConflictError(`Code ${entry.code} is part of a re-poll record and cannot be deleted.`);

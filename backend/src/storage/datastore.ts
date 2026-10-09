@@ -941,8 +941,37 @@ export class DataStore {
   }
 
   deleteOfficerCode(code: string): void {
-    this.data.officerCodes = this.data.officerCodes.filter((entry) => !codesMatch(entry.code, code));
+    this.removeOfficerCodes((entry) => codesMatch(entry.code, code));
+  }
+
+  // "Remove All Codes" (Officer Codes tab): every code of one election
+  // type, both branches. Returns how many were removed.
+  removeOfficerCodesByType(electionType: ElectionType): number {
+    return this.removeOfficerCodes((entry) => entry.electionType === electionType);
+  }
+
+  // A re-polled code's votes are kept only because the code itself marks
+  // them as set aside (see getCountedVotes) -- once the code is gone they
+  // would quietly start counting again, so they go with it. They never
+  // counted, and the archive saved at End of Voting already records how
+  // many there were. Every other code's votes are left alone.
+  private removeOfficerCodes(matches: (entry: OfficerCode) => boolean): number {
+    const removed = this.data.officerCodes.filter(matches);
+    if (removed.length === 0) {
+      return 0;
+    }
+    const setAside = new Set(removed.filter((entry) => entry.repoll).map((entry) => entry.code.toLowerCase()));
+    if (setAside.size > 0) {
+      const isSetAside = (vote: StoredVote) => Boolean(vote.officerCode && setAside.has(vote.officerCode.toLowerCase()));
+      const removedIds = this.votes.filter(isSetAside).map((vote) => vote.id);
+      this.votes = this.votes.filter((vote) => !isSetAside(vote));
+      if (removedIds.length > 0) {
+        this.queueVoteDeletion(removedIds);
+      }
+    }
+    this.data.officerCodes = this.data.officerCodes.filter((entry) => !matches(entry));
     this.queuePersist();
+    return removed.length;
   }
 
   getArchives(): ElectionArchive[] {

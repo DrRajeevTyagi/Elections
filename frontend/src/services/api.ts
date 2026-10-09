@@ -402,6 +402,16 @@ export const startFreshDuties = async (electionType: ElectionType, adminSecret: 
   return response.data.count;
 };
 
+// "Remove All Codes" -- every code of one election, Dwarka and AN together.
+export const removeAllOfficerCodes = async (electionType: ElectionType, adminSecret: string): Promise<number> => {
+  const response = await api.post<{ count: number }>(
+    '/officer-codes/remove-all',
+    { electionType },
+    { headers: { 'x-admin-secret': adminSecret } }
+  );
+  return response.data.count;
+};
+
 // Send Codes screen -- `sent: false` is "Undo".
 export const markOfficerCodesSent = async (codes: string[], sent: boolean, adminSecret: string): Promise<void> => {
   await api.post(

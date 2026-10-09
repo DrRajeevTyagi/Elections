@@ -27,6 +27,7 @@ const mockedDataStore = {
   findOfficerCode: vi.fn<[string], OfficerCode | undefined>(),
   countVotesByOfficerCode: vi.fn<[string], number>(),
   deleteOfficerCode: vi.fn(),
+  removeOfficerCodesByType: vi.fn<[string], number>(() => 0),
   updateOfficerCode: vi.fn<unknown[], OfficerCode | undefined>(),
   markOfficerCodesSent: vi.fn<unknown[], OfficerCode[]>(() => []),
   orderRepoll: vi.fn<unknown[], { original: OfficerCode; replacement: OfficerCode } | undefined>(),
@@ -61,10 +62,44 @@ const runningSchoolRun: ElectionRun = {
 };
 
 describe('DELETE /api/officer-codes/:code', () => {
+  // The vote/seal/re-poll protections apply only while the code's own
+  // election is running -- so these tests run with School running.
   beforeEach(() => {
     vi.clearAllMocks();
     mockedDataStore.countVotesByOfficerCode.mockReturnValue(0);
+    mockedDataStore.getCurrentRun.mockReturnValue(runningSchoolRun);
+  });
+
+  // Decided 2026-10-09: between elections every code can be deleted, so a
+  // new election can start from a clean list (End of Voting has already
+  // archived the full record of every booth).
+  it('allows deleting a used, sealed or re-polled code when its election is not running', async () => {
     mockedDataStore.getCurrentRun.mockReturnValue(undefined);
+    mockedDataStore.countVotesByOfficerCode.mockReturnValue(12);
+    const { createApp } = await import('../app.js');
+    const sealed = { sealedAt: 1, sealedBy: 'x', paperListCount: 12, appCount: 12 };
+    const repoll = { orderedAt: 1, orderedBy: 'x', reason: 'disruption' as const, note: '', cancelledVoteCount: 12, replacementCode: 'new999' };
+    for (const entry of [
+      { ...baseCode, officerName: 'Jane' },
+      { ...baseCode, officerName: 'Jane', seal: sealed },
+      { ...baseCode, officerName: 'Jane', repoll },
+      { ...baseCode, officerName: 'Jane', replacesCode: 'old111' }
+    ]) {
+      mockedDataStore.findOfficerCode.mockReturnValueOnce(entry);
+      const response = await request(createApp()).delete('/api/officer-codes/ABC123');
+      expect(response.status).toBe(204);
+    }
+    expect(mockedDataStore.deleteOfficerCode).toHaveBeenCalledTimes(4);
+  });
+
+  it('allows deleting a used School code while House elections are running', async () => {
+    mockedDataStore.getCurrentRun.mockReturnValue({ ...runningSchoolRun, electionType: 'house' });
+    mockedDataStore.findOfficerCode.mockReturnValue({ ...baseCode, officerName: 'Jane' });
+    mockedDataStore.countVotesByOfficerCode.mockReturnValue(5);
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).delete('/api/officer-codes/ABC123');
+    expect(response.status).toBe(204);
+    expect(mockedDataStore.deleteOfficerCode).toHaveBeenCalledWith('ABC123');
   });
 
   it('refuses to delete a code that has already cast votes', async () => {
@@ -494,7 +529,7 @@ describe('POST /api/officer-codes/:code/repoll', () => {
     expect(mockedDataStore.orderRepoll).not.toHaveBeenCalled();
   });
 
-  it('a re-polled code can never be reopened or deleted', async () => {
+  it('a re-polled code can never be reopened, nor deleted while its election runs', async () => {
     mockedDataStore.findOfficerCode.mockReturnValue(repollResult().original);
     const { createApp } = await import('../app.js');
     const reopen = await request(createApp()).post('/api/officer-codes/ABC123/reopen');
@@ -592,7 +627,7 @@ describe('POST /api/officer-codes/:code/seal', () => {
     expect(fraction.status).toBe(400);
   });
 
-  it('a sealed booth can no longer be reopened, re-polled or deleted', async () => {
+  it('a sealed booth can no longer be reopened, re-polled, or deleted while its election runs', async () => {
     mockedDataStore.findOfficerCode.mockReturnValue({ ...closedBooth, seal: { sealedAt: 1, sealedBy: 'x', paperListCount: 38, appCount: 38 } });
     const { createApp } = await import('../app.js');
     const reopen = await request(createApp()).post('/api/officer-codes/ABC123/reopen');
@@ -641,6 +676,45 @@ describe('POST /api/officer-codes/fresh-duties', () => {
     const { createApp } = await import('../app.js');
     const response = await request(createApp()).post('/api/officer-codes/fresh-duties').send({});
     expect(response.status).toBe(400);
+  });
+});
+
+describe('POST /api/officer-codes/remove-all', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDataStore.getCurrentRun.mockReturnValue(undefined);
+  });
+
+  it('removes every code of that election, both branches, and reports how many', async () => {
+    mockedDataStore.removeOfficerCodesByType.mockReturnValue(160);
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/remove-all').send({ electionType: 'house' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.count).toBe(160);
+    expect(mockedDataStore.removeOfficerCodesByType).toHaveBeenCalledWith('house');
+  });
+
+  it('is refused while that same election is running', async () => {
+    mockedDataStore.getCurrentRun.mockReturnValue(runningSchoolRun);
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/remove-all').send({ electionType: 'school' });
+
+    expect(response.status).toBe(409);
+    expect(mockedDataStore.removeOfficerCodesByType).not.toHaveBeenCalled();
+  });
+
+  it('is allowed for House while School is running', async () => {
+    mockedDataStore.getCurrentRun.mockReturnValue(runningSchoolRun);
+    const { createApp } = await import('../app.js');
+    await request(createApp()).post('/api/officer-codes/remove-all').send({ electionType: 'house' }).expect(200);
+  });
+
+  it('needs an election type', async () => {
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/officer-codes/remove-all').send({});
+    expect(response.status).toBe(400);
+    expect(mockedDataStore.removeOfficerCodesByType).not.toHaveBeenCalled();
   });
 });
 

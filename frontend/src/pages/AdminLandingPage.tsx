@@ -26,7 +26,8 @@ import {
   getRuns,
   searchRunLog,
   closeRecording,
-  startFreshDuties
+  startFreshDuties,
+  removeAllOfficerCodes
 } from '../services/api';
 import type {
   PollStatus,
@@ -150,6 +151,10 @@ export const AdminLandingPage = (): JSX.Element => {
   // "Verify & Seal": the closed booth whose Paper List check is open.
   const [sealTarget, setSealTarget] = useState<OfficerCode | null>(null);
   const [showFreshDuties, setShowFreshDuties] = useState(false);
+  // "Remove All Codes" panel: which election, and the typed CONFIRM.
+  const [showRemoveAll, setShowRemoveAll] = useState(false);
+  const [removeAllType, setRemoveAllType] = useState<ElectionType | ''>('');
+  const [removeAllConfirm, setRemoveAllConfirm] = useState('');
   const [officerNameDrafts, setOfficerNameDrafts] = useState<Record<string, string>>({});
   const [archives, setArchives] = useState<ArchiveSummary[]>([]);
   const [archiveNameDrafts, setArchiveNameDrafts] = useState<Record<string, string>>({});
@@ -846,6 +851,31 @@ export const AdminLandingPage = (): JSX.Element => {
       await loadOfficerCodes();
     } catch (freshError) {
       setError(freshError instanceof Error ? freshError.message : 'Failed to start fresh duties');
+    } finally {
+      setOfficerCodesLoading(false);
+    }
+  };
+
+  const closeRemoveAll = () => {
+    setShowRemoveAll(false);
+    setRemoveAllType('');
+    setRemoveAllConfirm('');
+  };
+
+  const handleRemoveAllCodes = async () => {
+    if (!removeAllType || removeAllConfirm.trim() !== 'CONFIRM') {
+      return;
+    }
+    const kind = removeAllType === 'house' ? 'House' : 'School';
+    try {
+      setOfficerCodesLoading(true);
+      setError(null);
+      const count = await removeAllOfficerCodes(removeAllType, adminSecret);
+      setMessage(`Removed ${count} ${kind} Elections code${count === 1 ? '' : 's'} (Dwarka and AN). The list is ready for a new teacher list.`);
+      closeRemoveAll();
+      await loadOfficerCodes();
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : 'Failed to remove the codes');
     } finally {
       setOfficerCodesLoading(false);
     }
@@ -1969,6 +1999,14 @@ export const AdminLandingPage = (): JSX.Element => {
             >
               🔄 Start Allotting Duties for a Fresh Election
             </button>
+            <button
+              className="button"
+              style={{ backgroundColor: '#991b1b' }}
+              onClick={() => (showRemoveAll ? closeRemoveAll() : setShowRemoveAll(true))}
+              title="Delete every code of one election, in both Dwarka and AN, to start from an empty list"
+            >
+              🗑 Remove All Codes
+            </button>
           </div>
         </div>
 
@@ -1995,6 +2033,63 @@ export const AdminLandingPage = (): JSX.Element => {
                 );
               })}
               <button className="button" style={{ backgroundColor: '#6b7280' }} onClick={() => setShowFreshDuties(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showRemoveAll && (
+          <div style={{ padding: '1rem', backgroundColor: '#fef2f2', border: '2px solid #991b1b', borderRadius: '8px', marginBottom: '1rem' }}>
+            <p style={{ margin: '0 0 0.75rem 0' }}>
+              Which election&apos;s codes should be removed? <strong>Every</strong> code of that election, in{' '}
+              <strong>both Dwarka and AN</strong>, is deleted, so you can start again from an empty list. Past
+              elections in Election History are not affected.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+              {(['school', 'house'] as const).map((type) => {
+                const running = currentRun?.status === 'running' && currentRun.electionType === type;
+                return (
+                  <label key={type} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', opacity: running ? 0.5 : 1 }}>
+                    <input
+                      type="radio"
+                      name="remove-all-type"
+                      disabled={running}
+                      checked={removeAllType === type}
+                      onChange={() => setRemoveAllType(type)}
+                    />
+                    {type === 'house' ? 'House Elections' : 'School Elections'}
+                    {running && ' (running now, so not allowed)'}
+                  </label>
+                );
+              })}
+            </div>
+            <label className="form-label" htmlFor="remove-all-confirm" style={{ display: 'block' }}>
+              Type CONFIRM to go ahead
+            </label>
+            <input
+              id="remove-all-confirm"
+              className="form-input"
+              autoComplete="off"
+              value={removeAllConfirm}
+              onChange={(event) => setRemoveAllConfirm(event.target.value)}
+              style={{ maxWidth: '220px' }}
+            />
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+              <button
+                className="button"
+                style={{
+                  backgroundColor: '#991b1b',
+                  opacity: removeAllType && removeAllConfirm.trim() === 'CONFIRM' && !officerCodesLoading ? 1 : 0.5
+                }}
+                disabled={!removeAllType || removeAllConfirm.trim() !== 'CONFIRM' || officerCodesLoading}
+                onClick={() => void handleRemoveAllCodes()}
+              >
+                {removeAllType
+                  ? `Remove All ${officerCodes.filter((entry) => entry.electionType === removeAllType).length} ${removeAllType === 'house' ? 'House' : 'School'} Codes`
+                  : 'Remove All Codes'}
+              </button>
+              <button className="button" style={{ backgroundColor: '#6b7280' }} onClick={closeRemoveAll}>
                 Cancel
               </button>
             </div>
@@ -2042,6 +2137,22 @@ export const AdminLandingPage = (): JSX.Element => {
                       !isRepolled && !isSealed && isClosed && inRunningElection && Boolean(entry.officerName.trim());
                     const duty = dutyStatus(entry);
                     const dutyStyle = DUTY_STYLES[duty];
+                    // Between elections every code can be deleted (the server
+                    // allows it once the code's election isn't running).
+                    const deleteButton = (
+                      <button
+                        className="button"
+                        style={{
+                          backgroundColor: '#dc2626',
+                          opacity: officerCodesLoading ? 0.5 : 1,
+                          marginTop: isRepolled || isSealed ? '0.4rem' : undefined
+                        }}
+                        disabled={officerCodesLoading}
+                        onClick={() => handleDeleteOfficerCode(entry.code)}
+                      >
+                        Delete
+                      </button>
+                    );
                     return (
                       <tr
                         key={entry.code}
@@ -2119,12 +2230,18 @@ export const AdminLandingPage = (): JSX.Element => {
                         </td>
                         <td style={{ padding: '0.5rem' }}>
                           {isRepolled ? (
-                            <span style={{ fontSize: '0.8rem' }}>{REPOLL_REASON_LABELS[entry.repoll!.reason]}</span>
+                            <>
+                              <span style={{ fontSize: '0.8rem', display: 'block' }}>{REPOLL_REASON_LABELS[entry.repoll!.reason]}</span>
+                              {!inRunningElection && deleteButton}
+                            </>
                           ) : isSealed ? (
-                            <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>
-                              Paper List {entry.seal!.paperListCount} &middot; App {entry.seal!.appCount}
-                              <span style={{ display: 'block', fontWeight: 400 }}>sealed {formatTimestamp(entry.seal!.sealedAt)}</span>
-                            </span>
+                            <>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block' }}>
+                                Paper List {entry.seal!.paperListCount} &middot; App {entry.seal!.appCount}
+                                <span style={{ display: 'block', fontWeight: 400 }}>sealed {formatTimestamp(entry.seal!.sealedAt)}</span>
+                              </span>
+                              {!inRunningElection && deleteButton}
+                            </>
                           ) : (
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                             {canSeal && (
@@ -2169,17 +2286,9 @@ export const AdminLandingPage = (): JSX.Element => {
                                 Close
                               </button>
                             )}
-                            {/* A re-poll's new code is part of the permanent re-poll record. */}
-                            {!entry.replacesCode && (
-                              <button
-                                className="button"
-                                style={{ backgroundColor: '#dc2626', opacity: officerCodesLoading ? 0.5 : 1 }}
-                                disabled={officerCodesLoading}
-                                onClick={() => handleDeleteOfficerCode(entry.code)}
-                              >
-                                Delete
-                              </button>
-                            )}
+                            {/* A re-poll's new code is part of the permanent
+                                re-poll record while its election runs. */}
+                            {(!entry.replacesCode || !inRunningElection) && deleteButton}
                           </div>
                           )}
                         </td>

@@ -225,6 +225,58 @@ describe('DataStore -- officer code case-insensitive matching (2026-09-22)', () 
   });
 });
 
+// Decided 2026-10-09: codes can be removed between elections, including
+// re-polled ones -- whose set-aside votes must go with them, or they would
+// start counting again the moment the code that marks them is gone.
+describe('DataStore -- removing officer codes between elections', () => {
+  beforeEach(() => {
+    sharedFakeFirestore = new FakeFirestore();
+  });
+
+  it('deleting a re-polled code removes its set-aside votes, and only those', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    const [old, other] = store.generateOfficerCodes(2, 'school');
+    await store.addVote(sel({ HB: 'hb-1' }), 'school', undefined, old.code);
+    await store.addVote(sel({ HB: 'hb-1' }), 'school', undefined, old.code);
+    await store.addVote(sel({ HB: 'hb-2' }), 'school', undefined, other.code);
+    const result = store.orderRepoll(old.code, { orderedBy: 'x', reason: 'disruption', note: '' }, { officerName: 'Jane' })!;
+    await store.addVote(sel({ HB: 'hb-2' }), 'school', undefined, result.replacement.code);
+    expect(store.getCountedVotes()).toHaveLength(2);
+
+    store.deleteOfficerCode(old.code);
+    await store.addVote(sel({ HB: 'hb-3' }), 'house', 'Anand', 'flush1'); // flush queued writes
+
+    expect(store.getVotes().filter((vote) => vote.officerCode === old.code)).toHaveLength(0);
+    // The votes that count are untouched -- nothing starts counting again.
+    expect(store.getCountedVotes().filter((vote) => vote.electionType === 'school')).toHaveLength(2);
+    const stillStored = [...sharedFakeFirestore.store.values()].filter(
+      (value) => (value as { officerCode?: string }).officerCode === old.code
+    );
+    expect(stillStored).toHaveLength(0);
+  });
+
+  it('deleting an ordinary used code leaves its votes counting', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    const [entry] = store.generateOfficerCodes(1, 'school');
+    await store.addVote(sel({ HB: 'hb-1' }), 'school', undefined, entry.code);
+    store.deleteOfficerCode(entry.code);
+    expect(store.getCountedVotes()).toHaveLength(1);
+  });
+
+  it('removeOfficerCodesByType removes every code of that type in both branches, and no other', async () => {
+    const store = await importFreshDataStore();
+    await store.init();
+    store.generateOfficerCodes(3, 'house', 'Anand', 'dwarka');
+    store.generateOfficerCodes(2, 'house', 'Prem', 'AN');
+    store.generateOfficerCodes(4, 'school', undefined, 'AN');
+
+    expect(store.removeOfficerCodesByType('house')).toBe(5);
+    expect(store.getOfficerCodes().map((entry) => entry.electionType)).toEqual(['school', 'school', 'school', 'school']);
+  });
+});
+
 describe('DataStore -- election runs and the append-only action log (ROADMAP.md Phase 3)', () => {
   beforeEach(() => {
     sharedFakeFirestore = new FakeFirestore();
