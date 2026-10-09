@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ElectionArchive, ElectionRun, OfficerCode, PollState, StoredVote } from '../types/election.js';
+import type { ElectionArchive, ElectionRun, LogEntry, OfficerCode, PollState, StoredVote } from '../types/election.js';
 
 // Regression tests for "Start Recording" / "Close Recording" (ROADMAP.md
 // Phase 3, ELECTION-INTEGRITY-AND-TRUST.md items 5/11): the run boundary
@@ -33,6 +33,8 @@ const mockedDataStore = {
   closeOfficerCodesByType: vi.fn(),
   stampOfficerCodesRunId: vi.fn(),
   getArchives: vi.fn<[], ElectionArchive[]>(() => []),
+  getArchive: vi.fn<[string], ElectionArchive | undefined>(),
+  getLogEntries: vi.fn<[string], LogEntry[]>(() => []),
   startRun: vi.fn(),
   closeRun: vi.fn(),
   appendLogEntry: vi.fn()
@@ -43,8 +45,16 @@ vi.mock('../storage/datastore.js', () => ({
 }));
 
 const mockedArchiveCurrentElection = vi.fn();
+const mockedBuildElectionSnapshot = vi.fn<[string?], ElectionArchive | null>();
 vi.mock('../services/resultsService.js', () => ({
-  archiveCurrentElection: mockedArchiveCurrentElection
+  archiveCurrentElection: mockedArchiveCurrentElection,
+  buildElectionSnapshot: mockedBuildElectionSnapshot,
+  // Stand-in that only narrows the booths -- enough to see it was applied.
+  filterArchiveByBranch: (archive: ElectionArchive, branch: string) => ({
+    ...archive,
+    branch,
+    officerCodes: archive.officerCodes.filter((entry) => (entry.branch ?? 'dwarka') === branch)
+  })
 }));
 
 const mockedKioskService = { clearSessions: vi.fn() };
@@ -276,5 +286,82 @@ describe('GET /api/election-runs/log/search', () => {
     expect(mockedDataStore.searchLogEntries).toHaveBeenCalledWith(
       expect.objectContaining({ adminOnly: false })
     );
+  });
+});
+
+describe('GET /api/election-runs/:id/record', () => {
+  const archive: ElectionArchive = {
+    id: 'arch-1',
+    archivedAt: 5,
+    electionType: 'school',
+    totalVotes: 3,
+    results: [],
+    officerCodes: [
+      { code: 'aaa111', officerName: 'Jane', voteCount: 2, branch: 'dwarka' },
+      { code: 'bbb222', officerName: 'Ravi', voteCount: 1, branch: 'AN' }
+    ]
+  };
+  const log: LogEntry[] = [
+    { id: 'l1', timestamp: 1, runId: 'run-1', actor: 'Rajeev', action: 'run.start' },
+    { id: 'l2', timestamp: 2, runId: 'run-1', actor: 'Rajeev', action: 'officerCode.seal', branch: 'dwarka' },
+    { id: 'l3', timestamp: 3, runId: 'run-1', actor: 'Rajeev', action: 'officerCode.seal', branch: 'AN' }
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDataStore.getLogEntries.mockReturnValue(log);
+  });
+
+  it('gives an ended election its saved results, as final, with its whole log', async () => {
+    mockedDataStore.getRun.mockReturnValue({ ...runningRun, status: 'closed', closedAt: 9, closedBy: 'Rajeev', archiveIds: ['arch-1'] });
+    mockedDataStore.getArchive.mockReturnValue(archive);
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).get('/api/election-runs/run-1/record');
+
+    expect(response.status).toBe(200);
+    expect(response.body.final).toBe(true);
+    expect(response.body.report.id).toBe('arch-1');
+    expect(response.body.log).toHaveLength(3);
+    expect(mockedDataStore.getLogEntries).toHaveBeenCalledWith('run-1');
+    expect(mockedBuildElectionSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('narrows to one branch: its booths, and only log entries about that branch or both', async () => {
+    mockedDataStore.getRun.mockReturnValue({ ...runningRun, status: 'closed', archiveIds: ['arch-1'] });
+    mockedDataStore.getArchive.mockReturnValue(archive);
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).get('/api/election-runs/run-1/record?branch=AN');
+
+    expect(response.body.report.officerCodes.map((entry: { code: string }) => entry.code)).toEqual(['bbb222']);
+    expect(response.body.log.map((entry: LogEntry) => entry.id)).toEqual(['l1', 'l3']);
+  });
+
+  it('gives a running election live results, marked not final', async () => {
+    mockedDataStore.getRun.mockReturnValue(runningRun);
+    mockedDataStore.getPollState.mockReturnValue({ activeElectionType: 'school', settings: { isOpen: true, allowRevote: false } });
+    mockedBuildElectionSnapshot.mockReturnValue({ ...archive, id: 'live' });
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).get('/api/election-runs/run-1/record');
+
+    expect(response.body.final).toBe(false);
+    expect(response.body.report.id).toBe('live');
+  });
+
+  it('still opens when the saved results were deleted from Election History', async () => {
+    mockedDataStore.getRun.mockReturnValue({ ...runningRun, status: 'closed', archiveIds: ['gone'] });
+    mockedDataStore.getArchive.mockReturnValue(undefined);
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).get('/api/election-runs/run-1/record');
+
+    expect(response.status).toBe(200);
+    expect(response.body.report).toBeNull();
+    expect(response.body.log).toHaveLength(3);
+  });
+
+  it('404s for an unknown election and 400s for an unknown branch', async () => {
+    mockedDataStore.getRun.mockReturnValue(undefined);
+    const { createApp } = await import('../app.js');
+    expect((await request(createApp()).get('/api/election-runs/nope/record')).status).toBe(404);
+    expect((await request(createApp()).get('/api/election-runs/run-1/record?branch=xyz')).status).toBe(400);
   });
 });

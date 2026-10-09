@@ -48,6 +48,7 @@ import { BulkAllotCodesModal } from '../components/BulkAllotCodesModal';
 import { SendCodesPanel } from '../components/SendCodesPanel';
 import { TakeoverPrompt, TakeoverRequestBox } from '../components/AdminTakeover';
 import { RepollDialog } from '../components/RepollDialog';
+import { describeLogEntry } from '../utils/logSentences';
 import { SealDialog } from '../components/SealDialog';
 import { countDutyStatuses, dutyStatus, DUTY_STYLES, endOfVotingChecklist } from '../utils/dutyStatus';
 import { REPOLL_REASON_LABELS } from '../types/api';
@@ -775,6 +776,11 @@ export const AdminLandingPage = (): JSX.Element => {
   // immediately, so the tab never opens empty. Also (re)loads the list of
   // past runs so the Run dropdown stays current.
   useEffect(() => {
+    // Election History needs the list too, to link each election to its
+    // Election Record.
+    if (activeTab === 'history') {
+      void loadPastRuns();
+    }
     if (activeTab !== 'log') {
       return;
     }
@@ -2338,7 +2344,22 @@ export const AdminLandingPage = (): JSX.Element => {
         <h2>Election History</h2>
         <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '-0.5rem', marginBottom: '1rem' }}>
           Each election's final results and polling-officer turnout are saved here automatically at End of Voting.
+          📜 Election Record shows the whole story of an election: summary, results, every booth, and what happened.
         </p>
+        {currentRun?.status === 'running' && (
+          <div style={{ padding: '0.75rem', border: '2px solid #f59e0b', borderRadius: '8px', backgroundColor: '#fffbeb', marginBottom: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ overflowWrap: 'anywhere' }}>
+              Running now: <strong>{currentRun.name}</strong>
+            </span>
+            <button
+              className="button"
+              style={{ backgroundColor: '#b45309' }}
+              onClick={() => window.open(`/admin/record/${currentRun.id}`, '_blank')}
+            >
+              📜 Election Record (not final yet)
+            </button>
+          </div>
+        )}
         {archives.length === 0 ? (
           <p>No past elections have been archived yet.</p>
         ) : (
@@ -2391,7 +2412,21 @@ export const AdminLandingPage = (): JSX.Element => {
                             ever needed again (e.g. clearing test data) --
                             re-add the button rather than reintroducing a new
                             deletion path. */}
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          {/* Only elections ended with End of Voting have a
+                              record; results saved by hand do not. */}
+                          {(() => {
+                            const run = pastRuns.find((entry) => entry.archiveIds?.includes(archive.id));
+                            return run ? (
+                              <button
+                                className="button"
+                                style={{ backgroundColor: '#047857' }}
+                                onClick={() => window.open(`/admin/record/${run.id}`, '_blank')}
+                              >
+                                📜 Election Record
+                              </button>
+                            ) : null;
+                          })()}
                           <button
                             className="button"
                             style={{ backgroundColor: '#4338ca' }}
@@ -2594,10 +2629,8 @@ export const AdminLandingPage = (): JSX.Element => {
                     <thead>
                       <tr style={{ textAlign: 'left', borderBottom: '2px solid #e5e7eb' }}>
                         <th style={{ padding: '0.5rem' }}>Time</th>
-                        <th style={{ padding: '0.5rem' }}>Actor</th>
-                        <th style={{ padding: '0.5rem' }}>Action</th>
                         <th style={{ padding: '0.5rem' }}>Branch</th>
-                        <th style={{ padding: '0.5rem' }}>Details</th>
+                        <th style={{ padding: '0.5rem' }}>What happened</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2622,20 +2655,17 @@ export const AdminLandingPage = (): JSX.Element => {
                             <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
                               {formatTimestamp(entry.timestamp)}
                             </td>
-                            <td style={{ padding: '0.5rem', fontSize: '0.85rem' }}>{entry.actor}</td>
-                            <td style={{ padding: '0.5rem', fontWeight: isNotable ? 700 : 500, color: isNotable ? '#991b1b' : undefined }}>
-                              {isNotable && '⚠ '}
-                              {entry.action}
-                            </td>
                             <td style={{ padding: '0.5rem', fontSize: '0.85rem' }}>
                               {entry.branch === 'AN' ? 'AN' : entry.branch === 'dwarka' ? 'Dwarka' : ''}
                             </td>
-                            <td style={{ padding: '0.5rem', fontSize: '0.8rem', color: '#6b7280', fontFamily: 'monospace' }}>
-                              {entry.details && Object.keys(entry.details).length > 0
-                                ? Object.entries(entry.details)
-                                    .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
-                                    .join(' ')
-                                : ''}
+                            {/* Plain sentence; the stored action name is kept as a
+                                tooltip for anyone matching it to a search. */}
+                            <td
+                              title={entry.action}
+                              style={{ padding: '0.5rem', overflowWrap: 'anywhere', fontWeight: isNotable ? 700 : 400, color: isNotable ? '#991b1b' : undefined }}
+                            >
+                              {isNotable && '⚠ '}
+                              {describeLogEntry(entry)}
                             </td>
                           </tr>
                         );

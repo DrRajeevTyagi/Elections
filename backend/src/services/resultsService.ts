@@ -169,6 +169,8 @@ export const buildElectionSnapshot = (name?: string): ElectionArchive | null => 
       officerName: entry.officerName,
       voteCount: dataStore.countCountedVotesByOfficerCode(entry.code),
       branch: entry.branch,
+      ...(entry.house ? { house: entry.house } : {}),
+      ...(entry.closedAt ? { closedAt: entry.closedAt } : {}),
       ...(entry.repoll
         ? {
             cancelledVoteCount: entry.repoll.cancelledVoteCount,

@@ -4,6 +4,7 @@ import type {
   ActivateRequest,
   ActivateResponse,
   ArchiveReportResponse,
+  ElectionRecordResponse,
   ArchivesListResponse,
   CurrentReportResponse,
   CurrentRunResponse,
@@ -529,6 +530,16 @@ export const deleteArchive = async (id: string, adminSecret: string): Promise<vo
 // backend/src/services/runService.ts for exactly what each does.
 export const getCurrentRun = async (adminSecret: string): Promise<CurrentRunResponse> => {
   const response = await api.get<CurrentRunResponse>('/election-runs/current', {
+    headers: { 'x-admin-secret': adminSecret }
+  });
+  return response.data;
+};
+
+// The Election Record -- one election's whole story; `branch` narrows it
+// to Dwarka or AN.
+export const getElectionRecord = async (runId: string, adminSecret: string, branch?: Branch): Promise<ElectionRecordResponse> => {
+  const response = await api.get<ElectionRecordResponse>(`/election-runs/${runId}/record`, {
+    params: branch ? { branch } : undefined,
     headers: { 'x-admin-secret': adminSecret }
   });
   return response.data;

@@ -3,7 +3,9 @@ import { requireAdminSession } from '../middleware/adminAuth.js';
 import { dataStore } from '../storage/datastore.js';
 import type { LogSearchFilter } from '../storage/datastore.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { BadRequestError } from '../utils/httpError.js';
+import { BadRequestError, NotFoundError } from '../utils/httpError.js';
+import { buildElectionSnapshot, filterArchiveByBranch } from '../services/resultsService.js';
+import { getPollState } from '../services/voteService.js';
 import { startRecording, closeRecording } from '../services/runService.js';
 import { isValidBranch } from '../config/posts.js';
 
@@ -61,6 +63,40 @@ electionRunsRouter.get(
     };
 
     res.json({ entries: dataStore.searchLogEntries(filter) });
+  })
+);
+
+// The Election Record: everything about one election in one place -- the
+// run itself (who started and ended it, when), its results and booth-by-
+// booth figures, and its full log in time order. While the election is
+// still running the results are live (and marked not final); once it has
+// ended they come from the archive saved at End of Voting. `?branch=`
+// narrows it to Dwarka or AN: their results and booths, plus the log
+// entries about that branch and the ones that apply to both (start, end,
+// opening voting, ...).
+electionRunsRouter.get(
+  '/:id/record',
+  asyncHandler((req, res) => {
+    const { branch } = req.query as { branch?: string };
+    if (branch !== undefined && !isValidBranch(branch)) {
+      throw new BadRequestError('Invalid branch');
+    }
+    const run = dataStore.getRun(req.params.id);
+    if (!run) {
+      throw new NotFoundError('Election not found');
+    }
+    const running = run.status === 'running';
+    // A running run's type is always the active one (see startRecording).
+    const full = running
+      ? getPollState().activeElectionType === run.electionType
+        ? buildElectionSnapshot(run.name)
+        : null
+      : (run.archiveIds ?? []).map((id) => dataStore.getArchive(id)).find((archive) => archive !== undefined) ?? null;
+    const report = full && branch ? filterArchiveByBranch(full, branch) : full;
+    const log = dataStore
+      .getLogEntries(run.id)
+      .filter((entry) => !branch || !entry.branch || entry.branch === branch);
+    res.json({ run, final: !running, report, log });
   })
 );
 

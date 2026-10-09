@@ -225,6 +225,10 @@ export interface ArchivedCandidateResult {
 export interface ArchivedOfficerCode {
   code: string;
   officerName: string;
+  // Both added 2026-10-09 for the Election Record's booth-by-booth table;
+  // missing on archives saved before then.
+  house?: HouseId;
+  closedAt?: number;
   // Votes that COUNT -- always 0 for a re-polled booth, whose votes are
   // reported separately in cancelledVoteCount.
   voteCount: number;

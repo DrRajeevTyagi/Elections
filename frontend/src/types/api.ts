@@ -242,6 +242,9 @@ export interface ArchivedCandidateResult {
 export interface ArchivedOfficerCode {
   code: string;
   officerName: string;
+  // Missing on archives saved before 2026-10-09.
+  house?: HouseId;
+  closedAt?: number;
   voteCount: number; // votes that count -- 0 for a re-polled booth
   branch?: Branch;
   cancelledVoteCount?: number;
@@ -261,6 +264,9 @@ export interface ElectionReport {
   results: ArchivedCandidateResult[];
   officerCodes: ArchivedOfficerCode[];
   name?: string;
+  // Ballots per branch, captured when the snapshot was taken (missing on
+  // older archives).
+  totalVotesByBranch?: Partial<Record<Branch, number>>;
   // Set only when the report was narrowed to one branch at read time --
   // see api.ts getCurrentReport/getArchive.
   branch?: Branch;
@@ -276,6 +282,16 @@ export interface ArchiveSummary {
 
 export interface CurrentReportResponse {
   report: ElectionReport | null;
+}
+
+// The Election Record (GET /election-runs/:id/record): the run, its
+// results and booths (live while running -- final is false then; null if
+// the saved results were deleted), and its whole log in time order.
+export interface ElectionRecordResponse {
+  run: ElectionRun;
+  final: boolean;
+  report: ElectionReport | null;
+  log: LogEntry[];
 }
 
 export interface ArchiveReportResponse {

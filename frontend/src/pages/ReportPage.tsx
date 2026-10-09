@@ -68,12 +68,12 @@ export const OfficerTurnoutTable = ({ officerCodes }: { officerCodes: ArchivedOf
   </>
 );
 
-interface GroupedPost {
+export interface GroupedPost {
   post: PostId;
   candidates: ArchivedCandidateResult[];
 }
 
-const groupByPost = (results: ArchivedCandidateResult[], postIds: PostId[]): GroupedPost[] =>
+export const groupByPost = (results: ArchivedCandidateResult[], postIds: PostId[]): GroupedPost[] =>
   postIds.map((post) => ({
     post,
     candidates: results.filter((r) => r.post === post).sort((a, b) => b.total - a.total)
@@ -84,7 +84,7 @@ interface GroupedHouse {
   posts: GroupedPost[];
 }
 
-const groupByHouse = (results: ArchivedCandidateResult[]): GroupedHouse[] =>
+export const groupByHouse = (results: ArchivedCandidateResult[]): GroupedHouse[] =>
   HOUSE_IDS.map((house) => ({
     house,
     posts: groupByPost(
@@ -93,7 +93,7 @@ const groupByHouse = (results: ArchivedCandidateResult[]): GroupedHouse[] =>
     )
   }));
 
-const PostResultsTable = ({ group }: { group: GroupedPost }): JSX.Element => (
+export const PostResultsTable = ({ group }: { group: GroupedPost }): JSX.Element => (
   <table className="report-table">
     <thead>
       <tr>

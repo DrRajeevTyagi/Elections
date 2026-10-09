@@ -489,7 +489,8 @@ describe('AdminLandingPage tabs', () => {
         expect.any(String)
       )
     );
-    await screen.findByText('run.start', { exact: false });
+    // Shown as a plain sentence, not the stored action name.
+    await screen.findByText('Rajeev -- laptop started the election.');
   });
 
   it('"Start the Voting Process" wizard walks through every step and opens the poll in one flow', async () => {
