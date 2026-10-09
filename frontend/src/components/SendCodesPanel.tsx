@@ -6,7 +6,8 @@ import {
   dutyLabel,
   groupCodesForSending,
   normalizeIndianPhone,
-  DEFAULT_MESSAGE_TEMPLATE
+  DEFAULT_MESSAGE_TEMPLATE,
+  PREVIOUS_DEFAULT_MESSAGE_TEMPLATES
 } from '../utils/bulkAllot';
 import type { SendGroup, WhatsAppMode } from '../utils/bulkAllot';
 import type { Branch } from '../types/election';
@@ -58,7 +59,10 @@ const formatSentTime = (timestamp: number): string =>
 
 export const SendCodesPanel = ({ adminSecret, branch, officerCodes, onClose, onChanged }: SendCodesPanelProps): JSX.Element => {
   const [mode, setMode] = useState<WhatsAppMode>(() => (readStored(MODE_KEY) === 'web' ? 'web' : 'app'));
-  const [template, setTemplate] = useState(() => readStored(TEMPLATE_KEY) ?? DEFAULT_MESSAGE_TEMPLATE);
+  const [template, setTemplate] = useState(() => {
+    const stored = readStored(TEMPLATE_KEY);
+    return stored && !PREVIOUS_DEFAULT_MESSAGE_TEMPLATES.includes(stored) ? stored : DEFAULT_MESSAGE_TEMPLATE;
+  });
   const [dutyFilter, setDutyFilter] = useState<DutyFilter>('all');
   const [unsentOnly, setUnsentOnly] = useState(false);
   // Marks applied on screen straight away, before the server confirms --

@@ -163,13 +163,28 @@ export interface MessageTemplateVars {
   branch: string; // "Dwarka" or "AN"
 }
 
-export const DEFAULT_MESSAGE_TEMPLATE = `Dear {name}, your Polling Officer Code for the {branch} branch elections:
+// "House/School" is left for the sender to trim to one before sending.
+export const DEFAULT_MESSAGE_TEMPLATE = `Dear {name},
+Your Polling Officer Code for the {branch} branch House/School Elections:
+
+{codes}
+
+Please keep this code confidential. Use it only to activate the voting kiosk for voting.
+
+- Mount Carmel School
+visit https://elections.anytimeteacher.com/`;
+
+// Earlier standard messages. A device that saved one of these unchanged
+// is moved on to the current one; a message someone edited is kept.
+export const PREVIOUS_DEFAULT_MESSAGE_TEMPLATES = [
+  `Dear {name}, your Polling Officer Code for the {branch} branch elections:
 
 {codes}
 
 Please keep this code confidential. Use it only to activate the voting kiosk on election day.
 
-- Election Commission, Mount Carmel School`;
+- Election Commission, Mount Carmel School`
+];
 
 export const fillMessageTemplate = (template: string, vars: MessageTemplateVars): string =>
   template
