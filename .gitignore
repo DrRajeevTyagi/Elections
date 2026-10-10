@@ -35,3 +35,10 @@ test-output.json
 
 
 
+# Testing tool records (not part of the app)
+.reticle/capsules/
+.reticle/flows/
+.reticle/intent/
+frontend/.reticle/capsules/
+frontend/.reticle/flows/
+frontend/.reticle/intent/
