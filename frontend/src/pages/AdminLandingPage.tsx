@@ -53,7 +53,7 @@ import { describeLogEntry } from '../utils/logSentences';
 import { SealDialog } from '../components/SealDialog';
 import { endOfVotingChecklist } from '../utils/dutyStatus';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
-import { POST_NAMES } from '../constants/posts';
+import { POST_NAMES, SCHOOL_POST_IDS, getSchoolPostIds } from '../constants/posts';
 import { POST_COLORS } from '../constants/postColors';
 import { HOUSE_COLORS } from '../constants/houseColors';
 import './Page.css';
@@ -951,7 +951,7 @@ export const AdminLandingPage = (): JSX.Element => {
       const id = `${post.toLowerCase()}-${Date.now()}`;
       
       // Determine election type from post
-      const electionType: ElectionType = ['HB', 'HG', 'SSC', 'SRC', 'SCC'].includes(post) ? 'school' : 'house';
+      const electionType: ElectionType = (SCHOOL_POST_IDS as PostId[]).includes(post) ? 'school' : 'house';
       
       await addCandidate({
         id,
@@ -1055,7 +1055,7 @@ export const AdminLandingPage = (): JSX.Element => {
   );
 
   // Renders one school post's card for the Live Results tab -- pulled out
-  // so all 5 posts can share the same card markup and colored header.
+  // so every post can share the same card markup and colored header.
   const renderSchoolPostCard = (postId: SchoolPostId) => {
     const postResult = results.find((r) => r.post === postId);
     const sortedCandidates = [...(postResult?.candidates ?? [])].sort((a, b) => b.total - a.total);
@@ -1686,7 +1686,7 @@ export const AdminLandingPage = (): JSX.Element => {
           </div>
         ) : (
           <div className="live-school-grid">
-            {(['HB', 'HG', 'SSC', 'SRC', 'SCC'] as const).map(renderSchoolPostCard)}
+            {getSchoolPostIds(selectedBranch).map(renderSchoolPostCard)}
             {results.length === 0 && <p>No votes recorded yet.</p>}
           </div>
         )}

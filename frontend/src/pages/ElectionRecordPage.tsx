@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { getElectionRecord } from '../services/api';
-import { SCHOOL_POST_IDS, POST_NAMES } from '../constants/posts';
+import { getSchoolPostIds, POST_NAMES } from '../constants/posts';
 import { HOUSE_IDS } from '../constants/houses';
 import { REPOLL_REASON_LABELS } from '../types/api';
 import type { ArchivedOfficerCode, CandidateVoteCount, ElectionRecordResponse } from '../types/api';
@@ -145,7 +145,7 @@ export const ElectionRecordPage = (): JSX.Element => {
           results:
             report.electionType === 'house'
               ? { kind: 'house' as const, houses: groupByHouse(own).filter((house) => house.posts.some((post) => post.candidates.length > 0)) }
-              : { kind: 'school' as const, posts: groupByPost(own, SCHOOL_POST_IDS) }
+              : { kind: 'school' as const, posts: groupByPost(own, getSchoolPostIds(each)) }
         };
       })
       .filter((entry) => !entry.empty);

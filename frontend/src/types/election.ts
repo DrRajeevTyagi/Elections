@@ -1,5 +1,5 @@
 // School election posts
-export type SchoolPostId = 'HB' | 'HG' | 'SSC' | 'SRC' | 'SCC';
+export type SchoolPostId = 'HB' | 'HG' | 'SSC' | 'SRC' | 'SCC' | 'IC';
 // House election posts
 export type HousePostId = 'HC' | 'HCC' | 'HSC';
 // All possible post IDs

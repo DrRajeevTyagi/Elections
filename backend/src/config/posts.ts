@@ -1,10 +1,29 @@
-import { PostId, HousePostId, SchoolPostId, HouseId, Candidate, Branch } from '../types/election.js';
+import { PostId, HousePostId, SchoolPostId, HouseId, Candidate, Branch, ElectionType } from '../types/election.js';
 
-// School election posts
-export const SCHOOL_POST_IDS: SchoolPostId[] = ['HB', 'HG', 'SSC', 'SRC', 'SCC'];
+// Every school election post that exists in any branch, in ballot order.
+// Not every branch elects all of them -- see SCHOOL_POSTS_BY_BRANCH.
+export const SCHOOL_POST_IDS: SchoolPostId[] = ['HB', 'HG', 'SSC', 'SRC', 'SCC', 'IC'];
 
 // House election posts
 export const HOUSE_POST_IDS: HousePostId[] = ['HC', 'HCC', 'HSC'];
+
+// The school posts each branch actually elects. AN also elects an
+// Integrity Captain, last on its ballot so the other five stay in the same
+// order in both branches. First step towards letting each school set up its
+// own posts (white-labelling, planned for after the 13 Nov 2026 elections).
+const SCHOOL_POSTS_BY_BRANCH: Record<Branch, SchoolPostId[]> = {
+  dwarka: ['HB', 'HG', 'SSC', 'SRC', 'SCC'],
+  AN: ['HB', 'HG', 'SSC', 'SRC', 'SCC', 'IC']
+};
+
+// The posts on one branch's ballot. With no branch given (both branches
+// together, e.g. a combined report), every post that exists anywhere.
+export const getPostIds = (electionType: ElectionType, branch?: Branch): PostId[] => {
+  if (electionType === 'house') {
+    return HOUSE_POST_IDS;
+  }
+  return branch ? SCHOOL_POSTS_BY_BRANCH[branch] : SCHOOL_POST_IDS;
+};
 
 // All post IDs
 export const POST_IDS: PostId[] = [...SCHOOL_POST_IDS, ...HOUSE_POST_IDS];

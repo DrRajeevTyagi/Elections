@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { SCHOOL_POST_IDS, HOUSE_POST_IDS, BRANCH_IDS } from '../config/posts.js';
+import { SCHOOL_POST_IDS, HOUSE_POST_IDS, BRANCH_IDS, getPostIds } from '../config/posts.js';
 import { dataStore } from '../storage/datastore.js';
 import {
   Candidate,
@@ -112,8 +112,8 @@ export const getResults = (house?: HouseId, branch?: Branch, electionType?: Elec
     candidates = candidates.filter((c) => c.branch === branch);
   }
 
-  // Get post IDs based on election type
-  const postIds = resolvedType === 'school' ? SCHOOL_POST_IDS : HOUSE_POST_IDS;
+  // Post IDs for this election type (and branch -- school posts differ)
+  const postIds = getPostIds(resolvedType, branch);
 
   return postIds.map((post) => {
     const postCandidates = candidates.filter((candidate) => candidate.post === post);

@@ -1,7 +1,7 @@
 import { dataStore } from '../storage/datastore.js';
 import { Candidate, PostId, ElectionType, HouseId, Branch } from '../types/election.js';
 import { getPollState } from './voteService.js';
-import { HOUSE_IDS, HOUSE_POST_IDS, SCHOOL_POST_IDS } from '../config/posts.js';
+import { HOUSE_IDS, HOUSE_POST_IDS, getPostIds } from '../config/posts.js';
 
 // `branch` is optional and additive -- omitting it (every call site today)
 // returns candidates across all branches, unchanged from before this
@@ -49,7 +49,7 @@ export const findMissingCandidateCoverage = (electionType: ElectionType, branch?
   }
 
   if (electionType === 'school') {
-    return SCHOOL_POST_IDS.filter((post) => !candidates.some((c) => c.post === post));
+    return getPostIds('school', branch).filter((post) => !candidates.some((c) => c.post === post));
   }
 
   const missing: string[] = [];

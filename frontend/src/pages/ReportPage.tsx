@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { getArchive, getCurrentReport } from '../services/api';
 import { HOUSE_IDS, HOUSE_POST_IDS } from '../constants/houses';
-import { POST_NAMES, SCHOOL_POST_IDS } from '../constants/posts';
+import { POST_NAMES, getSchoolPostIds } from '../constants/posts';
 import { REPOLL_REASON_LABELS } from '../types/api';
 import type { ArchivedCandidateResult, ArchivedOfficerCode, ElectionReport } from '../types/api';
 import type { Branch, HouseId, PostId } from '../types/election';
@@ -165,7 +165,7 @@ export const ReportPage = (): JSX.Element => {
     if (report.electionType === 'house') {
       return { kind: 'house' as const, houses: groupByHouse(report.results) };
     }
-    return { kind: 'school' as const, posts: groupByPost(report.results, SCHOOL_POST_IDS) };
+    return { kind: 'school' as const, posts: groupByPost(report.results, getSchoolPostIds(report.branch)) };
   }, [report]);
 
   if (checkingAuth) {

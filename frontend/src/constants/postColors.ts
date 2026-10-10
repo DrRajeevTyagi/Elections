@@ -16,6 +16,7 @@ export const POST_COLORS: Record<PostId, PostColor> = {
   SSC: { background: '#dcfce7', text: '#15803d', accent: '#16a34a' },
   SRC: { background: '#ffedd5', text: '#c2410c', accent: '#ea580c' },
   SCC: { background: '#ede9fe', text: '#6d28d9', accent: '#7c3aed' },
+  IC: { background: '#fef9c3', text: '#854d0e', accent: '#ca8a04' },
   HC: { background: '#cffafe', text: '#0e7490', accent: '#06b6d4' },
   HCC: { background: '#e0e7ff', text: '#4338ca', accent: '#6366f1' },
   HSC: { background: '#d1fae5', text: '#047857', accent: '#10b981' }

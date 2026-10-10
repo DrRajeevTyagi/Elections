@@ -380,6 +380,34 @@ describe('AdminLandingPage tabs', () => {
     expect(headings).toHaveLength(5);
     const backgroundColors = new Set(headings.map((h) => (h as HTMLElement).style.backgroundColor));
     expect(backgroundColors.size).toBe(5);
+    expect(grid?.textContent).not.toContain('Integrity Captain');
+  });
+
+  it('adds an Integrity Captain card, last, to AN\'s School Elections live results', async () => {
+    mockApi.verifyAdminSecret.mockResolvedValue(undefined);
+    mockApi.getPollStatus.mockResolvedValue({
+      poll: { activeElectionType: 'school', settings: { isOpen: false, allowRevote: false } }
+    });
+    mockApi.getResults.mockResolvedValue({
+      results: [
+        { post: 'HB', candidates: [{ candidate: { id: 'hb-1', name: 'Alex', post: 'HB', electionType: 'school', branch: 'AN' }, total: 5 }] },
+        { post: 'IC', candidates: [{ candidate: { id: 'ic-1', name: 'Isha', post: 'IC', electionType: 'school', branch: 'AN' }, total: 2 }] }
+      ],
+      totalVotes: 5
+    });
+    mockApi.getOfficerCodes.mockResolvedValue({ codes: [] });
+    mockApi.getArchivesList.mockResolvedValue({ archives: [] });
+
+    await unlockAsAdmin();
+    fireEvent.click(screen.getByRole('button', { name: 'Live Results' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'AN' }));
+    await screen.findByText('Isha');
+
+    const headings = Array.from(document.querySelectorAll('.live-school-grid .live-post-card h3'));
+    expect(headings).toHaveLength(6);
+    expect(headings[5]).toHaveTextContent('Integrity Captain');
+    const backgroundColors = new Set(headings.map((h) => (h as HTMLElement).style.backgroundColor));
+    expect(backgroundColors.size).toBe(6);
   });
 
   it('shows the election-in-progress banner, and leaves officer-code generation ungated regardless of the active election type', async () => {

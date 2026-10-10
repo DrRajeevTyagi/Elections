@@ -102,13 +102,17 @@ describe('GET /api/poll', () => {
   });
 });
 
-const fullSchoolSlate: Candidate[] = (['HB', 'HG', 'SSC', 'SRC', 'SCC'] as const).map((post) => ({
-  id: `${post}-1`,
-  name: `${post} One`,
-  post,
-  electionType: 'school',
-  branch: 'dwarka'
-}));
+// Integrity Captain (IC) is elected in AN only.
+const fullSchoolSlate: Candidate[] = [
+  ...(['HB', 'HG', 'SSC', 'SRC', 'SCC'] as const).map((post) => ({
+    id: `${post}-1`,
+    name: `${post} One`,
+    post,
+    electionType: 'school' as const,
+    branch: 'dwarka' as const
+  })),
+  { id: 'IC-1', name: 'IC One', post: 'IC', electionType: 'school', branch: 'AN' }
+];
 
 // The old standalone "Open Poll" button could open voting with no named
 // election behind it. Only the Start wizard and "Re-start Polling" open
@@ -146,6 +150,18 @@ describe('POST /api/poll/open', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.poll.settings.isOpen).toBe(true);
+  });
+
+  it('is refused while AN has no Integrity Captain candidate', async () => {
+    mockedDataStore.getCurrentRun.mockReturnValue({ ...runningRun, electionType: 'school' });
+    mockedDataStore.getCandidates.mockReturnValue(fullSchoolSlate.filter((c) => c.post !== 'IC'));
+
+    const { createApp } = await import('../app.js');
+    const response = await request(createApp()).post('/api/poll/open');
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('no candidates yet for IC');
+    expect(mockedDataStore.updatePollState).not.toHaveBeenCalled();
   });
 });
 

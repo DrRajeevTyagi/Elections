@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { SCHOOL_POST_IDS, HOUSE_POST_IDS } from '../config/posts.js';
+import { getPostIds } from '../config/posts.js';
 import { listCandidatesByPost } from '../services/candidateService.js';
 import { recordVote, getPollState } from '../services/voteService.js';
 import { dataStore } from '../storage/datastore.js';
@@ -28,8 +28,9 @@ const validateVote = (body: unknown, electionType: 'school' | 'house', house?: H
     throw new BadRequestError('Selections are required');
   }
 
-  // Determine which posts to validate based on election type
-  const postIds = electionType === 'school' ? SCHOOL_POST_IDS : HOUSE_POST_IDS;
+  // Exactly this branch's posts -- a selection for a post the branch doesn't
+  // elect (e.g. Integrity Captain on a Dwarka ballot) is never stored.
+  const postIds = getPostIds(electionType, branch);
   const selections: Record<string, unknown> = submission.selections as Record<string, unknown>;
   const normalized: Record<string, string> = {};
 

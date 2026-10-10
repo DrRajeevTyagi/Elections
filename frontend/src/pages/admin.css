@@ -368,7 +368,7 @@
   color: #6b7280;
 }
 
-/* School Elections live results: all 5 posts share one grid with a capped
+/* School Elections live results: every post shares one grid with a capped
    card width, instead of the old fixed 2-then-3 row split -- that split
    forced Head Boy/Head Girl into two half-screen-wide cards, which is why
    a candidate's name and their vote count used to sit with a large,

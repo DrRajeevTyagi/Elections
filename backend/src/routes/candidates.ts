@@ -5,7 +5,7 @@ import { getPollState } from '../services/voteService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { BadRequestError, ForbiddenError } from '../utils/httpError.js';
 import type { Candidate, ElectionType, HouseId } from '../types/election.js';
-import { isValidPostId, SCHOOL_POST_IDS, HOUSE_POST_IDS, isValidHouseId, isValidBranch } from '../config/posts.js';
+import { isValidPostId, SCHOOL_POST_IDS, HOUSE_POST_IDS, getPostIds, isValidHouseId, isValidBranch } from '../config/posts.js';
 
 export const candidatesRouter = Router();
 
@@ -117,7 +117,13 @@ candidatesRouter.post(
 
     // Validate post matches election type
     if (determinedElectionType === 'school' && !SCHOOL_POST_IDS.includes(post as any)) {
-      throw new BadRequestError('School election posts are: HB, HG, SSC, SRC, SCC');
+      throw new BadRequestError('School election posts are: ' + SCHOOL_POST_IDS.join(', '));
+    }
+    // Some school posts are elected in one branch only (Integrity Captain:
+    // AN only) -- a candidate for a post their branch doesn't have would
+    // never appear on any ballot.
+    if (determinedElectionType === 'school' && !getPostIds('school', branch ?? 'dwarka').includes(post)) {
+      throw new BadRequestError(`${branch === 'AN' ? 'AN' : 'Dwarka'} does not elect this post (${post}).`);
     }
     if (determinedElectionType === 'house' && !HOUSE_POST_IDS.includes(post as any)) {
       throw new BadRequestError('House election posts are: HC, HCC, HSC');

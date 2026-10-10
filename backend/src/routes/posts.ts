@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { SCHOOL_POST_IDS, HOUSE_POST_IDS, isValidHouseId, isValidBranch } from '../config/posts.js';
+import { getPostIds, isValidHouseId, isValidBranch } from '../config/posts.js';
 import { listCandidatesForActiveElection, listCandidatesByPost } from '../services/candidateService.js';
 import { getPollState } from '../services/voteService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -34,8 +34,8 @@ postsRouter.get(
     }
     const branch = parseBranch(req.query.branch);
 
-    // Get post IDs based on election type
-    const postIds = pollState.activeElectionType === 'school' ? SCHOOL_POST_IDS : HOUSE_POST_IDS;
+    // Posts for this election type -- school posts differ by branch
+    const postIds = getPostIds(pollState.activeElectionType, branch);
 
     const posts = postIds.map((postId) => ({
       post: postId,
